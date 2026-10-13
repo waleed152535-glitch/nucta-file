@@ -25,12 +25,20 @@ export const TAXONOMY_VERSION = "2023-01-01";
  * obtained, every element from that taxonomy becomes unrecognised and the
  * errors look like tagging mistakes when the only fault is a bad address.
  *
- * Note the scheme: these are http, not https. A namespace is compared as a
- * literal string rather than resolved as a web address, so the two differ
- * completely to a validator even though a browser treats them alike. Real
- * filed UK accounts use http, and an https spelling has every fact refused
- * while the schema itself loads — which reads confusingly like a tagging
- * fault.
+ * Every value here is read out of the FRC's own taxonomy package rather than
+ * inferred, and two things about it are easy to get wrong.
+ *
+ * First, the schemes differ. The entry point is addressed over **https**,
+ * while the namespaces inside the schemas are **http**. They look like the
+ * same address and are not: a namespace is compared as a literal string and
+ * never fetched, so one spelling of each is correct and the other silently
+ * fails. Mixing them up gets the schema loaded but every fact refused, which
+ * reads like a tagging fault and isn't one.
+ *
+ * Second, there is no FRS 105 entry point. The FRC suite ships FRS-101,
+ * FRS-102 and IFRS only, so micro-entity accounts under FRS 105 are tagged
+ * against the FRS-102 entry point. Pointing at an invented FRS-105 address
+ * produces "an error in the Taxonomy reference".
  *
  * FRC 2023 covers periods ending to 31 March 2026; FRC 2024 to 31 March 2027.
  */
@@ -44,42 +52,32 @@ export interface AccountsTaxonomy {
 
 export const ACCOUNT_TAXONOMIES: AccountsTaxonomy[] = [
   {
-    key: "frs105-2023",
-    label: "FRS 105 micro-entity (FRC 2023)",
-    schemaRef: "http://xbrl.frc.org.uk/FRS-105/2023-01-01/FRS-105-2023-01-01.xsd",
-    core: "http://xbrl.frc.org.uk/fr/2023-01-01/core",
-    bus: "http://xbrl.frc.org.uk/cd/2023-01-01/business",
-  },
-  {
     key: "frs102-2023",
-    label: "FRS 102 section 1A (FRC 2023)",
-    schemaRef: "http://xbrl.frc.org.uk/FRS-102/2023-01-01/FRS-102-2023-01-01.xsd",
+    label: "FRS 102 (FRC 2023)",
+    schemaRef: "https://xbrl.frc.org.uk/FRS-102/2023-01-01/FRS-102-2023-01-01.xsd",
     core: "http://xbrl.frc.org.uk/fr/2023-01-01/core",
     bus: "http://xbrl.frc.org.uk/cd/2023-01-01/business",
   },
   {
-    key: "frs105-2024",
-    label: "FRS 105 micro-entity (FRC 2024)",
-    schemaRef: "http://xbrl.frc.org.uk/FRS-105/2024-01-01/FRS-105-2024-01-01.xsd",
-    core: "http://xbrl.frc.org.uk/fr/2024-01-01/core",
-    bus: "http://xbrl.frc.org.uk/cd/2024-01-01/business",
+    key: "frs101-2023",
+    label: "FRS 101 (FRC 2023)",
+    schemaRef: "https://xbrl.frc.org.uk/FRS-101/2023-01-01/FRS-101-2023-01-01.xsd",
+    core: "http://xbrl.frc.org.uk/fr/2023-01-01/core",
+    bus: "http://xbrl.frc.org.uk/cd/2023-01-01/business",
+  },
+  {
+    key: "core-2023",
+    label: "Core only (FRC 2023)",
+    schemaRef: "https://xbrl.frc.org.uk/fr/2023-01-01/core/frc-core-2023-01-01.xsd",
+    core: "http://xbrl.frc.org.uk/fr/2023-01-01/core",
+    bus: "http://xbrl.frc.org.uk/cd/2023-01-01/business",
   },
   {
     key: "frs102-2024",
-    label: "FRS 102 section 1A (FRC 2024)",
-    schemaRef: "http://xbrl.frc.org.uk/FRS-102/2024-01-01/FRS-102-2024-01-01.xsd",
+    label: "FRS 102 (FRC 2024)",
+    schemaRef: "https://xbrl.frc.org.uk/FRS-102/2024-01-01/FRS-102-2024-01-01.xsd",
     core: "http://xbrl.frc.org.uk/fr/2024-01-01/core",
     bus: "http://xbrl.frc.org.uk/cd/2024-01-01/business",
-  },
-  {
-    // Kept only to show the difference. A namespace is matched as a literal
-    // string, so https and http are two unrelated namespaces however alike
-    // they look in a browser. This variant was refused.
-    key: "frs105-2023-https",
-    label: "FRS 105 2023, https (refused)",
-    schemaRef: "https://xbrl.frc.org.uk/FRS-105/2023-01-01/FRS-105-2023-01-01.xsd",
-    core: "https://xbrl.frc.org.uk/fr/2023-01-01/core",
-    bus: "https://xbrl.frc.org.uk/cd/2023-01-01/business",
   },
 ];
 

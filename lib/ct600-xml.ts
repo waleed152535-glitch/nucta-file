@@ -335,6 +335,25 @@ export function irMark(bodyXml: string, method: MarkMethod = "exc-c14n"): string
 let canonicalRan = false;
 export const markWasCanonical = (): boolean => canonicalRan;
 
+/**
+ * The IRmark in the form HMRC quote back.
+ *
+ * The same twenty bytes appear twice in a filing: base64 inside the XML, and
+ * base32 in the receipt and anywhere a person reads it. A client querying a
+ * filing will cite the base32 form, so it has to be derivable from what we
+ * stored. HMRC's specification calls for exactly this pairing.
+ */
+export function markForPeople(base64Mark: string): string {
+  const bytes = Buffer.from(base64Mark, "base64");
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const b of bytes) bits += b.toString(2).padStart(8, "0");
+  while (bits.length % 5 !== 0) bits += "0";
+  let out = "";
+  for (let i = 0; i < bits.length; i += 5) out += alphabet[parseInt(bits.slice(i, i + 5), 2)];
+  return out;
+}
+
 /** The canonical text that was digested, kept so it can be inspected. */
 let lastCanonical = "";
 export const markCanonicalText = (): string => lastCanonical;

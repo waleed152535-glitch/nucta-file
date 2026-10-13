@@ -25,10 +25,14 @@ export const TAXONOMY_VERSION = "2023-01-01";
  * obtained, every element from that taxonomy becomes unrecognised and the
  * errors look like tagging mistakes when the only fault is a bad address.
  *
- * The URL shape is confirmed by the Irish extensions, which are published as
- * .../ireland/FRS-102/2023-01-01/ie-FRS-102-2023-01-01.xsd — the UK form
- * drops the country segment and the prefix. FRC 2023 covers periods ending to
- * 31 March 2026; FRC 2024 to 31 March 2027.
+ * Note the scheme: these are http, not https. A namespace is compared as a
+ * literal string rather than resolved as a web address, so the two differ
+ * completely to a validator even though a browser treats them alike. Real
+ * filed UK accounts use http, and an https spelling has every fact refused
+ * while the schema itself loads — which reads confusingly like a tagging
+ * fault.
+ *
+ * FRC 2023 covers periods ending to 31 March 2026; FRC 2024 to 31 March 2027.
  */
 export interface AccountsTaxonomy {
   key: string;
@@ -42,30 +46,40 @@ export const ACCOUNT_TAXONOMIES: AccountsTaxonomy[] = [
   {
     key: "frs105-2023",
     label: "FRS 105 micro-entity (FRC 2023)",
-    schemaRef: "https://xbrl.frc.org.uk/FRS-105/2023-01-01/FRS-105-2023-01-01.xsd",
-    core: "https://xbrl.frc.org.uk/fr/2023-01-01/core",
-    bus: "https://xbrl.frc.org.uk/cd/2023-01-01/business",
+    schemaRef: "http://xbrl.frc.org.uk/FRS-105/2023-01-01/FRS-105-2023-01-01.xsd",
+    core: "http://xbrl.frc.org.uk/fr/2023-01-01/core",
+    bus: "http://xbrl.frc.org.uk/cd/2023-01-01/business",
   },
   {
     key: "frs102-2023",
     label: "FRS 102 section 1A (FRC 2023)",
-    schemaRef: "https://xbrl.frc.org.uk/FRS-102/2023-01-01/FRS-102-2023-01-01.xsd",
-    core: "https://xbrl.frc.org.uk/fr/2023-01-01/core",
-    bus: "https://xbrl.frc.org.uk/cd/2023-01-01/business",
+    schemaRef: "http://xbrl.frc.org.uk/FRS-102/2023-01-01/FRS-102-2023-01-01.xsd",
+    core: "http://xbrl.frc.org.uk/fr/2023-01-01/core",
+    bus: "http://xbrl.frc.org.uk/cd/2023-01-01/business",
   },
   {
     key: "frs105-2024",
     label: "FRS 105 micro-entity (FRC 2024)",
-    schemaRef: "https://xbrl.frc.org.uk/FRS-105/2024-01-01/FRS-105-2024-01-01.xsd",
-    core: "https://xbrl.frc.org.uk/fr/2024-01-01/core",
-    bus: "https://xbrl.frc.org.uk/cd/2024-01-01/business",
+    schemaRef: "http://xbrl.frc.org.uk/FRS-105/2024-01-01/FRS-105-2024-01-01.xsd",
+    core: "http://xbrl.frc.org.uk/fr/2024-01-01/core",
+    bus: "http://xbrl.frc.org.uk/cd/2024-01-01/business",
   },
   {
     key: "frs102-2024",
     label: "FRS 102 section 1A (FRC 2024)",
-    schemaRef: "https://xbrl.frc.org.uk/FRS-102/2024-01-01/FRS-102-2024-01-01.xsd",
-    core: "https://xbrl.frc.org.uk/fr/2024-01-01/core",
-    bus: "https://xbrl.frc.org.uk/cd/2024-01-01/business",
+    schemaRef: "http://xbrl.frc.org.uk/FRS-102/2024-01-01/FRS-102-2024-01-01.xsd",
+    core: "http://xbrl.frc.org.uk/fr/2024-01-01/core",
+    bus: "http://xbrl.frc.org.uk/cd/2024-01-01/business",
+  },
+  {
+    // Kept only to show the difference. A namespace is matched as a literal
+    // string, so https and http are two unrelated namespaces however alike
+    // they look in a browser. This variant was refused.
+    key: "frs105-2023-https",
+    label: "FRS 105 2023, https (refused)",
+    schemaRef: "https://xbrl.frc.org.uk/FRS-105/2023-01-01/FRS-105-2023-01-01.xsd",
+    core: "https://xbrl.frc.org.uk/fr/2023-01-01/core",
+    bus: "https://xbrl.frc.org.uk/cd/2023-01-01/business",
   },
 ];
 
@@ -90,7 +104,7 @@ export const COMP_TAXONOMIES: CompTaxonomy[] = [
   {
     key: "frc-hmrc-2023",
     label: "HMRC CT, FRC-hosted (2023)",
-    schemaRef: "https://xbrl.frc.org.uk/HMRC/2023-01-01/HMRC-2023-01-01.xsd",
+    schemaRef: "http://xbrl.frc.org.uk/HMRC/2023-01-01/HMRC-2023-01-01.xsd",
     ct: "http://www.hmrc.gov.uk/schemas/ct/comp/2023-01-01",
   },
   {
@@ -102,7 +116,7 @@ export const COMP_TAXONOMIES: CompTaxonomy[] = [
   {
     key: "frc-hmrc-2024",
     label: "HMRC CT, FRC-hosted (2024)",
-    schemaRef: "https://xbrl.frc.org.uk/HMRC/2024-01-01/HMRC-2024-01-01.xsd",
+    schemaRef: "http://xbrl.frc.org.uk/HMRC/2024-01-01/HMRC-2024-01-01.xsd",
     ct: "http://www.hmrc.gov.uk/schemas/ct/comp/2024-01-01",
   },
 ];
@@ -122,8 +136,8 @@ export const NS = {
   xlink: "http://www.w3.org/1999/xlink",
   link: "http://www.xbrl.org/2003/linkbase",
   iso4217: "http://www.xbrl.org/2003/iso4217",
-  core: `https://xbrl.frc.org.uk/fr/${TAXONOMY_VERSION}/core`,
-  bus: `https://xbrl.frc.org.uk/cd/${TAXONOMY_VERSION}/business`,
+  core: `http://xbrl.frc.org.uk/fr/${TAXONOMY_VERSION}/core`,
+  bus: `http://xbrl.frc.org.uk/cd/${TAXONOMY_VERSION}/business`,
   ct: `http://www.hmrc.gov.uk/schemas/ct/comp/${TAXONOMY_VERSION}`,
 };
 

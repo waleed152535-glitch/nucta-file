@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { previewEnvelope, runSubmission, pollAgain, type AttemptResult, type TestFormInput } from "@/lib/actions";
 import { MARK_METHODS, ATTACH_LAYOUTS, type MarkMethod, type AttachLayout } from "@/lib/ct600-xml";
 import { ACCOUNT_TAXONOMIES, COMP_TAXONOMIES } from "@/lib/ixbrl";
+import { markForPeople } from "@/lib/ct600-xml";
 
 /**
  * The gateway console.
@@ -544,6 +545,19 @@ function Transcript({ r, onPoll, polling }: { r: AttemptResult; onPoll?: () => v
               <div className="kv">
                 <span className="k">IRmark we calculated</span>
                 <span className="v mono" style={{ fontSize: 11, wordBreak: "break-all" }}>{r.irmark}</span>
+              </div>
+            )}
+            {r.irmark && (
+              <div className="kv">
+                <span className="k">
+                  IRmark as HMRC quote it
+                  <span style={{ display: "block", color: "var(--faint)", fontSize: 11, fontWeight: 400 }}>
+                    the form that appears in the receipt
+                  </span>
+                </span>
+                <span className="v mono" style={{ fontSize: 11, wordBreak: "break-all" }}>
+                  {markForPeople(r.irmark)}
+                </span>
               </div>
             )}
             <div className="kv">

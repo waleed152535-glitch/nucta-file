@@ -49,6 +49,12 @@ export interface TestFormInput {
   /** Which taxonomy each document references. */
   accountsTaxonomy: string;
   compTaxonomy: string;
+  /**
+   * Why a document isn't attached. HMRC cap the length of these, so they are
+   * short phrases rather than sentences.
+   */
+  noAccountsReason: string;
+  noComputationsReason: string;
   /** Which reading of the IRmark spec to use. */
   markMethod: MarkMethod;
   /** Send as "Test in Live" instead: the live endpoint, with a -TIL class. */
@@ -78,6 +84,8 @@ function toCt600(f: TestFormInput, docs?: { accounts: string; computation: strin
     declarantStatus: f.declarantStatus,
     accountsAttached: f.attachAccounts,
     computationsAttached: f.attachComputation,
+    noAccountsReason: f.noAccountsReason,
+    noComputationsReason: f.noComputationsReason,
     accountsIxbrl: docs?.accounts,
     computationIxbrl: docs?.computation,
     attachLayout: f.attachLayout,

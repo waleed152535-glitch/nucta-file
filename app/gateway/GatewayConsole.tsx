@@ -40,6 +40,11 @@ const blank: TestFormInput = {
   attachComputation: false,
   accountsTaxonomy: "frs105-2023",
   compTaxonomy: "frc-hmrc-2023",
+  // Short on purpose: HMRC cap the length of these fields. "Company in
+  // liquidation" is the value in HMRC's own valid sample, so it is known to
+  // pass their validator.
+  noAccountsReason: "Submitted separately",
+  noComputationsReason: "Company in liquidation",
   markMethod: "exc-c14n",
   testInLive: false,
   attachLayout: "comp-first",
@@ -268,6 +273,39 @@ export default function GatewayConsole({
                   </span>
                 </span>
               </label>
+
+              {!f.attachComputation && (
+                <div className="field">
+                  <label>
+                    Reason no computation is attached
+                    <span className="hint">HMRC limit the length</span>
+                  </label>
+                  <input
+                    value={f.noComputationsReason}
+                    maxLength={30}
+                    onChange={(e) => set("noComputationsReason", e.target.value)}
+                  />
+                  <span className="note" style={{ fontSize: 11.5 }}>
+                    {f.noComputationsReason.length}/30 characters. The default is the value from
+                    HMRC&apos;s own valid sample, so it is known to pass. A real filing needs a
+                    reason that is actually true of the company.
+                  </span>
+                </div>
+              )}
+
+              {!f.attachAccounts && (
+                <div className="field">
+                  <label>
+                    Reason no accounts are attached
+                    <span className="hint">HMRC limit the length</span>
+                  </label>
+                  <input
+                    value={f.noAccountsReason}
+                    maxLength={30}
+                    onChange={(e) => set("noAccountsReason", e.target.value)}
+                  />
+                </div>
+              )}
 
               <div className="field">
                 <label>Accounts taxonomy</label>

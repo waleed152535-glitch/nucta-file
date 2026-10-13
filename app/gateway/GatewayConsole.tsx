@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { previewEnvelope, runSubmission, pollAgain, type AttemptResult, type TestFormInput } from "@/lib/actions";
-import { MARK_METHODS, type MarkMethod } from "@/lib/ct600-xml";
+import { MARK_METHODS, ATTACH_LAYOUTS, type MarkMethod, type AttachLayout } from "@/lib/ct600-xml";
 
 /**
  * The gateway console.
@@ -32,6 +32,7 @@ const blank: TestFormInput = {
   attachAccounts: true,
   markMethod: "exc-c14n",
   testInLive: false,
+  attachLayout: "comp-first",
 };
 
 type Check = { label: string; ok: boolean; detail: string };
@@ -248,6 +249,7 @@ export default function GatewayConsole({
                   <span className="v mono" style={{ fontSize: 11, wordBreak: "break-all" }}>{endpoint}</span>
                 </div>
                 <div className="kv"><span className="k">GatewayTest</span><span className="v mono">{f.testInLive ? "0" : "1"}</span></div>
+                <div className="kv"><span className="k">Attachments</span><span className="v" style={{ fontSize: 12 }}>{ATTACH_LAYOUTS.find((a) => a.key === f.attachLayout)?.label}</span></div>
                 <div className="kv"><span className="k">IRmark method</span><span className="v" style={{ fontSize: 12 }}>{MARK_METHODS.find((m) => m.key === f.markMethod)?.label}</span></div>
               </div>
             </div>
@@ -286,6 +288,32 @@ export default function GatewayConsole({
                   HMRC&apos;s published wording allows more than one reading, and working
                   implementations disagree. If a submission comes back with error 9001, try the
                   next one down and send again — nothing else needs changing.
+                </p>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="hd">
+                <h3>Attachment layout</h3>
+                <span className="note">If HMRC complain about Computation</span>
+              </div>
+              <div className="bd">
+                <div className="field">
+                  <label>How the two iXBRL documents sit in the return</label>
+                  <select
+                    value={f.attachLayout}
+                    onChange={(e) => set("attachLayout", e.target.value as AttachLayout)}
+                  >
+                    {ATTACH_LAYOUTS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+                  </select>
+                </div>
+                <p className="note" style={{ marginTop: 0 }}>
+                  {ATTACH_LAYOUTS.find((a) => a.key === f.attachLayout)?.detail}
+                </p>
+                <p className="note">
+                  HMRC publish a sample with accounts attached and another with computations, but
+                  none with both, and the technical pack doesn&apos;t give the order. Work down the
+                  list until one is accepted.
                 </p>
               </div>
             </div>

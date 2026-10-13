@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "crypto";
-import { buildCt600, buildEnvelope, checkCt600, markWasCanonical, type Ct600Input, type MarkMethod } from "./ct600-xml";
+import { buildCt600, buildEnvelope, checkCt600, markWasCanonical, type Ct600Input, type MarkMethod, type AttachLayout } from "./ct600-xml";
 import { buildAccounts, buildComputation, type AccountsInput } from "./ixbrl";
 import { submitAndWait, poll, remove, explain, type RunResult } from "./govtalk";
 import { gatewayConfig, messageClass, redact, type Mode } from "./hmrc";
@@ -48,6 +48,8 @@ export interface TestFormInput {
   markMethod: MarkMethod;
   /** Send as "Test in Live" instead: the live endpoint, with a -TIL class. */
   testInLive: boolean;
+  /** How the iXBRL attachments are arranged inside the return. */
+  attachLayout: AttachLayout;
 }
 
 function toCt600(f: TestFormInput, docs?: { accounts: string; computation: string }): Ct600Input {
@@ -70,6 +72,7 @@ function toCt600(f: TestFormInput, docs?: { accounts: string; computation: strin
     computationsAttached: f.attachAccounts,
     accountsIxbrl: docs?.accounts,
     computationIxbrl: docs?.computation,
+    attachLayout: f.attachLayout,
   };
 }
 

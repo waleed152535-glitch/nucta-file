@@ -60,7 +60,38 @@ export interface Ct600Input {
   noComputationsReason?: string;
   /** Reliefs and deductions in total (box 275). */
   totalReliefs?: number;
+  /** How the two attachments are arranged inside XBRLsubmission. */
+  attachLayout?: AttachLayout;
 }
+
+/**
+ * How the iXBRL attachments are arranged.
+ *
+ * HMRC publish one sample with accounts attached and another with
+ * computations attached, but none showing both together, and the technical
+ * pack doesn't give the order. Since a real return carries both, the
+ * arrangement is offered as a choice and the test service decides. A wrong
+ * one produces "Invalid content found at element 'Computation'".
+ */
+export type AttachLayout = "comp-first" | "accounts-first" | "separate";
+
+export const ATTACH_LAYOUTS: { key: AttachLayout; label: string; detail: string }[] = [
+  {
+    key: "comp-first",
+    label: "Computation, then accounts",
+    detail: "Both inside one XBRLsubmission, with the computation first. HMRC's rejection pointed at the Computation element when accounts came first, which suggests this order.",
+  },
+  {
+    key: "accounts-first",
+    label: "Accounts, then computation",
+    detail: "Both inside one XBRLsubmission, accounts first — matching the order ReturnInfoSummary uses. This is what HMRC rejected.",
+  },
+  {
+    key: "separate",
+    label: "Two separate XBRLsubmission blocks",
+    detail: "One block per document. Right if the schema allows only a single attachment per block, which would also explain why HMRC publish the two samples separately.",
+  },
+];
 
 const esc = (v: string): string =>
   String(v ?? "")
@@ -209,28 +240,34 @@ export function buildCt600(i: Ct600Input): string {
   // as live XML rather than encoded text.
   const acc = i.accountsAttached && i.accountsIxbrl ? nestable(i.accountsIxbrl) : null;
   const comp = i.computationsAttached && i.computationIxbrl ? nestable(i.computationIxbrl) : null;
+
+  const block = (tag: "Accounts" | "Computation", doc: string) => {
+    p(`      <${tag}>`);
+    p(`        <Instance>`);
+    p(`          <InlineXBRLDocument>`);
+    p(doc);
+    p(`          </InlineXBRLDocument>`);
+    p(`        </Instance>`);
+    p(`      </${tag}>`);
+  };
+
   if (acc || comp) {
+    const layout = i.attachLayout ?? "comp-first";
     p(`  <AttachedFiles>`);
-    p(`    <XBRLsubmission>`);
-    if (acc) {
-      p(`      <Accounts>`);
-      p(`        <Instance>`);
-      p(`          <InlineXBRLDocument>`);
-      p(acc);
-      p(`          </InlineXBRLDocument>`);
-      p(`        </Instance>`);
-      p(`      </Accounts>`);
+    if (layout === "separate") {
+      if (comp) { p(`    <XBRLsubmission>`); block("Computation", comp); p(`    </XBRLsubmission>`); }
+      if (acc) { p(`    <XBRLsubmission>`); block("Accounts", acc); p(`    </XBRLsubmission>`); }
+    } else {
+      p(`    <XBRLsubmission>`);
+      if (layout === "comp-first") {
+        if (comp) block("Computation", comp);
+        if (acc) block("Accounts", acc);
+      } else {
+        if (acc) block("Accounts", acc);
+        if (comp) block("Computation", comp);
+      }
+      p(`    </XBRLsubmission>`);
     }
-    if (comp) {
-      p(`      <Computation>`);
-      p(`        <Instance>`);
-      p(`          <InlineXBRLDocument>`);
-      p(comp);
-      p(`          </InlineXBRLDocument>`);
-      p(`        </Instance>`);
-      p(`      </Computation>`);
-    }
-    p(`    </XBRLsubmission>`);
     p(`  </AttachedFiles>`);
   }
 
@@ -258,7 +295,7 @@ export const MARK_METHODS: { key: MarkMethod; label: string; detail: string }[] 
   {
     key: "inc-c14n",
     label: "Inclusive C14N over IRenvelope",
-    detail: "The same, but Canonical XML 1.0 rather than exclusive. These two differ only in how inherited namespace declarations are carried, so for a return of this shape they produce an identical fingerprint \u2014 there are really two values to try, not three.",
+    detail: "The same, but Canonical XML 1.0 rather than exclusive. These two differ only in how inherited namespace declarations are carried, so for a return of this shape they produce an identical fingerprint — there are really two values to try, not three.",
   },
   {
     key: "inc-c14n-body",

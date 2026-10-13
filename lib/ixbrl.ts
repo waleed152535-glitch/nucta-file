@@ -90,6 +90,13 @@ const n2 = (v: number): string => (Math.round(v * 100) / 100).toFixed(2);
 const show = (v: number): string =>
   Math.abs(v).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
+/**
+ * A number as XBRL itself accepts it: digits, an optional decimal point, and
+ * nothing else. No grouping separators.
+ */
+const plain = (v: number, decimals = 0): string =>
+  decimals > 0 ? Math.abs(v).toFixed(decimals) : String(Math.round(Math.abs(v)));
+
 /** Accounts show a negative in brackets rather than with a minus sign. */
 const shown = (v: number): string => (v < 0 ? `( ${show(v)} )` : show(v));
 
@@ -102,8 +109,22 @@ const longDate = (v: string): string => {
 };
 
 /**
- * One tagged figure. `sign` marks a value shown in brackets but held as a
- * positive in the taxonomy — creditors and expenses work that way.
+ * One tagged figure.
+ *
+ * There is deliberately no `format` attribute. A format names a
+ * transformation that turns display text such as "400,000" into the number
+ * 400000, and those transformations live in versioned registries that HMRC's
+ * processor only partly supports — it rejected both the current registry and
+ * an older one as undefined. Inline XBRL allows the attribute to be omitted
+ * provided the element's text is already a valid numeric literal, so that is
+ * what we write. No registry, nothing to be unsupported.
+ *
+ * The cost is cosmetic: figures read 400000 rather than 400,000. Worth
+ * revisiting once a submission is accepted and a registry can be tested on
+ * its own.
+ *
+ * `negated` marks a value shown as a deduction but held as a positive in the
+ * taxonomy — creditors and expenses work that way.
  */
 function fact(
   name: string,
@@ -111,16 +132,15 @@ function fact(
   ctx: string,
   opts: { negated?: boolean; decimals?: string } = {},
 ): string {
-  const v = Math.abs(value);
+  const dp = Number(opts.decimals ?? "0");
   const attrs = [
     `name="${name}"`,
     `contextRef="${ctx}"`,
     `unitRef="GBP"`,
     `decimals="${opts.decimals ?? "0"}"`,
-    `format="ixt:numcommadot"`,
     opts.negated ? `sign="-"` : "",
   ].filter(Boolean).join(" ");
-  return `<ix:nonFraction ${attrs}>${show(v)}</ix:nonFraction>`;
+  return `<ix:nonFraction ${attrs}>${plain(value, dp > 0 ? dp : 0)}</ix:nonFraction>`;
 }
 
 const textFact = (name: string, value: string, ctx: string): string =>
@@ -150,7 +170,7 @@ export function buildAccounts(i: AccountsInput): string {
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"
-      xmlns:ix="${NS.ix}" xmlns:ixt="${NS.ixt}" xmlns:xbrli="${NS.xbrli}"
+      xmlns:ix="${NS.ix}" xmlns:xbrli="${NS.xbrli}"
       xmlns:xlink="${NS.xlink}" xmlns:link="${NS.link}" xmlns:iso4217="${NS.iso4217}"
       xmlns:core="${NS.core}" xmlns:bus="${NS.bus}">
 <head>
@@ -283,7 +303,7 @@ ${i.dormant
 <p class="note">
   <b>1. Employee information.</b> Average number of employees during the period:
   <ix:nonFraction name="core:AverageNumberEmployeesDuringPeriod" contextRef="${D}"
-    unitRef="pure" decimals="0" format="ixt:numcommadot">${show(i.employees)}</ix:nonFraction>.
+    unitRef="pure" decimals="0">${plain(i.employees)}</ix:nonFraction>.
 </p>
 <p class="note"><b>2. Off balance sheet arrangements.</b> None.</p>
 
@@ -303,7 +323,7 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"
-      xmlns:ix="${NS.ix}" xmlns:ixt="${NS.ixt}" xmlns:xbrli="${NS.xbrli}"
+      xmlns:ix="${NS.ix}" xmlns:xbrli="${NS.xbrli}"
       xmlns:xlink="${NS.xlink}" xmlns:link="${NS.link}" xmlns:iso4217="${NS.iso4217}"
       xmlns:ct="${NS.ct}" xmlns:bus="${NS.bus}">
 <head>

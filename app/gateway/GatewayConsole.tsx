@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { previewEnvelope, runSubmission, type AttemptResult, type TestFormInput } from "@/lib/actions";
+import { MARK_METHODS, type MarkMethod } from "@/lib/ct600-xml";
 
 /**
  * The gateway console.
@@ -29,6 +30,8 @@ const blank: TestFormInput = {
   declarantName: "Waleed Sarfraz",
   declarantStatus: "Agent",
   attachAccounts: true,
+  markMethod: "exc-c14n",
+  testInLive: false,
 };
 
 type Check = { label: string; ok: boolean; detail: string };
@@ -223,12 +226,13 @@ export default function GatewayConsole({
               <div className="bd">
                 <div className="kv"><span className="k">Vendor ID</span><span className="v mono">{vendorId}</span></div>
                 <div className="kv"><span className="k">Sender ID</span><span className="v mono">{senderId}</span></div>
-                <div className="kv"><span className="k">Message class</span><span className="v mono">HMRC-CT-CT600-TIL</span></div>
+                <div className="kv"><span className="k">Message class</span><span className="v mono">{f.testInLive ? "HMRC-CT-CT600-TIL" : "HMRC-CT-CT600"}</span></div>
                 <div className="kv">
                   <span className="k">Endpoint</span>
                   <span className="v mono" style={{ fontSize: 11, wordBreak: "break-all" }}>{endpoint}</span>
                 </div>
-                <div className="kv"><span className="k">GatewayTest</span><span className="v mono">1</span></div>
+                <div className="kv"><span className="k">GatewayTest</span><span className="v mono">{f.testInLive ? "0" : "1"}</span></div>
+                <div className="kv"><span className="k">IRmark method</span><span className="v" style={{ fontSize: 12 }}>{MARK_METHODS.find((m) => m.key === f.markMethod)?.label}</span></div>
               </div>
             </div>
 
@@ -244,6 +248,29 @@ export default function GatewayConsole({
                     </span>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="hd">
+                <h3>IRmark method</h3>
+                <span className="note">Only change this if HMRC return 9001</span>
+              </div>
+              <div className="bd">
+                <div className="field">
+                  <label>How to calculate the fingerprint</label>
+                  <select value={f.markMethod} onChange={(e) => set("markMethod", e.target.value as MarkMethod)}>
+                    {MARK_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                  </select>
+                </div>
+                <p className="note" style={{ marginTop: 0 }}>
+                  {MARK_METHODS.find((m) => m.key === f.markMethod)?.detail}
+                </p>
+                <p className="note">
+                  HMRC&apos;s published wording allows more than one reading, and working
+                  implementations disagree. If a submission comes back with error 9001, try the
+                  next one down and send again — nothing else needs changing.
+                </p>
               </div>
             </div>
           </div>

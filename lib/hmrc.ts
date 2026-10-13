@@ -32,12 +32,35 @@ export const ENDPOINTS = {
     ?? "https://transaction-engine.tax.service.gov.uk/submission",
 } as const;
 
+/**
+ * The External Test Service answers polls on its own address, separate from
+ * the one submissions go to. HMRC also name a poll address in their reply,
+ * which takes precedence; this is the fallback when they don't.
+ */
+export const POLL_ENDPOINTS = {
+  test: process.env.HMRC_TEST_POLL_ENDPOINT
+    ?? "https://test-transaction-engine.tax.service.gov.uk/poll",
+  live: process.env.HMRC_LIVE_POLL_ENDPOINT
+    ?? "https://transaction-engine.tax.service.gov.uk/poll",
+} as const;
+
 export type Mode = "test" | "live";
 
-/** The message class tells HMRC which service the envelope is for. */
-export function messageClass(mode: Mode): string {
+/**
+ * The message class tells HMRC which service the envelope is for, and the
+ * credentials are validated against it.
+ *
+ * The plain class is correct on both the External Test Service and the live
+ * one. The `-TIL` suffix belongs to "Test in Live" only — a different kind of
+ * test, sent to the live endpoint with live credentials. Sending ETS
+ * credentials against a `-TIL` class produces error 1046, "the supplied user
+ * credentials failed validation for the requested service", which is HMRC
+ * saying the service name doesn't match the account rather than that the
+ * password is wrong.
+ */
+export function messageClass(mode: Mode, testInLive = false): string {
   const base = process.env.HMRC_CT_CLASS ?? "HMRC-CT-CT600";
-  return mode === "test" ? `${base}-TIL` : base;
+  return testInLive ? `${base}-TIL` : base;
 }
 
 export interface ConfigResult {
@@ -68,6 +91,7 @@ export function gatewayConfig(mode: Mode): ConfigResult {
   return {
     config: {
       endpoint: ENDPOINTS[mode],
+      pollEndpoint: POLL_ENDPOINTS[mode],
       senderId: SENDER_ID,
       password: password as string,
       vendorId: VENDOR_ID,

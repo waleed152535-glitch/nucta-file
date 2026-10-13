@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "crypto";
-import { buildCt600, buildEnvelope, checkCt600, markWasCanonical, type Ct600Input } from "./ct600-xml";
+import { buildCt600, buildEnvelope, checkCt600, markWasCanonical, type Ct600Input, type MarkMethod } from "./ct600-xml";
 import { buildAccounts, buildComputation, type AccountsInput } from "./ixbrl";
 import { submitAndWait, explain, type RunResult } from "./govtalk";
 import { gatewayConfig, messageClass, redact, type Mode } from "./hmrc";
@@ -44,6 +44,10 @@ export interface TestFormInput {
   declarantName: string;
   declarantStatus: string;
   attachAccounts: boolean;
+  /** Which reading of the IRmark spec to use. */
+  markMethod: MarkMethod;
+  /** Send as "Test in Live" instead: the live endpoint, with a -TIL class. */
+  testInLive: boolean;
 }
 
 function toCt600(f: TestFormInput): Ct600Input {
@@ -125,16 +129,25 @@ export async function previewEnvelope(f: TestFormInput): Promise<{
     };
   }
 
-  const body = buildCt600(input);
-  const envelope = buildEnvelope({
-    messageClass: messageClass(f.mode),
-    senderId: process.env.HMRC_SENDER_ID ?? "CTUser100",
-    vendorId: process.env.HMRC_VENDOR_ID ?? "9754",
-    body,
-    utr: f.utr,
-    periodEnd: f.periodTo,
-    test: f.mode === "test",
-  });
+  let envelope: string;
+  try {
+    envelope = buildEnvelope({
+      messageClass: messageClass(f.mode, f.testInLive),
+      senderId: process.env.HMRC_SENDER_ID ?? "CTUser100",
+      vendorId: process.env.HMRC_VENDOR_ID ?? "9754",
+      body: buildCt600(input),
+      utr: f.utr,
+      periodEnd: f.periodTo,
+      test: f.mode === "test",
+      markMethod: f.markMethod,
+    });
+  } catch (e) {
+    return {
+      ok: false,
+      problems: [`Couldn't build the submission: ${String((e as Error)?.message ?? e).slice(0, 200)}`],
+      warnings: [], envelope: null, irmark: null, canonical: false, accounts: null, computation: null,
+    };
+  }
 
   const mark = (envelope.match(/<IRmark[^>]*>([\s\S]*?)<\/IRmark>/) ?? [])[1] ?? null;
   const acc = toAccounts(f);
@@ -182,25 +195,36 @@ export async function runSubmission(f: TestFormInput): Promise<AttemptResult> {
     };
   }
 
-  const body = buildCt600(input);
-  const envelope = buildEnvelope({
-    messageClass: messageClass(f.mode),
-    senderId: config.senderId,
-    vendorId: config.vendorId,
-    body,
-    utr: f.utr,
-    periodEnd: f.periodTo,
-    test: f.mode === "test",
-    productName: config.productName,
-    productVersion: config.productVersion,
-    email: config.email,
-  });
+  const cls = messageClass(f.mode, f.testInLive);
+  let envelope: string;
+  try {
+    envelope = buildEnvelope({
+      messageClass: cls,
+      senderId: config.senderId,
+      vendorId: config.vendorId,
+      body: buildCt600(input),
+      utr: f.utr,
+      periodEnd: f.periodTo,
+      test: f.mode === "test",
+      productName: config.productName,
+      productVersion: config.productVersion,
+      email: config.email,
+      markMethod: f.markMethod,
+    });
+  } catch (e) {
+    return {
+      ok: false, outcome: "error",
+      headline: "Couldn't build the submission.",
+      detail: [String((e as Error)?.message ?? e).slice(0, 300)],
+      irmark: null, canonical: false, correlationId: null, receipt: null, envelope: null, steps: [],
+    };
+  }
 
   const mark = (envelope.match(/<IRmark[^>]*>([\s\S]*?)<\/IRmark>/) ?? [])[1] ?? null;
 
   let run: RunResult;
   try {
-    run = await submitAndWait(config, envelope, { maxWaitSeconds: 60 });
+    run = await submitAndWait({ ...config, messageClass: cls }, envelope, { maxWaitSeconds: 60 });
   } catch (e) {
     return {
       ok: false, outcome: "error",
@@ -257,7 +281,7 @@ async function record(f: TestFormInput, r: AttemptResult, run: RunResult): Promi
     id: sid,
     returnId: f.utr,          // console attempts are keyed on the UTR used
     gatewayTest: f.mode === "test",
-    messageClass: messageClass(f.mode),
+    messageClass: messageClass(f.mode, f.testInLive),
     outcome: run.outcome,
     correlationId: run.correlationId,
     irmark: r.irmark,

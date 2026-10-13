@@ -15,6 +15,11 @@
 export interface GovTalkConfig {
   /** Where to post. Test and live endpoints come from HMRC's technical pack. */
   endpoint: string;
+  /**
+   * Where to send polls and deletes, when HMRC's reply doesn't name one.
+   * The External Test Service answers these on a separate address.
+   */
+  pollEndpoint?: string;
   senderId: string;
   password: string;
   vendorId: string;
@@ -23,6 +28,8 @@ export interface GovTalkConfig {
   /** 1 for the test services, 0 for a real filing. */
   gatewayTest: boolean;
   email?: string;
+  /** The service name, which a poll or delete must repeat exactly. */
+  messageClass?: string;
 }
 
 export interface GovTalkResult {
@@ -131,7 +138,7 @@ export async function poll(
   endpoint?: string,
 ): Promise<GovTalkResult> {
   const body = controlMessage(config, "poll", correlationId);
-  const { status, text } = await post(endpoint || config.endpoint, body);
+  const { status, text } = await post(endpoint || config.pollEndpoint || config.endpoint, body);
   return parseReply(text, status);
 }
 
@@ -142,7 +149,7 @@ export async function remove(
   endpoint?: string,
 ): Promise<GovTalkResult> {
   const body = controlMessage(config, "delete", correlationId);
-  const { status, text } = await post(endpoint || config.endpoint, body);
+  const { status, text } = await post(endpoint || config.pollEndpoint || config.endpoint, body);
   return parseReply(text, status);
 }
 
@@ -157,7 +164,7 @@ function controlMessage(config: GovTalkConfig, qualifier: string, correlationId:
   <EnvelopeVersion>2.0</EnvelopeVersion>
   <Header>
     <MessageDetails>
-      <Class>HMRC-CT-CT600</Class>
+      <Class>${esc(config.messageClass ?? "HMRC-CT-CT600")}</Class>
       <Qualifier>${esc(qualifier)}</Qualifier>
       <Function>submit</Function>
       <CorrelationID>${esc(correlationId)}</CorrelationID>
@@ -254,7 +261,7 @@ export async function submitAndWait(
   }
 
   const deadline = Date.now() + (opts.maxWaitSeconds ?? 120) * 1000;
-  let endpoint = r.pollEndpoint ?? config.endpoint;
+  let endpoint = r.pollEndpoint ?? config.pollEndpoint ?? config.endpoint;
 
   while (r.qualifier === "acknowledgement" && Date.now() < deadline) {
     const wait = Math.max(1, r.pollSeconds ?? 5);

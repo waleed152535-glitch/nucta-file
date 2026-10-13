@@ -1,4 +1,7 @@
 import { createHash } from "crypto";
+import { DOMParser } from "@xmldom/xmldom";
+import { ExclusiveCanonicalization } from "xml-crypto/lib/exclusive-canonicalization.js";
+import { C14nCanonicalization } from "xml-crypto/lib/c14n-canonicalization.js";
 
 /**
  * Builds a Company Tax Return as XML for HMRC's Corporation Tax service.
@@ -161,24 +164,48 @@ export function buildCt600(i: Ct600Input): string {
 }
 
 /**
- * The IRmark.
+ * How the IRmark digest is produced.
  *
- * HMRC's specification is precise and unforgiving: take the IRenvelope,
- * remove the IRmark element entirely, canonicalise the result using
- * Exclusive XML Canonicalisation (http://www.w3.org/2001/10/xml-exc-c14n#),
- * take a SHA-1 digest of the UTF-8 bytes, and base64 encode it. HMRC repeat
- * the calculation on arrival and refuse the submission with error 9001 if
- * their answer differs from ours.
- *
- * The important thing about canonicalisation is what it does *not* do: it
- * does not strip whitespace between elements. An earlier version of this
- * function normalised whitespace away, which would have produced a digest
- * that could never match. Real canonicalisation is used instead, with a
- * documented fallback only so the rest of the app still loads if the parser
- * is unavailable.
+ * HMRC's specification is precise, but the published wording leaves room for
+ * more than one reading, and working implementations in the wild disagree.
+ * Rather than pick one and hope, all three readings are available and the
+ * test service decides. A wrong choice shows up as error 9001 and nothing
+ * else, so trying the next one costs a single resubmission.
  */
-export function irMark(bodyXml: string): string {
-  const canonical = canonicalWithoutMark(bodyXml);
+export type MarkMethod = "exc-c14n" | "inc-c14n" | "inc-c14n-body";
+
+export const MARK_METHODS: { key: MarkMethod; label: string; detail: string }[] = [
+  {
+    key: "exc-c14n",
+    label: "Exclusive C14N over IRenvelope",
+    detail: "Exclusive XML Canonicalisation of the IRenvelope with the IRmark element removed. This is the reading HMRC's own wording suggests.",
+  },
+  {
+    key: "inc-c14n",
+    label: "Inclusive C14N over IRenvelope",
+    detail: "The same, but Canonical XML 1.0 rather than exclusive. These two differ only in how inherited namespace declarations are carried, so for a return of this shape they produce an identical fingerprint \u2014 there are really two values to try, not three.",
+  },
+  {
+    key: "inc-c14n-body",
+    label: "Inclusive C14N over Body wrapper",
+    detail: "Inclusive C14N over a Body element wrapping the IRenvelope, with both namespaces declared on it. This is what at least one working open-source submitter does.",
+  },
+];
+
+/**
+ * The IRmark: a SHA-1 digest of the canonicalised return, base64 encoded.
+ *
+ * HMRC repeat the calculation on arrival and refuse the submission with error
+ * 9001 if their answer differs from ours.
+ *
+ * The important thing about canonicalisation is what it does *not* do: it does
+ * not strip whitespace between elements, and the IRmark element is removed
+ * from the parsed tree rather than cut out of the text, so the newline and
+ * indentation that surrounded it survive — exactly as they do when HMRC delete
+ * the node at their end.
+ */
+export function irMark(bodyXml: string, method: MarkMethod = "exc-c14n"): string {
+  const canonical = canonicalWithoutMark(bodyXml, method);
   return createHash("sha1").update(canonical, "utf8").digest("base64");
 }
 
@@ -186,47 +213,40 @@ export function irMark(bodyXml: string): string {
  * Whether the last digest was produced by real canonicalisation.
  *
  * Worth showing on screen: if HMRC return error 9001 and this says false,
- * the cause is the missing parser rather than anything in the return.
+ * the cause is a missing parser rather than anything in the return.
  */
 let canonicalRan = false;
 export const markWasCanonical = (): boolean => canonicalRan;
 
-/**
- * Removes the IRmark element and canonicalises what's left.
- *
- * The removal happens in the parsed tree rather than in the text, and that
- * distinction matters. HMRC receive a document, find the IRmark element and
- * delete that node; the newline and indentation around it are separate text
- * nodes and survive. Cutting the element out of the string with a regular
- * expression would also take that whitespace, giving a different digest from
- * theirs over something as trivial as an indent.
- */
-function canonicalWithoutMark(bodyXml: string): string {
-  try {
-    /* eslint-disable @typescript-eslint/no-require-imports */
-    const { DOMParser } = require("@xmldom/xmldom") as typeof import("@xmldom/xmldom");
-    const { ExclusiveCanonicalization } =
-      require("xml-crypto/lib/exclusive-canonicalization.js") as {
-        ExclusiveCanonicalization: new () => { process(node: unknown, opts: object): string };
-      };
-    /* eslint-enable @typescript-eslint/no-require-imports */
+/** The canonical text that was digested, kept so it can be inspected. */
+let lastCanonical = "";
+export const markCanonicalText = (): string => lastCanonical;
 
-    const doc = new DOMParser().parseFromString(bodyXml.trim(), "text/xml");
-    const root = doc.documentElement;
-    if (!root) throw new Error("no root element");
+function canonicalWithoutMark(bodyXml: string, method: MarkMethod): string {
+  // The Body wrapper variant needs the IRenvelope nested inside a Body element
+  // carrying both namespace declarations, so it is built as text before
+  // parsing rather than assembled afterwards.
+  const source = method === "inc-c14n-body"
+    ? `<Body xmlns="${GOVTALK_NAMESPACE}" xmlns:ct="${CT_NAMESPACE}">${bodyXml.trim()}</Body>`
+    : bodyXml.trim();
 
-    const marks = Array.from(root.getElementsByTagName("IRmark"));
-    for (const m of marks) m.parentNode?.removeChild(m);
+  const doc = new DOMParser().parseFromString(source, "text/xml");
+  const root = doc.documentElement;
+  if (!root) throw new Error("The return isn't valid XML, so no IRmark can be calculated.");
 
-    const out = new ExclusiveCanonicalization().process(root, {});
-    canonicalRan = true;
-    return String(out);
-  } catch {
-    // Without a parser the best that can be done is to digest the text as
-    // written. It may not match, and the test service will say so.
-    canonicalRan = false;
-    return bodyXml.replace(/<IRmark\b[^>]*>[\s\S]*?<\/IRmark>/g, "").replace(/\r\n/g, "\n").trim();
+  for (const m of Array.from(root.getElementsByTagName("IRmark"))) {
+    m.parentNode?.removeChild(m);
   }
+
+  const engine = method === "exc-c14n"
+    ? new ExclusiveCanonicalization()
+    : new C14nCanonicalization();
+
+  // The signature varies between xml-crypto versions; only the node matters.
+  const out = String((engine as unknown as { process(n: unknown, o: object): string }).process(root, {}));
+  canonicalRan = true;
+  lastCanonical = out;
+  return out;
 }
 
 export interface EnvelopeInput {
@@ -244,6 +264,8 @@ export interface EnvelopeInput {
   test?: boolean;
   productName?: string;
   productVersion?: string;
+  /** Which reading of the IRmark specification to use. */
+  markMethod?: MarkMethod;
 }
 
 /** Wraps a return in the GovTalk envelope the Transaction Engine expects. */
@@ -258,7 +280,7 @@ export function buildEnvelope(i: EnvelopeInput): string {
 </IRheader>
 ${i.body}
 </IRenvelope>`;
-  const mark = irMark(inner);
+  const mark = irMark(inner, i.markMethod ?? "exc-c14n");
   const signed = inner.replace("PLACEHOLDER", mark);
 
   return `<?xml version="1.0" encoding="UTF-8"?>

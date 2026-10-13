@@ -284,9 +284,14 @@ export function buildCt600(i: Ct600Input): string {
  * test service decides. A wrong choice shows up as error 9001 and nothing
  * else, so trying the next one costs a single resubmission.
  */
-export type MarkMethod = "exc-c14n" | "inc-c14n" | "inc-c14n-body";
+export type MarkMethod = "spec" | "exc-c14n" | "inc-c14n" | "inc-c14n-body";
 
 export const MARK_METHODS: { key: MarkMethod; label: string; detail: string }[] = [
+  {
+    key: "spec",
+    label: "HMRC specification",
+    detail: "The algorithm from HMRC's own IRmark step-by-step guide: start at the Body element including its tags, copy GovTalkMessage's namespace declarations onto it, remove the IRmark element but keep the whitespace around it, canonicalise with inclusive Canonical XML 1.0, then SHA-1 and base64. Use this one.",
+  },
   {
     key: "exc-c14n",
     label: "Exclusive C14N over IRenvelope",
@@ -338,9 +343,14 @@ function canonicalWithoutMark(bodyXml: string, method: MarkMethod): string {
   // The Body wrapper variant needs the IRenvelope nested inside a Body element
   // carrying both namespace declarations, so it is built as text before
   // parsing rather than assembled afterwards.
+  // For "spec" the caller has already assembled the Body element exactly as it
+  // will be serialised, so it is canonicalised as given — the whitespace
+  // inside it is part of the digest.
   const source = method === "inc-c14n-body"
     ? `<Body xmlns="${GOVTALK_NAMESPACE}" xmlns:ct="${CT_NAMESPACE}">${bodyXml.trim()}</Body>`
-    : bodyXml.trim();
+    : method === "spec"
+      ? bodyXml
+      : bodyXml.trim();
 
   const doc = new DOMParser().parseFromString(source, "text/xml");
   const root = doc.documentElement;
@@ -392,7 +402,20 @@ export function buildEnvelope(i: EnvelopeInput): string {
 </IRheader>
 ${i.body}
 </IRenvelope>`;
-  const mark = irMark(inner, i.markMethod ?? "exc-c14n");
+  const method = i.markMethod ?? "spec";
+
+  /**
+   * The Body exactly as the envelope will carry it.
+   *
+   * HMRC's IRmark guide starts from the Body element, tags included, with
+   * GovTalkMessage's namespace declarations copied onto it — and only those,
+   * which here is the single default declaration. The whitespace inside Body
+   * counts too, because HMRC recompute the digest from the document they
+   * receive, so this has to be byte-for-byte what gets sent.
+   */
+  const bodyForMark = `<Body xmlns="${GOVTALK_NAMESPACE}">\n${inner}\n  </Body>`;
+
+  const mark = method === "spec" ? irMark(bodyForMark, "spec") : irMark(inner, method);
   const signed = inner.replace("PLACEHOLDER", mark);
 
   return `<?xml version="1.0" encoding="UTF-8"?>

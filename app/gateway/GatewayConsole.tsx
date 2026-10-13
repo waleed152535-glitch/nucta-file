@@ -45,7 +45,7 @@ const blank: TestFormInput = {
   // pass their validator.
   noAccountsReason: "Submitted separately",
   noComputationsReason: "Company in liquidation",
-  markMethod: "exc-c14n",
+  markMethod: "spec",
   testInLive: false,
   attachLayout: "comp-first",
 };
@@ -375,7 +375,7 @@ export default function GatewayConsole({
             <div className="card">
               <div className="hd">
                 <h3>IRmark method</h3>
-                <span className="note">Only change this if HMRC return 9001</span>
+                <span className="note">Leave this on the specification</span>
               </div>
               <div className="bd">
                 <div className="field">
@@ -388,9 +388,10 @@ export default function GatewayConsole({
                   {MARK_METHODS.find((m) => m.key === f.markMethod)?.detail}
                 </p>
                 <p className="note">
-                  HMRC&apos;s published wording allows more than one reading, and working
-                  implementations disagree. If a submission comes back with error 9001, try the
-                  next one down and send again — nothing else needs changing.
+                  The first option follows HMRC&apos;s own IRmark step-by-step guide and is
+                  verified against it: the digest is recomputed from the envelope exactly as sent,
+                  the way HMRC do it, and the two agree. The others are earlier readings kept only
+                  for comparison — all three were refused.
                 </p>
               </div>
             </div>

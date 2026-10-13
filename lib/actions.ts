@@ -3,7 +3,7 @@
 import { randomUUID } from "crypto";
 import { buildCt600, buildEnvelope, checkCt600, markWasCanonical, type Ct600Input, type MarkMethod } from "./ct600-xml";
 import { buildAccounts, buildComputation, type AccountsInput } from "./ixbrl";
-import { submitAndWait, explain, type RunResult } from "./govtalk";
+import { submitAndWait, poll, remove, explain, type RunResult } from "./govtalk";
 import { gatewayConfig, messageClass, redact, type Mode } from "./hmrc";
 
 /**
@@ -233,7 +233,7 @@ export async function runSubmission(f: TestFormInput): Promise<AttemptResult> {
 
   let run: RunResult;
   try {
-    run = await submitAndWait({ ...config, messageClass: cls }, envelope, { maxWaitSeconds: 60 });
+    run = await submitAndWait({ ...config, messageClass: cls }, envelope, { maxWaitSeconds: 40 });
   } catch (e) {
     return {
       ok: false, outcome: "error",
@@ -312,4 +312,84 @@ async function record(f: TestFormInput, r: AttemptResult, run: RunResult): Promi
       })),
     );
   }
+}
+
+/**
+ * Asks HMRC again about a submission already sent.
+ *
+ * A Company Tax Return isn't processed instantly, and a web request can't sit
+ * waiting indefinitely — the host cuts it off after a minute. So the first
+ * attempt waits as long as it safely can, and after that the correlation ID
+ * is used to ask again. This is one exchange, not a loop, so it returns at
+ * once however long HMRC are taking.
+ *
+ * When HMRC have finished, the message is cleared from their queue in the
+ * same call, which they ask developers to do.
+ */
+export async function pollAgain(
+  correlationId: string,
+  mode: Mode = "test",
+  testInLive = false,
+): Promise<AttemptResult> {
+  const { config, missing } = gatewayConfig(mode);
+  if (!config) {
+    return {
+      ok: false, outcome: "blocked",
+      headline: "The gateway credentials aren't set up yet.",
+      detail: missing,
+      irmark: null, canonical: false, correlationId, receipt: null, envelope: null, steps: [],
+    };
+  }
+
+  const cls = messageClass(mode, testInLive);
+  const steps: AttemptResult["steps"] = [];
+  const withClass = { ...config, messageClass: cls };
+
+  let r;
+  try {
+    r = await poll(withClass, correlationId);
+  } catch (e) {
+    return {
+      ok: false, outcome: "error",
+      headline: "Couldn't reach HMRC to ask again.",
+      detail: [String((e as Error)?.message ?? e).slice(0, 300)],
+      irmark: null, canonical: false, correlationId, receipt: null, envelope: null, steps,
+    };
+  }
+  steps.push({ stage: "poll", at: new Date().toISOString(), qualifier: r.qualifier, httpStatus: r.httpStatus, raw: r.raw });
+
+  const stillGoing = r.qualifier === "acknowledgement" && r.errors.length === 0;
+  const rejected = r.qualifier === "error" || r.errors.length > 0;
+
+  // Tidy up once HMRC have given a verdict either way.
+  if (!stillGoing) {
+    try {
+      const d = await remove(withClass, correlationId, r.pollEndpoint ?? undefined);
+      steps.push({ stage: "delete", at: new Date().toISOString(), qualifier: d.qualifier, httpStatus: d.httpStatus, raw: d.raw });
+    } catch {
+      /* a failed tidy-up doesn't change the filing's outcome */
+    }
+  }
+
+  const outcome = stillGoing ? "timeout" : rejected ? "rejected" : "accepted";
+
+  return {
+    ok: outcome === "accepted",
+    outcome,
+    headline:
+      outcome === "accepted" ? "Accepted by HMRC."
+        : outcome === "rejected" ? "HMRC rejected the submission."
+          : "Still processing at HMRC.",
+    detail: rejected
+      ? r.errors.map(explain)
+      : outcome === "accepted"
+        ? ["HMRC have finished and issued a receipt. The message has been cleared from their queue."]
+        : ["HMRC are still working on it. Wait a few seconds and ask again."],
+    irmark: null,
+    canonical: true,
+    correlationId,
+    receipt: r.receipt,
+    envelope: null,
+    steps,
+  };
 }

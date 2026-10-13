@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { previewEnvelope, runSubmission, type AttemptResult, type TestFormInput } from "@/lib/actions";
+import { previewEnvelope, runSubmission, pollAgain, type AttemptResult, type TestFormInput } from "@/lib/actions";
 import { MARK_METHODS, type MarkMethod } from "@/lib/ct600-xml";
 
 /**
@@ -73,6 +73,22 @@ export default function GatewayConsole({
     start(async () => {
       const r = await runSubmission(f);
       setResult(r);
+    });
+  }
+
+  function doPoll() {
+    const id = result?.correlationId;
+    if (!id) return;
+    start(async () => {
+      const r = await pollAgain(id, f.mode, f.testInLive);
+      // The first attempt holds the IRmark and the envelope; a later poll
+      // doesn't, so keep what we already know rather than blanking it.
+      setResult((prev) => ({
+        ...r,
+        irmark: r.irmark ?? prev?.irmark ?? null,
+        envelope: r.envelope ?? prev?.envelope ?? null,
+        steps: [...(prev?.steps ?? []), ...r.steps],
+      }));
     });
   }
 
@@ -337,13 +353,19 @@ export default function GatewayConsole({
           </div>
         )}
 
-        {result && <Transcript r={result} />}
+        {result && (
+          <Transcript
+            r={result}
+            onPoll={result.correlationId ? doPoll : undefined}
+            polling={pending}
+          />
+        )}
       </div>
     </>
   );
 }
 
-function Transcript({ r }: { r: AttemptResult }) {
+function Transcript({ r, onPoll, polling }: { r: AttemptResult; onPoll?: () => void; polling?: boolean }) {
   const tone =
     r.outcome === "accepted" ? "good"
       : r.outcome === "rejected" ? "bad"
@@ -362,6 +384,25 @@ function Transcript({ r }: { r: AttemptResult }) {
           )}
         </span>
       </div>
+
+      {r.outcome === "timeout" && onPoll && (
+        <div className="card">
+          <div className="hd">
+            <h3>Ask HMRC again</h3>
+            <span className="note">Nothing is resubmitted</span>
+          </div>
+          <div className="bd">
+            <p className="note" style={{ marginTop: 0 }}>
+              The return is with HMRC and they are still working on it. This asks for the verdict
+              using the correlation ID below — it does not send the return a second time, so there
+              is no risk of filing twice. Give it a few seconds between tries.
+            </p>
+            <button className="btn" onClick={onPoll} disabled={polling}>
+              {polling ? "Asking…" : "Ask HMRC for the verdict"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {(r.irmark || r.correlationId || r.receipt) && (
         <div className="card">

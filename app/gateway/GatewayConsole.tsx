@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { previewEnvelope, runSubmission, pollAgain, type AttemptResult, type TestFormInput } from "@/lib/actions";
 import { MARK_METHODS, ATTACH_LAYOUTS, type MarkMethod, type AttachLayout } from "@/lib/ct600-xml";
+import { ACCOUNT_TAXONOMIES, COMP_TAXONOMIES } from "@/lib/ixbrl";
 
 /**
  * The gateway console.
@@ -33,6 +34,12 @@ const blank: TestFormInput = {
   declarantName: "Waleed Sarfraz",
   declarantStatus: "Agent",
   attachAccounts: true,
+  // The computation is off to begin with. Its taxonomy address is the least
+  // certain part of the submission, so the accounts are proved on their own
+  // first rather than two unknowns failing together.
+  attachComputation: false,
+  accountsTaxonomy: "frs105-2023",
+  compTaxonomy: "frc-hmrc-2023",
   markMethod: "exc-c14n",
   testInLive: false,
   attachLayout: "comp-first",
@@ -230,7 +237,7 @@ export default function GatewayConsole({
                 </div>
               </div>
 
-              <label style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 13 }}>
+              <label style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 13, marginBottom: 10 }}>
                 <input
                   type="checkbox"
                   checked={f.attachAccounts}
@@ -238,13 +245,57 @@ export default function GatewayConsole({
                   style={{ width: 16, marginTop: 2 }}
                 />
                 <span>
-                  Attach iXBRL accounts and computations
+                  Attach iXBRL accounts
                   <span style={{ display: "block", color: "var(--muted)", fontSize: 12, marginTop: 2 }}>
-                    HMRC expects both with a real return. Turning this off narrows the test to the
-                    CT600 and the IRmark alone, which is useful when hunting a rejection.
+                    Tagged against the FRC taxonomy.
                   </span>
                 </span>
               </label>
+
+              <label style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 13, marginBottom: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={f.attachComputation}
+                  onChange={(e) => set("attachComputation", e.target.checked)}
+                  style={{ width: 16, marginTop: 2 }}
+                />
+                <span>
+                  Attach iXBRL computation
+                  <span style={{ display: "block", color: "var(--muted)", fontSize: 12, marginTop: 2 }}>
+                    Leave this off until the accounts are accepted. HMRC don&apos;t publish the
+                    computation taxonomy&apos;s address, so it is the one part still being guessed
+                    at — and two unknowns failing together tell you nothing.
+                  </span>
+                </span>
+              </label>
+
+              <div className="field">
+                <label>Accounts taxonomy</label>
+                <select
+                  value={f.accountsTaxonomy}
+                  onChange={(e) => set("accountsTaxonomy", e.target.value)}
+                  disabled={!f.attachAccounts}
+                >
+                  {ACCOUNT_TAXONOMIES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                </select>
+                <span className="note mono" style={{ fontSize: 10.5, wordBreak: "break-all" }}>
+                  {ACCOUNT_TAXONOMIES.find((t) => t.key === f.accountsTaxonomy)?.schemaRef}
+                </span>
+              </div>
+
+              <div className="field">
+                <label>Computation taxonomy</label>
+                <select
+                  value={f.compTaxonomy}
+                  onChange={(e) => set("compTaxonomy", e.target.value)}
+                  disabled={!f.attachComputation}
+                >
+                  {COMP_TAXONOMIES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                </select>
+                <span className="note mono" style={{ fontSize: 10.5, wordBreak: "break-all" }}>
+                  {COMP_TAXONOMIES.find((t) => t.key === f.compTaxonomy)?.schemaRef}
+                </span>
+              </div>
             </div>
           </div>
 

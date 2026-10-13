@@ -2,7 +2,7 @@
 
 import { randomUUID } from "crypto";
 import { buildCt600, buildEnvelope, checkCt600, markWasCanonical, type Ct600Input, type MarkMethod, type AttachLayout } from "./ct600-xml";
-import { buildAccounts, buildComputation, type AccountsInput } from "./ixbrl";
+import { buildAccounts, buildComputation, ACCOUNT_TAXONOMIES, COMP_TAXONOMIES, type AccountsInput } from "./ixbrl";
 import { submitAndWait, poll, remove, explain, type RunResult } from "./govtalk";
 import { gatewayConfig, messageClass, redact, type Mode } from "./hmrc";
 
@@ -44,6 +44,11 @@ export interface TestFormInput {
   declarantName: string;
   declarantStatus: string;
   attachAccounts: boolean;
+  /** Separate from the accounts, so one can be proved without the other. */
+  attachComputation: boolean;
+  /** Which taxonomy each document references. */
+  accountsTaxonomy: string;
+  compTaxonomy: string;
   /** Which reading of the IRmark spec to use. */
   markMethod: MarkMethod;
   /** Send as "Test in Live" instead: the live endpoint, with a -TIL class. */
@@ -72,19 +77,21 @@ function toCt600(f: TestFormInput, docs?: { accounts: string; computation: strin
     declarantName: f.declarantName,
     declarantStatus: f.declarantStatus,
     accountsAttached: f.attachAccounts,
-    computationsAttached: f.attachAccounts,
+    computationsAttached: f.attachComputation,
     accountsIxbrl: docs?.accounts,
     computationIxbrl: docs?.computation,
     attachLayout: f.attachLayout,
   };
 }
 
-/** Builds the two iXBRL documents that travel inside the return. */
+/** Builds whichever iXBRL documents are being attached. */
 function buildDocs(f: TestFormInput): { accounts: string; computation: string } {
   const acc = toAccounts(f);
   return {
-    accounts: buildAccounts(acc),
-    computation: buildComputation({ ...acc, taxRate: f.rate, taxPayable: f.taxPayable }),
+    accounts: f.attachAccounts ? buildAccounts(acc) : "",
+    computation: f.attachComputation
+      ? buildComputation({ ...acc, taxRate: f.rate, taxPayable: f.taxPayable })
+      : "",
   };
 }
 
@@ -128,6 +135,8 @@ function toAccounts(f: TestFormInput): AccountsInput {
 
     approvedBy: f.declarantName,
     approvedOn: f.periodTo,
+    taxonomy: ACCOUNT_TAXONOMIES.find((t) => t.key === f.accountsTaxonomy) ?? ACCOUNT_TAXONOMIES[0],
+    compTaxonomy: COMP_TAXONOMIES.find((t) => t.key === f.compTaxonomy) ?? COMP_TAXONOMIES[0],
   };
 }
 
@@ -137,7 +146,7 @@ export async function previewEnvelope(f: TestFormInput): Promise<{
   envelope: string | null; irmark: string | null; canonical: boolean;
   accounts: string | null; computation: string | null;
 }> {
-  const docs = f.attachAccounts ? buildDocs(f) : undefined;
+  const docs = f.attachAccounts || f.attachComputation ? buildDocs(f) : undefined;
   const input = toCt600(f, docs);
   const check = checkCt600(input);
   if (!check.ok) {
@@ -176,8 +185,8 @@ export async function previewEnvelope(f: TestFormInput): Promise<{
     envelope: redact(envelope),
     irmark: mark,
     canonical: markWasCanonical(),
-    accounts: docs?.accounts ?? null,
-    computation: docs?.computation ?? null,
+    accounts: docs?.accounts || null,
+    computation: docs?.computation || null,
   };
 }
 
@@ -189,7 +198,7 @@ export async function previewEnvelope(f: TestFormInput): Promise<{
  * transcript shows exactly what they said.
  */
 export async function runSubmission(f: TestFormInput): Promise<AttemptResult> {
-  const input = toCt600(f, f.attachAccounts ? buildDocs(f) : undefined);
+  const input = toCt600(f, f.attachAccounts || f.attachComputation ? buildDocs(f) : undefined);
   const check = checkCt600(input);
   if (!check.ok) {
     return {

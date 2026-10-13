@@ -17,6 +17,95 @@
 
 /** The taxonomy this is written against. Bump when HMRC accepts a newer one. */
 export const TAXONOMY_VERSION = "2023-01-01";
+
+/**
+ * Which taxonomy the accounts are tagged against.
+ *
+ * `schemaRef` is a real URL that HMRC's validator fetches. If it can't be
+ * obtained, every element from that taxonomy becomes unrecognised and the
+ * errors look like tagging mistakes when the only fault is a bad address.
+ *
+ * The URL shape is confirmed by the Irish extensions, which are published as
+ * .../ireland/FRS-102/2023-01-01/ie-FRS-102-2023-01-01.xsd — the UK form
+ * drops the country segment and the prefix. FRC 2023 covers periods ending to
+ * 31 March 2026; FRC 2024 to 31 March 2027.
+ */
+export interface AccountsTaxonomy {
+  key: string;
+  label: string;
+  schemaRef: string;
+  core: string;
+  bus: string;
+}
+
+export const ACCOUNT_TAXONOMIES: AccountsTaxonomy[] = [
+  {
+    key: "frs105-2023",
+    label: "FRS 105 micro-entity (FRC 2023)",
+    schemaRef: "https://xbrl.frc.org.uk/FRS-105/2023-01-01/FRS-105-2023-01-01.xsd",
+    core: "https://xbrl.frc.org.uk/fr/2023-01-01/core",
+    bus: "https://xbrl.frc.org.uk/cd/2023-01-01/business",
+  },
+  {
+    key: "frs102-2023",
+    label: "FRS 102 section 1A (FRC 2023)",
+    schemaRef: "https://xbrl.frc.org.uk/FRS-102/2023-01-01/FRS-102-2023-01-01.xsd",
+    core: "https://xbrl.frc.org.uk/fr/2023-01-01/core",
+    bus: "https://xbrl.frc.org.uk/cd/2023-01-01/business",
+  },
+  {
+    key: "frs105-2024",
+    label: "FRS 105 micro-entity (FRC 2024)",
+    schemaRef: "https://xbrl.frc.org.uk/FRS-105/2024-01-01/FRS-105-2024-01-01.xsd",
+    core: "https://xbrl.frc.org.uk/fr/2024-01-01/core",
+    bus: "https://xbrl.frc.org.uk/cd/2024-01-01/business",
+  },
+  {
+    key: "frs102-2024",
+    label: "FRS 102 section 1A (FRC 2024)",
+    schemaRef: "https://xbrl.frc.org.uk/FRS-102/2024-01-01/FRS-102-2024-01-01.xsd",
+    core: "https://xbrl.frc.org.uk/fr/2024-01-01/core",
+    bus: "https://xbrl.frc.org.uk/cd/2024-01-01/business",
+  },
+];
+
+/**
+ * Which taxonomy the computation is tagged against.
+ *
+ * This is the least certain part of the whole submission. HMRC publish the CT
+ * computational taxonomies only as zip packages, and neither the accepted-
+ * taxonomies list nor the computations format document gives the entry point
+ * URL. Each candidate below is a reading of the naming conventions, not a
+ * documented fact, which is why the computation can be left off entirely
+ * while the accounts are proved first.
+ */
+export interface CompTaxonomy {
+  key: string;
+  label: string;
+  schemaRef: string;
+  ct: string;
+}
+
+export const COMP_TAXONOMIES: CompTaxonomy[] = [
+  {
+    key: "frc-hmrc-2023",
+    label: "HMRC CT, FRC-hosted (2023)",
+    schemaRef: "https://xbrl.frc.org.uk/HMRC/2023-01-01/HMRC-2023-01-01.xsd",
+    ct: "http://www.hmrc.gov.uk/schemas/ct/comp/2023-01-01",
+  },
+  {
+    key: "hmrc-2023",
+    label: "HMRC CT, hmrc.gov.uk (2023)",
+    schemaRef: "http://www.hmrc.gov.uk/schemas/ct/comp/2023-01-01/ct-comp-2023-01-01.xsd",
+    ct: "http://www.hmrc.gov.uk/schemas/ct/comp/2023-01-01",
+  },
+  {
+    key: "frc-hmrc-2024",
+    label: "HMRC CT, FRC-hosted (2024)",
+    schemaRef: "https://xbrl.frc.org.uk/HMRC/2024-01-01/HMRC-2024-01-01.xsd",
+    ct: "http://www.hmrc.gov.uk/schemas/ct/comp/2024-01-01",
+  },
+];
 export const NS = {
   ix: "http://www.xbrl.org/2013/inlineXBRL",
   /**
@@ -81,6 +170,10 @@ export interface AccountsInput {
 
   approvedBy: string;
   approvedOn: string;
+  /** Which accounts taxonomy to reference. Defaults to FRS 105, FRC 2023. */
+  taxonomy?: AccountsTaxonomy;
+  /** Which computation taxonomy to reference. */
+  compTaxonomy?: CompTaxonomy;
 }
 
 const esc = (v: string): string =>
@@ -156,6 +249,7 @@ function row(label: string, thisYear: string, lastYear: string, bold = false): s
 }
 
 export function buildAccounts(i: AccountsInput): string {
+  const tx = i.taxonomy ?? ACCOUNT_TAXONOMIES[0];
   const D = "D";        // the period
   const PD = "PD";      // the period before
   const E = "E";        // the period end
@@ -172,7 +266,7 @@ export function buildAccounts(i: AccountsInput): string {
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:ix="${NS.ix}" xmlns:xbrli="${NS.xbrli}"
       xmlns:xlink="${NS.xlink}" xmlns:link="${NS.link}" xmlns:iso4217="${NS.iso4217}"
-      xmlns:core="${NS.core}" xmlns:bus="${NS.bus}">
+      xmlns:core="${tx.core}" xmlns:bus="${tx.bus}">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <title>${esc(i.companyName)} — accounts for the period ended ${esc(longDate(i.periodTo))}</title>
@@ -198,7 +292,7 @@ export function buildAccounts(i: AccountsInput): string {
       ${textFact("bus:UKCompaniesHouseRegisteredNumber", i.companyNo, D)}
     </ix:hidden>
     <ix:references>
-      <link:schemaRef xlink:type="simple" xlink:href="${NS.core}/core-${TAXONOMY_VERSION}.xsd"/>
+      <link:schemaRef xlink:type="simple" xlink:href="${tx.schemaRef}"/>
     </ix:references>
     <ix:resources>
       <xbrli:context id="${D}">
@@ -318,6 +412,7 @@ ${i.dormant
 
 /** The Corporation Tax computation, also as iXBRL. */
 export function buildComputation(i: AccountsInput & { taxRate: number; taxPayable: number }): string {
+  const cx = i.compTaxonomy ?? COMP_TAXONOMIES[0];
   const D = "D";
   const adjusted = i.profitBeforeTax;
 
@@ -325,7 +420,7 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:ix="${NS.ix}" xmlns:xbrli="${NS.xbrli}"
       xmlns:xlink="${NS.xlink}" xmlns:link="${NS.link}" xmlns:iso4217="${NS.iso4217}"
-      xmlns:ct="${NS.ct}" xmlns:bus="${NS.bus}">
+      xmlns:ct="${cx.ct}" xmlns:bus="${NS.bus}">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <title>${esc(i.companyName)} — Corporation Tax computation</title>
@@ -343,7 +438,7 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
 <div style="display:none">
   <ix:header>
     <ix:references>
-      <link:schemaRef xlink:type="simple" xlink:href="${NS.ct}/ct-comp-${TAXONOMY_VERSION}.xsd"/>
+      <link:schemaRef xlink:type="simple" xlink:href="${cx.schemaRef}"/>
     </ix:references>
     <ix:resources>
       <xbrli:context id="${D}">

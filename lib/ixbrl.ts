@@ -19,7 +19,16 @@
 export const TAXONOMY_VERSION = "2023-01-01";
 export const NS = {
   ix: "http://www.xbrl.org/2013/inlineXBRL",
-  ixt: "http://www.xbrl.org/inlineXBRL/transformation/2020-02-12",
+  /**
+   * Transformation Registry 2.
+   *
+   * HMRC's processor accepts only Registry 1 (2010-04-20) and Registry 2
+   * (2011-07-31). The later registries exist, but HMRC's iXBRL processor
+   * doesn't know them, and a format from one is refused as undefined. Note
+   * that "numdotdecimal" belongs to Registry 3 onwards; the Registry 2 name
+   * for a comma-grouped, dot-decimal number is "numcommadot".
+   */
+  ixt: "http://www.xbrl.org/inlineXBRL/transformation/2011-07-31",
   xbrli: "http://www.xbrl.org/2003/instance",
   xlink: "http://www.w3.org/1999/xlink",
   link: "http://www.xbrl.org/2003/linkbase",
@@ -108,7 +117,7 @@ function fact(
     `contextRef="${ctx}"`,
     `unitRef="GBP"`,
     `decimals="${opts.decimals ?? "0"}"`,
-    `format="ixt:numdotdecimal"`,
+    `format="ixt:numcommadot"`,
     opts.negated ? `sign="-"` : "",
   ].filter(Boolean).join(" ");
   return `<ix:nonFraction ${attrs}>${show(v)}</ix:nonFraction>`;
@@ -274,7 +283,7 @@ ${i.dormant
 <p class="note">
   <b>1. Employee information.</b> Average number of employees during the period:
   <ix:nonFraction name="core:AverageNumberEmployeesDuringPeriod" contextRef="${D}"
-    unitRef="pure" decimals="0" format="ixt:numdotdecimal">${show(i.employees)}</ix:nonFraction>.
+    unitRef="pure" decimals="0" format="ixt:numcommadot">${show(i.employees)}</ix:nonFraction>.
 </p>
 <p class="note"><b>2. Off balance sheet arrangements.</b> None.</p>
 

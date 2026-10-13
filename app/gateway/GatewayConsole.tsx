@@ -19,13 +19,16 @@ const blank: TestFormInput = {
   companyName: "Nucta Test Trading Ltd",
   companyNo: "12345678",
   utr: "8596148860",
+  companyType: "0",
   periodFrom: "2024-04-01",
   periodTo: "2025-03-31",
-  turnover: 48000,
-  tradingProfits: 12000,
-  corporationTax: 2280,
-  taxPayable: 2280,
-  rate: 19,
+  // The main rate deliberately: at this profit no marginal relief applies and
+  // no associated-company question arises, so the rate can't be queried.
+  turnover: 400000,
+  tradingProfits: 300000,
+  corporationTax: 75000,
+  taxPayable: 75000,
+  rate: 25,
   financialYear: 2024,
   declarantName: "Waleed Sarfraz",
   declarantStatus: "Agent",
@@ -161,6 +164,17 @@ export default function GatewayConsole({
                   <span className="hint">HMRC issued {testUtr} for testing</span>
                 </label>
                 <input className="mono" value={f.utr} onChange={(e) => set("utr", e.target.value)} />
+              </div>
+
+              <div className="field">
+                <label>
+                  Type of company <span className="hint">box 4</span>
+                </label>
+                <select value={f.companyType} onChange={(e) => set("companyType", e.target.value)}>
+                  <option value="0">0 — ordinary trading company</option>
+                  <option value="1">1 — close investment-holding company</option>
+                  <option value="6">6 — as used in HMRC&apos;s own sample</option>
+                </select>
               </div>
 
               <div className="row2">

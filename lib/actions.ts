@@ -50,6 +50,8 @@ export interface TestFormInput {
   testInLive: boolean;
   /** How the iXBRL attachments are arranged inside the return. */
   attachLayout: AttachLayout;
+  /** CT600 box 4. 0 is an ordinary trading company. */
+  companyType: string;
 }
 
 function toCt600(f: TestFormInput, docs?: { accounts: string; computation: string }): Ct600Input {
@@ -57,6 +59,7 @@ function toCt600(f: TestFormInput, docs?: { accounts: string; computation: strin
     companyName: f.companyName,
     companyNo: f.companyNo,
     utr: f.utr,
+    companyType: f.companyType,
     periodFrom: f.periodFrom,
     periodTo: f.periodTo,
     turnover: f.turnover,

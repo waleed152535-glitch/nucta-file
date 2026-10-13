@@ -50,7 +50,7 @@ export interface TestFormInput {
   testInLive: boolean;
 }
 
-function toCt600(f: TestFormInput): Ct600Input {
+function toCt600(f: TestFormInput, docs?: { accounts: string; computation: string }): Ct600Input {
   return {
     companyName: f.companyName,
     companyNo: f.companyNo,
@@ -68,6 +68,17 @@ function toCt600(f: TestFormInput): Ct600Input {
     declarantStatus: f.declarantStatus,
     accountsAttached: f.attachAccounts,
     computationsAttached: f.attachAccounts,
+    accountsIxbrl: docs?.accounts,
+    computationIxbrl: docs?.computation,
+  };
+}
+
+/** Builds the two iXBRL documents that travel inside the return. */
+function buildDocs(f: TestFormInput): { accounts: string; computation: string } {
+  const acc = toAccounts(f);
+  return {
+    accounts: buildAccounts(acc),
+    computation: buildComputation({ ...acc, taxRate: f.rate, taxPayable: f.taxPayable }),
   };
 }
 
@@ -120,7 +131,8 @@ export async function previewEnvelope(f: TestFormInput): Promise<{
   envelope: string | null; irmark: string | null; canonical: boolean;
   accounts: string | null; computation: string | null;
 }> {
-  const input = toCt600(f);
+  const docs = f.attachAccounts ? buildDocs(f) : undefined;
+  const input = toCt600(f, docs);
   const check = checkCt600(input);
   if (!check.ok) {
     return {
@@ -150,7 +162,6 @@ export async function previewEnvelope(f: TestFormInput): Promise<{
   }
 
   const mark = (envelope.match(/<IRmark[^>]*>([\s\S]*?)<\/IRmark>/) ?? [])[1] ?? null;
-  const acc = toAccounts(f);
 
   return {
     ok: true,
@@ -159,10 +170,8 @@ export async function previewEnvelope(f: TestFormInput): Promise<{
     envelope: redact(envelope),
     irmark: mark,
     canonical: markWasCanonical(),
-    accounts: f.attachAccounts ? buildAccounts(acc) : null,
-    computation: f.attachAccounts
-      ? buildComputation({ ...acc, taxRate: f.rate, taxPayable: f.taxPayable })
-      : null,
+    accounts: docs?.accounts ?? null,
+    computation: docs?.computation ?? null,
   };
 }
 
@@ -174,7 +183,7 @@ export async function previewEnvelope(f: TestFormInput): Promise<{
  * transcript shows exactly what they said.
  */
 export async function runSubmission(f: TestFormInput): Promise<AttemptResult> {
-  const input = toCt600(f);
+  const input = toCt600(f, f.attachAccounts ? buildDocs(f) : undefined);
   const check = checkCt600(input);
   if (!check.ok) {
     return {

@@ -44,6 +44,22 @@ export interface Ct600Input {
   declarantStatus: string;
   accountsAttached: boolean;
   computationsAttached: boolean;
+
+  /**
+   * The iXBRL documents themselves, embedded in the return.
+   *
+   * HMRC want the accounts and computations inside the CT600, as inline XML
+   * rather than base64. Saying "yes" in ReturnInfoSummary without supplying
+   * them is refused: "You must provide a set of iXBRL accounts if the 'No
+   * accounts reason' is absent."
+   */
+  accountsIxbrl?: string;
+  computationIxbrl?: string;
+  /** Why no accounts are attached, when there genuinely aren't any. */
+  noAccountsReason?: string;
+  noComputationsReason?: string;
+  /** Reliefs and deductions in total (box 275). */
+  totalReliefs?: number;
 }
 
 const esc = (v: string): string =>
@@ -53,6 +69,8 @@ const esc = (v: string): string =>
 
 const money = (v: number): string => (Math.round(v * 100) / 100).toFixed(2);
 const whole = (v: number): string => String(Math.round(v));
+/** A tax rate as HMRC want it: a percentage to two places, so 19.00. */
+const rate = (v: number): string => (Math.round(v * 100) / 100).toFixed(2);
 const ymd = (v: string): string => String(v ?? "").slice(0, 10);
 
 export interface Ct600Check { ok: boolean; problems: string[]; warnings: string[] }
@@ -86,11 +104,28 @@ export function checkCt600(i: Partial<Ct600Input>): Ct600Check {
   return { ok: problems.length === 0, problems, warnings };
 }
 
-/** The CT600 itself. */
+/**
+ * Strips the XML declaration from an iXBRL document so it can be nested.
+ *
+ * A document can only carry one declaration, and it has to be the first
+ * thing in the file. An embedded one makes the whole envelope invalid.
+ */
+function nestable(doc: string): string {
+  return doc.replace(/^\s*<\?xml[^>]*\?>\s*/, "").trim();
+}
+
+/**
+ * The CT600 itself.
+ *
+ * The element names, their order and the number formats all follow HMRC's
+ * published valid sample. Order matters: the schema defines sequences, so a
+ * correctly named element in the wrong position is still rejected.
+ */
 export function buildCt600(i: Ct600Input): string {
   const netTrading = Math.max(0, i.tradingProfits - (i.lossesBroughtForward ?? 0));
-  const beforeReliefs = netTrading + (i.otherIncome ?? 0);
-  const chargeable = Math.max(0, beforeReliefs - (i.qualifyingDonations ?? 0));
+  const beforeOther = netTrading + (i.otherIncome ?? 0);
+  const beforeDonations = beforeOther;
+  const chargeable = Math.max(0, beforeDonations - (i.qualifyingDonations ?? 0));
 
   const L: string[] = [];
   const p = (s: string) => L.push(s);
@@ -107,59 +142,99 @@ export function buildCt600(i: Ct600Input): string {
   p(`    </PeriodCovered>`);
   p(`  </CompanyInformation>`);
 
+  // Either the document is attached or there's a reason it isn't. HMRC check
+  // the two against each other.
   p(`  <ReturnInfoSummary>`);
-  p(`    <Accounts><ThisPeriodAccounts>${i.accountsAttached ? "yes" : "no"}</ThisPeriodAccounts></Accounts>`);
-  p(`    <Computations><ThisPeriodComputations>${i.computationsAttached ? "yes" : "no"}</ThisPeriodComputations></Computations>`);
+  p(`    <Accounts>`);
+  if (i.accountsAttached) p(`      <ThisPeriodAccounts>yes</ThisPeriodAccounts>`);
+  else p(`      <NoAccountsReason>${esc(i.noAccountsReason ?? "Accounts will be submitted separately")}</NoAccountsReason>`);
+  p(`    </Accounts>`);
+  p(`    <Computations>`);
+  if (i.computationsAttached) p(`      <ThisPeriodComputations>yes</ThisPeriodComputations>`);
+  else p(`      <NoComputationsReason>${esc(i.noComputationsReason ?? "Computations will be submitted separately")}</NoComputationsReason>`);
+  p(`    </Computations>`);
   p(`  </ReturnInfoSummary>`);
 
-  p(`  <Turnover><Total>${money(i.turnover)}</Total></Turnover>`);
+  p(`  <Turnover>`);
+  p(`    <Total>${money(i.turnover)}</Total>`);
+  p(`  </Turnover>`);
 
   p(`  <CompanyTaxCalculation>`);
   p(`    <Income>`);
   p(`      <Trading>`);
   p(`        <Profits>${money(i.tradingProfits)}</Profits>`);
-  if (i.lossesBroughtForward) p(`        <LossesBroughtForward>${money(i.lossesBroughtForward)}</LossesBroughtForward>`);
+  p(`        <LossesBroughtForward>${money(i.lossesBroughtForward ?? 0)}</LossesBroughtForward>`);
   p(`        <NetProfits>${money(netTrading)}</NetProfits>`);
   p(`      </Trading>`);
-  if (i.otherIncome) p(`      <IncomeNotFallingUnderAnyOtherHeading>${money(i.otherIncome)}</IncomeNotFallingUnderAnyOtherHeading>`);
   p(`    </Income>`);
-  p(`    <ProfitsBeforeOtherDeductions>${money(beforeReliefs)}</ProfitsBeforeOtherDeductions>`);
-  if (i.qualifyingDonations) p(`    <QualifyingDonations>${money(i.qualifyingDonations)}</QualifyingDonations>`);
+  // Box 235.
+  p(`    <ProfitsBeforeOtherDeductions>${money(beforeOther)}</ProfitsBeforeOtherDeductions>`);
+  // Box 300, which HMRC require whenever box 235 is above zero.
+  p(`    <ChargesAndReliefs>`);
+  p(`      <ProfitsBeforeDonationsAndGroupRelief>${money(beforeDonations)}</ProfitsBeforeDonationsAndGroupRelief>`);
+  p(`    </ChargesAndReliefs>`);
   p(`    <ChargeableProfits>${money(chargeable)}</ChargeableProfits>`);
   p(`    <CorporationTaxChargeable>`);
   p(`      <FinancialYearOne>`);
-  p(`        <Year>${whole(i.financialYear)}</Year>`);
+  p(`        <Year>${i.financialYear}</Year>`);
   p(`        <Details>`);
   p(`          <Profit>${money(chargeable)}</Profit>`);
-  p(`          <TaxRate>${(i.rate / 100).toFixed(2)}</TaxRate>`);
+  // A percentage, not a fraction: 19.00 rather than 0.19. HMRC multiply the
+  // profit by this and refuse the return if the answer isn't the tax shown.
+  p(`          <TaxRate>${rate(i.rate)}</TaxRate>`);
   p(`          <Tax>${money(i.corporationTax)}</Tax>`);
   p(`        </Details>`);
   p(`      </FinancialYearOne>`);
   p(`    </CorporationTaxChargeable>`);
   p(`    <CorporationTax>${money(i.corporationTax)}</CorporationTax>`);
-  if (i.marginalRelief) p(`    <MarginalRateRelief>${money(i.marginalRelief)}</MarginalRateRelief>`);
   p(`    <NetCorporationTaxChargeable>${money(i.corporationTax - (i.marginalRelief ?? 0))}</NetCorporationTaxChargeable>`);
+  p(`    <TaxReliefsAndDeductions>`);
+  p(`      <TotalReliefsAndDeductions>${money(i.totalReliefs ?? 0)}</TotalReliefsAndDeductions>`);
+  p(`    </TaxReliefsAndDeductions>`);
   p(`  </CompanyTaxCalculation>`);
 
   p(`  <CalculationOfTaxOutstandingOrOverpaid>`);
-  p(`    <NetCorporationTaxLiability>${money(i.taxPayable)}</NetCorporationTaxLiability>`);
-  p(`    <TaxChargeable>${money(i.taxPayable)}</TaxChargeable>`);
+  p(`    <NetCorporationTaxLiability>${money(i.corporationTax - (i.marginalRelief ?? 0))}</NetCorporationTaxLiability>`);
+  p(`    <TaxChargeable>${money(i.corporationTax - (i.marginalRelief ?? 0))}</TaxChargeable>`);
   p(`    <TaxPayable>${money(i.taxPayable)}</TaxPayable>`);
-  if (i.taxAlreadyPaid) {
-    p(`    <TaxAlreadyPaid>${money(i.taxAlreadyPaid)}</TaxAlreadyPaid>`);
-    const out = i.taxPayable - i.taxAlreadyPaid;
-    if (out >= 0) p(`    <TaxOutstanding>${money(out)}</TaxOutstanding>`);
-    else p(`    <TaxOverpaid>${money(-out)}</TaxOverpaid>`);
-  }
   p(`  </CalculationOfTaxOutstandingOrOverpaid>`);
 
   p(`  <Declaration>`);
   p(`    <AcceptDeclaration>yes</AcceptDeclaration>`);
   p(`    <Name>${esc(i.declarantName)}</Name>`);
-  p(`    <Status>${esc(i.declarantStatus || "Director")}</Status>`);
+  p(`    <Status>${esc(i.declarantStatus)}</Status>`);
   p(`  </Declaration>`);
-  p(`</CompanyTaxReturn>`);
 
+  // The attachments come last, after the declaration, and the iXBRL goes in
+  // as live XML rather than encoded text.
+  const acc = i.accountsAttached && i.accountsIxbrl ? nestable(i.accountsIxbrl) : null;
+  const comp = i.computationsAttached && i.computationIxbrl ? nestable(i.computationIxbrl) : null;
+  if (acc || comp) {
+    p(`  <AttachedFiles>`);
+    p(`    <XBRLsubmission>`);
+    if (acc) {
+      p(`      <Accounts>`);
+      p(`        <Instance>`);
+      p(`          <InlineXBRLDocument>`);
+      p(acc);
+      p(`          </InlineXBRLDocument>`);
+      p(`        </Instance>`);
+      p(`      </Accounts>`);
+    }
+    if (comp) {
+      p(`      <Computation>`);
+      p(`        <Instance>`);
+      p(`          <InlineXBRLDocument>`);
+      p(comp);
+      p(`          </InlineXBRLDocument>`);
+      p(`        </Instance>`);
+      p(`      </Computation>`);
+    }
+    p(`    </XBRLsubmission>`);
+    p(`  </AttachedFiles>`);
+  }
+
+  p(`</CompanyTaxReturn>`);
   return L.join("\n");
 }
 
@@ -309,6 +384,9 @@ ${i.body}
   </Header>
   <GovTalkDetails>
     <Keys><Key Type="UTR">${esc(i.utr)}</Key></Keys>
+    <TargetDetails>
+      <Organisation>HMRC</Organisation>
+    </TargetDetails>
     <ChannelRouting>
       <Channel>
         <URI>${esc(i.vendorId)}</URI>

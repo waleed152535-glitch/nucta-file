@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { previewEnvelope, runSubmission, pollAgain, type AttemptResult, type TestFormInput } from "@/lib/actions";
-import { MARK_METHODS, ATTACH_LAYOUTS, type MarkMethod, type AttachLayout } from "@/lib/ct600-xml";
+import { MARK_METHODS, ATTACH_LAYOUTS, NO_ACCOUNTS_REASONS, NO_COMPUTATIONS_REASONS, type MarkMethod, type AttachLayout } from "@/lib/ct600-xml";
 import { ACCOUNT_TAXONOMIES, COMP_TAXONOMIES } from "@/lib/ixbrl";
 import { markForPeople } from "@/lib/ct600-xml";
 
@@ -12,7 +12,7 @@ import { markForPeople } from "@/lib/ct600-xml";
  * Bumped by hand with every package. It is on the screen so that an identical
  * rejection twice over can be told apart from a deploy that never landed.
  */
-const BUILD = "23 — computation dimensions";
+const BUILD = "24 — comp prefix + reason lists";
 
 /**
  * The gateway console.
@@ -53,7 +53,7 @@ const blank: TestFormInput = {
   // Short on purpose: HMRC cap the length of these fields. "Company in
   // liquidation" is the value in HMRC's own valid sample, so it is known to
   // pass their validator.
-  noAccountsReason: "Submitted separately",
+  noAccountsReason: "Company dormant",
   noComputationsReason: "Company in liquidation",
   markMethod: "spec",
   testInLive: false,
@@ -306,17 +306,17 @@ export default function GatewayConsole({
                 <div className="field">
                   <label>
                     Reason no computation is attached
-                    <span className="hint">HMRC limit the length</span>
+                    <span className="hint">HMRC&apos;s fixed list</span>
                   </label>
-                  <input
+                  <select
                     value={f.noComputationsReason}
-                    maxLength={30}
                     onChange={(e) => set("noComputationsReason", e.target.value)}
-                  />
+                  >
+                    {NO_COMPUTATIONS_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
                   <span className="note" style={{ fontSize: 11.5 }}>
-                    {f.noComputationsReason.length}/30 characters. The default is the value from
-                    HMRC&apos;s own valid sample, so it is known to pass. A real filing needs a
-                    reason that is actually true of the company.
+                    These are the only reasons HMRC&apos;s schema permits, word for word. A real
+                    filing needs one that is actually true of the company.
                   </span>
                 </div>
               )}
@@ -325,13 +325,14 @@ export default function GatewayConsole({
                 <div className="field">
                   <label>
                     Reason no accounts are attached
-                    <span className="hint">HMRC limit the length</span>
+                    <span className="hint">HMRC&apos;s fixed list</span>
                   </label>
-                  <input
+                  <select
                     value={f.noAccountsReason}
-                    maxLength={30}
                     onChange={(e) => set("noAccountsReason", e.target.value)}
-                  />
+                  >
+                    {NO_ACCOUNTS_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
                 </div>
               )}
 

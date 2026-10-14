@@ -328,6 +328,39 @@ export const MARK_METHODS: { key: MarkMethod; label: string; detail: string }[] 
 ];
 
 /**
+ * Why no accounts, or no computation, is attached.
+ *
+ * These are not free text. HMRC's schema restricts both elements to a closed
+ * list, and anything else is refused with "is not one of the allowed
+ * enumerated values". The lists below are transcribed from the enumerations in
+ * CT-2014-v1-994.xsd, so the only reasons the software can offer are reasons
+ * HMRC accept.
+ *
+ * Note there is no "submitted separately" for either. The nearest HMRC allow
+ * is the period-of-account case, which means something narrower: the period of
+ * account differs from the accounting period and the rest went with another
+ * return.
+ */
+export const NO_ACCOUNTS_REASONS = [
+  "PoA differs from AP-a/cs with sep rtn",
+  "Company in liquidation",
+  "Not within charge to CT",
+  "Company dormant",
+  "Amendment - a/cs already submitted",
+  "Other - PDF attached with explanation",
+  "PDF accounts attached with explanation",
+] as const;
+
+export const NO_COMPUTATIONS_REASONS = [
+  "PoA differs from AP-comp with sep rtn",
+  "Company in liquidation",
+  "Not within charge to CT",
+  "Company dormant",
+  "Amendment - comps already submitted",
+  "Other - PDF attached with explanation",
+] as const;
+
+/**
  * The IRmark: a SHA-1 digest of the canonicalised return, base64 encoded.
  *
  * HMRC repeat the calculation on arrival and refuse the submission with error

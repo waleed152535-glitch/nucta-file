@@ -571,16 +571,25 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
   const ECo = "ECo";
   const DTr = "DTr";
   const adjusted = i.profitBeforeTax;
-  // The computation binds the taxonomy's namespace to the `ct` prefix below,
-  // so the dimension and member names are written against that prefix.
-  const businessType = "ct:BusinessTypeDimension";
-  const businessName = "ct:BusinessNameDimension";
+  // The prefix is deliberately not `ct`.
+  //
+  // HMRC's own CT600 tooling binds `ct` to the return's namespace,
+  // http://www.govtalk.gov.uk/taxation/CT/5 — their published Schematron
+  // declares exactly that. This document is nested inside such a return, and
+  // the moment a dimension member put a real `ct:`-prefixed element into it
+  // (rather than a prefix only ever appearing inside an attribute value), the
+  // IRmark started failing. Redeclaring a prefix to a second namespace is
+  // legal XML, but it only takes one namespace fixup on the way through for
+  // the element to be re-serialised under a different prefix, and the IRmark
+  // is a digest of those exact bytes. A prefix of our own avoids the question.
+  const businessType = "ctcomp:BusinessTypeDimension";
+  const businessName = "ctcomp:BusinessNameDimension";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:ix="${NS.ix}" xmlns:xbrli="${NS.xbrli}"
       xmlns:xlink="${NS.xlink}" xmlns:link="${NS.link}" xmlns:iso4217="${NS.iso4217}"
-      xmlns:ct="${cx.ct}" xmlns:bus="${NS.bus}" xmlns:xbrldi="${NS.xbrldi}">
+      xmlns:ctcomp="${cx.ct}" xmlns:bus="${NS.bus}" xmlns:xbrldi="${NS.xbrldi}">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <title>${esc(i.companyName)} — Corporation Tax computation</title>
@@ -608,28 +617,28 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
         the rejection when one is missing. All six of the dated and referenced
         items are instant facts; only the partnership flag covers a period.
       -->
-      ${textFact("ct:CompanyName", i.companyName, ECo)}
-      ${textFact("ct:TaxReference", i.utr ?? "", ECo)}
-      ${dateFact("ct:PeriodOfAccountStartDate", i.periodFrom, ECo)}
-      ${dateFact("ct:PeriodOfAccountEndDate", i.periodTo, ECo)}
-      ${dateFact("ct:StartOfPeriodCoveredByReturn", i.periodFrom, ECo)}
-      ${dateFact("ct:EndOfPeriodCoveredByReturn", i.periodTo, ECo)}
-      ${boolFact("ct:CompanyIsAPartnerInAFirm", false, DCo)}
+      ${textFact("ctcomp:CompanyName", i.companyName, ECo)}
+      ${textFact("ctcomp:TaxReference", i.utr ?? "", ECo)}
+      ${dateFact("ctcomp:PeriodOfAccountStartDate", i.periodFrom, ECo)}
+      ${dateFact("ctcomp:PeriodOfAccountEndDate", i.periodTo, ECo)}
+      ${dateFact("ctcomp:StartOfPeriodCoveredByReturn", i.periodFrom, ECo)}
+      ${dateFact("ctcomp:EndOfPeriodCoveredByReturn", i.periodTo, ECo)}
+      ${boolFact("ctcomp:CompanyIsAPartnerInAFirm", false, DCo)}
     </ix:hidden>
     <ix:references>
       <link:schemaRef xlink:type="simple" xlink:href="${cx.schemaRef}"/>
     </ix:references>
     <ix:resources>
-      ${multiContext(DCo, i.companyNo, [{ dimension: businessType, member: "ct:Company" }], { from: i.periodFrom, to: i.periodTo })}
-      ${multiContext(ECo, i.companyNo, [{ dimension: businessType, member: "ct:Company" }], { at: i.periodTo })}
+      ${multiContext(DCo, i.companyNo, [{ dimension: businessType, member: "ctcomp:Company" }], { from: i.periodFrom, to: i.periodTo })}
+      ${multiContext(ECo, i.companyNo, [{ dimension: businessType, member: "ctcomp:Company" }], { at: i.periodTo })}
       ${multiContext(DTr, i.companyNo, [
-        { dimension: businessType, member: "ct:Trade" },
-        { dimension: businessName, typedElement: "ct:BusinessNameDomain", value: i.principalActivities?.trim() || i.companyName },
+        { dimension: businessType, member: "ctcomp:Trade" },
+        { dimension: businessName, typedElement: "ctcomp:BusinessNameDomain", value: i.principalActivities?.trim() || i.companyName },
         // Unlike the company-level hypercube, the trade hypercube's territory
         // domain is only UK, Northern Ireland or the rest of the UK — the
         // dimension's default member isn't among them, so it can't be answered
         // by omission and has to be stated.
-        { dimension: "ct:TerritoryDimension", member: "ct:UK" },
+        { dimension: "ctcomp:TerritoryDimension", member: "ctcomp:UK" },
       ], { from: i.periodFrom, to: i.periodTo })}
       <xbrli:unit id="GBP"><xbrli:measure>iso4217:GBP</xbrli:measure></xbrli:unit>
     </ix:resources>
@@ -645,20 +654,20 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
 <h2>Adjustment of profit</h2>
 <table>
   <tr><td class="lbl">Profit per the accounts</td>
-    <td class="num">${fact("ct:ProfitLossPerAccounts", i.profitBeforeTax, DTr)}</td></tr>
+    <td class="num">${fact("ctcomp:ProfitLossPerAccounts", i.profitBeforeTax, DTr)}</td></tr>
   <tr><td class="lbl">Add back: disallowable expenditure</td><td class="num">0</td></tr>
   <tr><td class="lbl">Less: capital allowances</td><td class="num">0</td></tr>
   <tr class="b"><td class="lbl">Adjusted trading profit</td>
-    <td class="num">${fact("ct:AdjustedTradingProfitOfThisPeriod", adjusted, DCo)}</td></tr>
+    <td class="num">${fact("ctcomp:AdjustedTradingProfitOfThisPeriod", adjusted, DCo)}</td></tr>
 </table>
 
 <h2>Tax payable</h2>
 <table>
   <tr><td class="lbl">Profits chargeable to Corporation Tax</td>
-    <td class="num">${fact("ct:TotalProfitsChargeableToCorporationTax", adjusted, DCo)}</td></tr>
+    <td class="num">${fact("ctcomp:TotalProfitsChargeableToCorporationTax", adjusted, DCo)}</td></tr>
   <tr><td class="lbl">Rate applied</td><td class="num">${n2(i.taxRate)}%</td></tr>
   <tr class="b"><td class="lbl">Corporation Tax payable</td>
-    <td class="num">${fact("ct:NetCorporationTaxPayable", i.taxPayable, DCo)}</td></tr>
+    <td class="num">${fact("ctcomp:NetCorporationTaxPayable", i.taxPayable, DCo)}</td></tr>
 </table>
 
 <p class="note">

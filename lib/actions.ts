@@ -63,6 +63,8 @@ export interface TestFormInput {
   attachLayout: AttachLayout;
   /** CT600 box 4. 0 is an ordinary trading company. */
   companyType: string;
+  /** Associated companies in the period. Needed to claim the 19% rate. */
+  associatedCompanies: number;
 }
 
 function toCt600(f: TestFormInput, docs?: { accounts: string; computation: string }): Ct600Input {
@@ -79,7 +81,8 @@ function toCt600(f: TestFormInput, docs?: { accounts: string; computation: strin
     taxPayable: f.taxPayable,
     rate: f.rate,
     financialYear: f.financialYear,
-    smallProfitsRate: f.rate <= 19,
+    smallProfitsRate: f.rate < 25,
+    associatedCompanies: f.associatedCompanies,
     declarantName: f.declarantName,
     declarantStatus: f.declarantStatus,
     accountsAttached: f.attachAccounts,

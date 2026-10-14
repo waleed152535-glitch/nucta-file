@@ -60,6 +60,16 @@ export interface Ct600Input {
   noComputationsReason?: string;
   /** Reliefs and deductions in total (box 275). */
   totalReliefs?: number;
+  /**
+   * How many associated companies the company had in the period.
+   *
+   * HMRC cannot accept a claim to the small profits rate without this. The
+   * business rule that enforces it (a_F034.4 in HMRC's own Schematron) only
+   * admits the 19% rate when AssociatedCompanies/StartingOrSmallCompaniesRate
+   * is present, because eligibility depends on how many associated companies
+   * share the limits. Leave the rate at 25% and none of this is needed.
+   */
+  associatedCompanies?: number;
   /** How the two attachments are arranged inside XBRLsubmission. */
   attachLayout?: AttachLayout;
 }
@@ -206,10 +216,18 @@ export function buildCt600(i: Ct600Input): string {
   p(`    </ChargesAndReliefs>`);
   p(`    <ChargeableProfits>${money(chargeable)}</ChargeableProfits>`);
   p(`    <CorporationTaxChargeable>`);
+  // A claim to the small profits rate has to be declared here, before the
+  // financial year, and the element order is enforced by the schema.
+  if (i.rate < 25) {
+    p(`      <AssociatedCompanies>`);
+    p(`        <ThisPeriod>${Math.max(0, Math.round(i.associatedCompanies ?? 0))}</ThisPeriod>`);
+    p(`        <StartingOrSmallCompaniesRate>yes</StartingOrSmallCompaniesRate>`);
+    p(`      </AssociatedCompanies>`);
+  }
   p(`      <FinancialYearOne>`);
   p(`        <Year>${i.financialYear}</Year>`);
   p(`        <Details>`);
-  p(`          <Profit>${money(chargeable)}</Profit>`);
+  p(`          <Profit>${money(Math.round(chargeable))}</Profit>`);
   // A percentage, not a fraction: 19.00 rather than 0.19. HMRC multiply the
   // profit by this and refuse the return if the answer isn't the tax shown.
   p(`          <TaxRate>${rate(i.rate)}</TaxRate>`);

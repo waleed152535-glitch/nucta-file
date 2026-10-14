@@ -24,13 +24,14 @@ const blank: TestFormInput = {
   companyType: "0",
   periodFrom: "2024-04-01",
   periodTo: "2025-03-31",
-  // The main rate deliberately: at this profit no marginal relief applies and
-  // no associated-company question arises, so the rate can't be queried.
-  turnover: 400000,
-  tradingProfits: 300000,
-  corporationTax: 75000,
-  taxPayable: 75000,
-  rate: 25,
+  // The small profits rate, which is what the real clients pay. It needs the
+  // associated-companies declaration below, without which HMRC refuse it.
+  turnover: 48000,
+  tradingProfits: 12000,
+  corporationTax: 2280,
+  taxPayable: 2280,
+  rate: 19,
+  associatedCompanies: 0,
   financialYear: 2024,
   declarantName: "Waleed Sarfraz",
   declarantStatus: "Agent",
@@ -224,6 +225,16 @@ export default function GatewayConsole({
                 <div className="field">
                   <label>Tax payable <span className="hint">box 525</span></label>
                   <input type="number" value={f.taxPayable} onChange={num("taxPayable")} />
+                </div>
+              </div>
+
+              <div className="row2">
+                <div className="field">
+                  <label>
+                    Associated companies
+                    <span className="hint">needed below 25%</span>
+                  </label>
+                  <input type="number" value={f.associatedCompanies} onChange={num("associatedCompanies")} />
                 </div>
               </div>
 

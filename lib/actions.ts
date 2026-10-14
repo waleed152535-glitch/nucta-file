@@ -144,7 +144,7 @@ function toAccounts(f: TestFormInput): AccountsInput {
     approvedBy: f.declarantName,
     approvedOn: f.periodTo,
     principalActivities: "Online retail",
-    trading: true,
+    tradingStatus: "trading",
     taxonomy: ACCOUNT_TAXONOMIES.find((t) => t.key === f.accountsTaxonomy) ?? ACCOUNT_TAXONOMIES[0],
     compTaxonomy: COMP_TAXONOMIES.find((t) => t.key === f.compTaxonomy) ?? COMP_TAXONOMIES[0],
   };

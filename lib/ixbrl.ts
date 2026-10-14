@@ -196,7 +196,16 @@ export interface AccountsInput {
    * list each one by name if it is missing, so none is optional.
    */
   principalActivities?: string;
-  trading?: boolean;
+  /**
+   * Trading status.
+   *
+   * "trading" is the taxonomy's default, and XBRL forbids stating a
+   * dimension's default member explicitly — a context carrying it is invalid,
+   * because the default is what absence already means. So a trading company
+   * gets the plain period context with no trading dimension at all, and only
+   * the exceptions name a member.
+   */
+  tradingStatus?: "trading" | "neverTraded" | "ceased";
   /** Members read from the FRC taxonomy; see FIXED_MEMBERS. */
   accountingStandard?: "FRS102" | "FRS101" | "FullIFRS" | "OtherStandards";
   accountsType?: "FullAccounts" | "AbridgedAccounts" | "FilletedAccounts" | "SmallCompaniesRegimeForAccounts";
@@ -370,7 +379,7 @@ export function buildAccounts(i: AccountsInput): string {
       ${fixedFact("bus:AccountingStandardsApplied", "DStd")}
       ${fixedFact("bus:AccountsType", "DType")}
       ${fixedFact("bus:AccountsStatusAuditedOrUnaudited", "DStat")}
-      ${fixedFact("bus:EntityTradingStatus", "DTrade")}
+      ${fixedFact("bus:EntityTradingStatus", (i.tradingStatus ?? "trading") === "trading" ? D : "DTrade")}
       ${fixedFact("bus:LegalFormEntity", "DLegal")}
       ${fixedFact("core:DirectorSigningFinancialStatements", "DDir")}
     </ix:hidden>
@@ -411,7 +420,7 @@ export function buildAccounts(i: AccountsInput): string {
       ${dimContext("DStd", i.companyNo, "bus:AccountingStandardsDimension", `bus:${i.accountingStandard ?? "FRS102"}`, { from: i.periodFrom, to: i.periodTo })}
       ${dimContext("DType", i.companyNo, "bus:AccountsTypeDimension", `bus:${i.accountsType ?? "FullAccounts"}`, { from: i.periodFrom, to: i.periodTo })}
       ${dimContext("DStat", i.companyNo, "bus:AccountsStatusDimension", `bus:${i.accountsStatus ?? "AuditExemptWithAccountantsReport"}`, { from: i.periodFrom, to: i.periodTo })}
-      ${dimContext("DTrade", i.companyNo, "bus:EntityTradingStatusDimension", i.trading === false ? "bus:EntityNoLongerTradingButTradedInPast" : "bus:EntityTradingDefault", { from: i.periodFrom, to: i.periodTo })}
+      ${(i.tradingStatus ?? "trading") === "trading" ? "" : dimContext("DTrade", i.companyNo, "bus:EntityTradingStatusDimension", i.tradingStatus === "neverTraded" ? "bus:EntityHasNeverTraded" : "bus:EntityNoLongerTradingButTradedInPast", { from: i.periodFrom, to: i.periodTo })}
       ${dimContext("DLegal", i.companyNo, "bus:LegalFormEntityDimension", `bus:${i.legalForm ?? "PrivateLimitedCompanyLtd"}`, { from: i.periodFrom, to: i.periodTo })}
       ${dimContext("DDir", i.companyNo, "bus:EntityOfficersDimension", "bus:Director1", { from: i.periodFrom, to: i.periodTo })}
       <xbrli:unit id="GBP"><xbrli:measure>iso4217:GBP</xbrli:measure></xbrli:unit>

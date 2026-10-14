@@ -7,6 +7,14 @@ import { ACCOUNT_TAXONOMIES, COMP_TAXONOMIES } from "@/lib/ixbrl";
 import { markForPeople } from "@/lib/ct600-xml";
 
 /**
+ * Which build of the filing code this page is running.
+ *
+ * Bumped by hand with every package. It is on the screen so that an identical
+ * rejection twice over can be told apart from a deploy that never landed.
+ */
+const BUILD = "23 — computation dimensions";
+
+/**
  * The gateway console.
  *
  * Everything else in Nucta File depends on one question being answered:
@@ -117,6 +125,14 @@ export default function GatewayConsole({
           <h2>HMRC test console</h2>
           <div className="sub">
             Send a Corporation Tax return to HMRC&apos;s test service and read their answer in full.
+            {" "}
+            {/*
+              The build marker exists because a rejection that is identical to
+              the previous one usually means the old code is still running, and
+              there was no way to tell from the screen. If this number isn't the
+              one you just uploaded, the deploy hasn't taken effect.
+            */}
+            <b>Build {BUILD}</b>
           </div>
         </div>
       </div>

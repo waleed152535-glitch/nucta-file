@@ -316,6 +316,51 @@ function dimContext(
 const textFact = (name: string, value: string, ctx: string): string =>
   `<ix:nonNumeric name="${name}" contextRef="${ctx}">${esc(value)}</ix:nonNumeric>`;
 
+/**
+ * A member of a dimension, as it appears inside a context's segment.
+ *
+ * Most of HMRC's dimensions are "explicit": the member is one of a fixed list
+ * of names in the taxonomy, like ct:Company. BusinessNameDimension is "typed"
+ * instead — there's no list of permitted trade names, so the value is written
+ * out inside the dimension's own domain element.
+ */
+type DimMember =
+  | { dimension: string; member: string }
+  | { dimension: string; typedElement: string; value: string };
+
+const memberXml = (m: DimMember): string =>
+  "member" in m
+    ? `<xbrldi:explicitMember dimension="${m.dimension}">${m.member}</xbrldi:explicitMember>`
+    : `<xbrldi:typedMember dimension="${m.dimension}"><${m.typedElement}>${esc(m.value)}</${m.typedElement}></xbrldi:typedMember>`;
+
+/**
+ * A context carrying one or more dimension members.
+ *
+ * HMRC's computational taxonomy puts every reportable concept inside a
+ * hypercube, and a hypercube's dimensions have to be answered or the fact is
+ * "not dimensionally valid". A dimension with a declared default is answered
+ * by saying nothing — stating the default explicitly is itself an error — so
+ * only the dimensions without a default are written here.
+ */
+function multiContext(
+  id: string, companyNo: string,
+  members: DimMember[],
+  period: { from: string; to: string } | { at: string },
+): string {
+  const when = "at" in period
+    ? `<xbrli:period><xbrli:instant>${esc(period.at)}</xbrli:instant></xbrli:period>`
+    : `<xbrli:period><xbrli:startDate>${esc(period.from)}</xbrli:startDate><xbrli:endDate>${esc(period.to)}</xbrli:endDate></xbrli:period>`;
+  return `<xbrli:context id="${id}">
+        <xbrli:entity>
+          <xbrli:identifier scheme="http://www.companieshouse.gov.uk/">${esc(companyNo)}</xbrli:identifier>
+          <xbrli:segment>
+            ${members.map(memberXml).join("\n            ")}
+          </xbrli:segment>
+        </xbrli:entity>
+        ${when}
+      </xbrli:context>`;
+}
+
 /** A row in the accounts, with this year and last year side by side. */
 function row(label: string, thisYear: string, lastYear: string, bold = false): string {
   return `<tr${bold ? ' class="b"' : ""}>
@@ -510,15 +555,32 @@ ${i.dormant
 /** The Corporation Tax computation, also as iXBRL. */
 export function buildComputation(i: AccountsInput & { taxRate: number; taxPayable: number }): string {
   const cx = i.compTaxonomy ?? COMP_TAXONOMIES[0];
-  const D = "D";   // the accounting period
-  const E = "E";   // its end, for the instant facts
+  // Every concept in HMRC's computational taxonomy sits in a hypercube, and
+  // the hypercube decides which dimensions its context must answer. There are
+  // three shapes here, and they are not interchangeable:
+  //
+  //   DCo  the company itself over the period   — BusinessType = Company
+  //   ECo  the same, at the period end          — for the instant facts
+  //   DTr  one trade over the period            — BusinessType = Trade, plus
+  //                                               the trade's name as a typed
+  //                                               member of BusinessNameDimension
+  //
+  // Territory, DetailedAnalysis and LossReform all declare defaults, so they
+  // are answered by omission; writing the default member out is an error.
+  const DCo = "DCo";
+  const ECo = "ECo";
+  const DTr = "DTr";
   const adjusted = i.profitBeforeTax;
+  // The computation binds the taxonomy's namespace to the `ct` prefix below,
+  // so the dimension and member names are written against that prefix.
+  const businessType = "ct:BusinessTypeDimension";
+  const businessName = "ct:BusinessNameDimension";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:ix="${NS.ix}" xmlns:xbrli="${NS.xbrli}"
       xmlns:xlink="${NS.xlink}" xmlns:link="${NS.link}" xmlns:iso4217="${NS.iso4217}"
-      xmlns:ct="${cx.ct}" xmlns:bus="${NS.bus}">
+      xmlns:ct="${cx.ct}" xmlns:bus="${NS.bus}" xmlns:xbrldi="${NS.xbrldi}">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <title>${esc(i.companyName)} — Corporation Tax computation</title>
@@ -546,33 +608,29 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
         the rejection when one is missing. All six of the dated and referenced
         items are instant facts; only the partnership flag covers a period.
       -->
-      ${textFact("ct:CompanyName", i.companyName, E)}
-      ${textFact("ct:TaxReference", i.utr ?? "", E)}
-      ${dateFact("ct:PeriodOfAccountStartDate", i.periodFrom, E)}
-      ${dateFact("ct:PeriodOfAccountEndDate", i.periodTo, E)}
-      ${dateFact("ct:StartOfPeriodCoveredByReturn", i.periodFrom, E)}
-      ${dateFact("ct:EndOfPeriodCoveredByReturn", i.periodTo, E)}
-      ${boolFact("ct:CompanyIsAPartnerInAFirm", false, D)}
+      ${textFact("ct:CompanyName", i.companyName, ECo)}
+      ${textFact("ct:TaxReference", i.utr ?? "", ECo)}
+      ${dateFact("ct:PeriodOfAccountStartDate", i.periodFrom, ECo)}
+      ${dateFact("ct:PeriodOfAccountEndDate", i.periodTo, ECo)}
+      ${dateFact("ct:StartOfPeriodCoveredByReturn", i.periodFrom, ECo)}
+      ${dateFact("ct:EndOfPeriodCoveredByReturn", i.periodTo, ECo)}
+      ${boolFact("ct:CompanyIsAPartnerInAFirm", false, DCo)}
     </ix:hidden>
     <ix:references>
       <link:schemaRef xlink:type="simple" xlink:href="${cx.schemaRef}"/>
     </ix:references>
     <ix:resources>
-      <xbrli:context id="${D}">
-        <xbrli:entity>
-          <xbrli:identifier scheme="http://www.companieshouse.gov.uk/">${esc(i.companyNo)}</xbrli:identifier>
-        </xbrli:entity>
-        <xbrli:period>
-          <xbrli:startDate>${esc(i.periodFrom)}</xbrli:startDate>
-          <xbrli:endDate>${esc(i.periodTo)}</xbrli:endDate>
-        </xbrli:period>
-      </xbrli:context>
-      <xbrli:context id="${E}">
-        <xbrli:entity>
-          <xbrli:identifier scheme="http://www.companieshouse.gov.uk/">${esc(i.companyNo)}</xbrli:identifier>
-        </xbrli:entity>
-        <xbrli:period><xbrli:instant>${esc(i.periodTo)}</xbrli:instant></xbrli:period>
-      </xbrli:context>
+      ${multiContext(DCo, i.companyNo, [{ dimension: businessType, member: "ct:Company" }], { from: i.periodFrom, to: i.periodTo })}
+      ${multiContext(ECo, i.companyNo, [{ dimension: businessType, member: "ct:Company" }], { at: i.periodTo })}
+      ${multiContext(DTr, i.companyNo, [
+        { dimension: businessType, member: "ct:Trade" },
+        { dimension: businessName, typedElement: "ct:BusinessNameDomain", value: i.principalActivities?.trim() || i.companyName },
+        // Unlike the company-level hypercube, the trade hypercube's territory
+        // domain is only UK, Northern Ireland or the rest of the UK — the
+        // dimension's default member isn't among them, so it can't be answered
+        // by omission and has to be stated.
+        { dimension: "ct:TerritoryDimension", member: "ct:UK" },
+      ], { from: i.periodFrom, to: i.periodTo })}
       <xbrli:unit id="GBP"><xbrli:measure>iso4217:GBP</xbrli:measure></xbrli:unit>
     </ix:resources>
   </ix:header>
@@ -587,20 +645,20 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
 <h2>Adjustment of profit</h2>
 <table>
   <tr><td class="lbl">Profit per the accounts</td>
-    <td class="num">${fact("ct:ProfitLossPerAccounts", i.profitBeforeTax, D)}</td></tr>
+    <td class="num">${fact("ct:ProfitLossPerAccounts", i.profitBeforeTax, DTr)}</td></tr>
   <tr><td class="lbl">Add back: disallowable expenditure</td><td class="num">0</td></tr>
   <tr><td class="lbl">Less: capital allowances</td><td class="num">0</td></tr>
   <tr class="b"><td class="lbl">Adjusted trading profit</td>
-    <td class="num">${fact("ct:AdjustedTradingProfitOfThisPeriod", adjusted, D)}</td></tr>
+    <td class="num">${fact("ct:AdjustedTradingProfitOfThisPeriod", adjusted, DCo)}</td></tr>
 </table>
 
 <h2>Tax payable</h2>
 <table>
   <tr><td class="lbl">Profits chargeable to Corporation Tax</td>
-    <td class="num">${fact("ct:TotalProfitsChargeableToCorporationTax", adjusted, D)}</td></tr>
+    <td class="num">${fact("ct:TotalProfitsChargeableToCorporationTax", adjusted, DCo)}</td></tr>
   <tr><td class="lbl">Rate applied</td><td class="num">${n2(i.taxRate)}%</td></tr>
   <tr class="b"><td class="lbl">Corporation Tax payable</td>
-    <td class="num">${fact("ct:NetCorporationTaxPayable", i.taxPayable, D)}</td></tr>
+    <td class="num">${fact("ct:NetCorporationTaxPayable", i.taxPayable, DCo)}</td></tr>
 </table>
 
 <p class="note">

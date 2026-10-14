@@ -39,9 +39,9 @@ const blank: TestFormInput = {
   // The computation is off to begin with. Its taxonomy address is the least
   // certain part of the submission, so the accounts are proved on their own
   // first rather than two unknowns failing together.
-  attachComputation: false,
+  attachComputation: true,
   accountsTaxonomy: "frs102-2023",
-  compTaxonomy: "frc-hmrc-2023",
+  compTaxonomy: "ct-2024",
   // Short on purpose: HMRC cap the length of these fields. "Company in
   // liquidation" is the value in HMRC's own valid sample, so it is known to
   // pass their validator.

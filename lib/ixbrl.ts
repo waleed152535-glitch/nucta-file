@@ -100,24 +100,19 @@ export interface CompTaxonomy {
 
 export const COMP_TAXONOMIES: CompTaxonomy[] = [
   {
-    key: "frc-hmrc-2023",
-    label: "HMRC CT, FRC-hosted (2023)",
-    schemaRef: "http://xbrl.frc.org.uk/HMRC/2023-01-01/HMRC-2023-01-01.xsd",
-    ct: "http://www.hmrc.gov.uk/schemas/ct/comp/2023-01-01",
-  },
-  {
-    key: "hmrc-2023",
-    label: "HMRC CT, hmrc.gov.uk (2023)",
-    schemaRef: "http://www.hmrc.gov.uk/schemas/ct/comp/2023-01-01/ct-comp-2023-01-01.xsd",
-    ct: "http://www.hmrc.gov.uk/schemas/ct/comp/2023-01-01",
-  },
-  {
-    key: "frc-hmrc-2024",
-    label: "HMRC CT, FRC-hosted (2024)",
-    schemaRef: "http://xbrl.frc.org.uk/HMRC/2024-01-01/HMRC-2024-01-01.xsd",
+    key: "ct-2024",
+    label: "HMRC CT computations (2024)",
+    schemaRef: "http://www.hmrc.gov.uk/schemas/ct/comp/2024-01-01/ct-comp-2024.xsd",
     ct: "http://www.hmrc.gov.uk/schemas/ct/comp/2024-01-01",
   },
+  {
+    key: "ct-2023",
+    label: "HMRC CT computations (2023)",
+    schemaRef: "http://www.hmrc.gov.uk/schemas/ct/comp/2023-01-01/ct-comp-2023.xsd",
+    ct: "http://www.hmrc.gov.uk/schemas/ct/comp/2023-01-01",
+  },
 ];
+
 export const NS = {
   ix: "http://www.xbrl.org/2013/inlineXBRL",
   /**
@@ -568,16 +563,16 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
   <tr><td class="lbl">Add back: disallowable expenditure</td><td class="num">0</td></tr>
   <tr><td class="lbl">Less: capital allowances</td><td class="num">0</td></tr>
   <tr class="b"><td class="lbl">Adjusted trading profit</td>
-    <td class="num">${fact("ct:AdjustedTradingProfitLoss", adjusted, D)}</td></tr>
+    <td class="num">${fact("ct:AdjustedTradingProfitOfThisPeriod", adjusted, D)}</td></tr>
 </table>
 
 <h2>Tax payable</h2>
 <table>
   <tr><td class="lbl">Profits chargeable to Corporation Tax</td>
-    <td class="num">${fact("ct:ProfitsChargeableToCorporationTax", adjusted, D)}</td></tr>
+    <td class="num">${fact("ct:TotalProfitsChargeableToCorporationTax", adjusted, D)}</td></tr>
   <tr><td class="lbl">Rate applied</td><td class="num">${n2(i.taxRate)}%</td></tr>
   <tr class="b"><td class="lbl">Corporation Tax payable</td>
-    <td class="num">${fact("ct:CorporationTaxPayable", i.taxPayable, D)}</td></tr>
+    <td class="num">${fact("ct:NetCorporationTaxPayable", i.taxPayable, D)}</td></tr>
 </table>
 
 <p class="note">

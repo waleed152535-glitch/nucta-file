@@ -13,6 +13,9 @@ if (process.env.NODE_ENV !== "production") globalForDb._sql = sql;
 
 export const db = drizzle(sql, { schema });
 
+/** The raw client, for the one-off table setup that isn't a Drizzle query. */
+export const rawSql = sql;
+
 /**
  * Where the app is connecting, without the password, for error messages.
  *

@@ -1,3 +1,4 @@
+import CreateTables from "./CreateTables";
 import { desc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -49,8 +50,10 @@ export default async function LogPage() {
               <div style={{ marginTop: 3 }}><b>Connecting to:</b> <span className="mono">{target}</span></div>
               {cause && /does not exist/i.test(cause) && (
                 <div style={{ marginTop: 5 }}>
-                  The tables haven&apos;t been created in <i>this</i> database. Check that the
-                  Neon project you ran the setup script in has the same address as above.
+                  The tables haven&apos;t been created in <i>this</i> database. The button
+                  creates them through Nucta File&apos;s own connection, so they land in exactly
+                  the database shown above. It only adds Nucta File&apos;s own tables.
+                  <CreateTables />
                 </div>
               )}
               <div className="mono" style={{ marginTop: 7, fontSize: 11, opacity: .6 }}>{problem}</div>

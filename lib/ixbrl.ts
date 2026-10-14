@@ -131,6 +131,7 @@ export const NS = {
    */
   ixt: "http://www.xbrl.org/inlineXBRL/transformation/2011-07-31",
   xbrli: "http://www.xbrl.org/2003/instance",
+  xbrldi: "http://xbrl.org/2006/xbrldi",
   xlink: "http://www.w3.org/1999/xlink",
   link: "http://www.xbrl.org/2003/linkbase",
   iso4217: "http://www.xbrl.org/2003/iso4217",
@@ -186,6 +187,21 @@ export interface AccountsInput {
   taxonomy?: AccountsTaxonomy;
   /** Which computation taxonomy to reference. */
   compTaxonomy?: CompTaxonomy;
+
+  /**
+   * The facts HMRC require on every set of accounts, beyond the figures.
+   *
+   * These are the "cover page" of a filing: which standards were applied,
+   * whether the company traded, its legal form, who signed and when. HMRC
+   * list each one by name if it is missing, so none is optional.
+   */
+  principalActivities?: string;
+  trading?: boolean;
+  /** Members read from the FRC taxonomy; see FIXED_MEMBERS. */
+  accountingStandard?: "FRS102" | "FRS101" | "FullIFRS" | "OtherStandards";
+  accountsType?: "FullAccounts" | "AbridgedAccounts" | "FilletedAccounts" | "SmallCompaniesRegimeForAccounts";
+  accountsStatus?: "AuditExemptWithAccountantsReport" | "Audited";
+  legalForm?: "PrivateLimitedCompanyLtd" | "CompanyLimitedByGuarantee" | "LimitedLiabilityPartnershipLLP";
 }
 
 const esc = (v: string): string =>
@@ -248,6 +264,49 @@ function fact(
   return `<ix:nonFraction ${attrs}>${plain(value, dp > 0 ? dp : 0)}</ix:nonFraction>`;
 }
 
+/**
+ * A fact whose meaning comes from a dimension rather than its text.
+ *
+ * The FRC taxonomy types these as fixedItemType, whose content is restricted
+ * to zero characters — the value is carried entirely by the dimension member
+ * on the context. So the element is deliberately empty, and lives in the
+ * hidden section where an empty element does no harm.
+ */
+const fixedFact = (name: string, ctx: string): string =>
+  `<ix:nonNumeric name="${name}" contextRef="${ctx}"></ix:nonNumeric>`;
+
+/** A date fact, written in the only form XBRL accepts without a transform. */
+const dateFact = (name: string, iso: string, ctx: string): string =>
+  `<ix:nonNumeric name="${name}" contextRef="${ctx}">${esc(String(iso).slice(0, 10))}</ix:nonNumeric>`;
+
+/** A true/false fact. */
+const boolFact = (name: string, value: boolean, ctx: string): string =>
+  `<ix:nonNumeric name="${name}" contextRef="${ctx}">${value ? "true" : "false"}</ix:nonNumeric>`;
+
+/**
+ * A context carrying one dimension member.
+ *
+ * Every fixed fact needs its own, because the member is what distinguishes
+ * "FRS 102 was applied" from "IFRS was applied" — the fact itself is blank.
+ */
+function dimContext(
+  id: string, companyNo: string, dimension: string, member: string,
+  period: { from: string; to: string } | { at: string },
+): string {
+  const when = "at" in period
+    ? `<xbrli:period><xbrli:instant>${esc(period.at)}</xbrli:instant></xbrli:period>`
+    : `<xbrli:period><xbrli:startDate>${esc(period.from)}</xbrli:startDate><xbrli:endDate>${esc(period.to)}</xbrli:endDate></xbrli:period>`;
+  return `<xbrli:context id="${id}">
+        <xbrli:entity>
+          <xbrli:identifier scheme="http://www.companieshouse.gov.uk/">${esc(companyNo)}</xbrli:identifier>
+          <xbrli:segment>
+            <xbrldi:explicitMember dimension="${dimension}">${member}</xbrldi:explicitMember>
+          </xbrli:segment>
+        </xbrli:entity>
+        ${when}
+      </xbrli:context>`;
+}
+
 const textFact = (name: string, value: string, ctx: string): string =>
   `<ix:nonNumeric name="${name}" contextRef="${ctx}">${esc(value)}</ix:nonNumeric>`;
 
@@ -278,7 +337,7 @@ export function buildAccounts(i: AccountsInput): string {
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:ix="${NS.ix}" xmlns:xbrli="${NS.xbrli}"
       xmlns:xlink="${NS.xlink}" xmlns:link="${NS.link}" xmlns:iso4217="${NS.iso4217}"
-      xmlns:core="${tx.core}" xmlns:bus="${tx.bus}">
+      xmlns:xbrldi="${NS.xbrldi}" xmlns:core="${tx.core}" xmlns:bus="${tx.bus}">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <title>${esc(i.companyName)} — accounts for the period ended ${esc(longDate(i.periodTo))}</title>
@@ -301,7 +360,19 @@ export function buildAccounts(i: AccountsInput): string {
   <ix:header>
     <ix:hidden>
       ${textFact("bus:EntityCurrentLegalOrRegisteredName", i.companyName, D)}
-      ${textFact("bus:UKCompaniesHouseRegisteredNumber", i.companyNo, D)}
+      ${textFact("bus:UKCompaniesHouseRegisteredNumber", i.companyNo.trim().toUpperCase(), D)}
+      ${textFact("bus:DescriptionPrincipalActivities", i.principalActivities ?? "Online retail", D)}
+      ${boolFact("bus:EntityDormantTruefalse", i.dormant, D)}
+      ${dateFact("bus:StartDateForPeriodCoveredByReport", i.periodFrom, E)}
+      ${dateFact("bus:EndDateForPeriodCoveredByReport", i.periodTo, E)}
+      ${dateFact("bus:BalanceSheetDate", i.periodTo, E)}
+      ${dateFact("core:DateAuthorisationFinancialStatementsForIssue", i.approvedOn, E)}
+      ${fixedFact("bus:AccountingStandardsApplied", "DStd")}
+      ${fixedFact("bus:AccountsType", "DType")}
+      ${fixedFact("bus:AccountsStatusAuditedOrUnaudited", "DStat")}
+      ${fixedFact("bus:EntityTradingStatus", "DTrade")}
+      ${fixedFact("bus:LegalFormEntity", "DLegal")}
+      ${fixedFact("core:DirectorSigningFinancialStatements", "DDir")}
     </ix:hidden>
     <ix:references>
       <link:schemaRef xlink:type="simple" xlink:href="${tx.schemaRef}"/>
@@ -337,6 +408,12 @@ export function buildAccounts(i: AccountsInput): string {
         </xbrli:entity>
         <xbrli:period><xbrli:instant>${esc(i.priorTo ?? "")}</xbrli:instant></xbrli:period>
       </xbrli:context>` : ""}
+      ${dimContext("DStd", i.companyNo, "bus:AccountingStandardsDimension", `bus:${i.accountingStandard ?? "FRS102"}`, { from: i.periodFrom, to: i.periodTo })}
+      ${dimContext("DType", i.companyNo, "bus:AccountsTypeDimension", `bus:${i.accountsType ?? "FullAccounts"}`, { from: i.periodFrom, to: i.periodTo })}
+      ${dimContext("DStat", i.companyNo, "bus:AccountsStatusDimension", `bus:${i.accountsStatus ?? "AuditExemptWithAccountantsReport"}`, { from: i.periodFrom, to: i.periodTo })}
+      ${dimContext("DTrade", i.companyNo, "bus:EntityTradingStatusDimension", i.trading === false ? "bus:EntityNoLongerTradingButTradedInPast" : "bus:EntityTradingDefault", { from: i.periodFrom, to: i.periodTo })}
+      ${dimContext("DLegal", i.companyNo, "bus:LegalFormEntityDimension", `bus:${i.legalForm ?? "PrivateLimitedCompanyLtd"}`, { from: i.periodFrom, to: i.periodTo })}
+      ${dimContext("DDir", i.companyNo, "bus:EntityOfficersDimension", "bus:Director1", { from: i.periodFrom, to: i.periodTo })}
       <xbrli:unit id="GBP"><xbrli:measure>iso4217:GBP</xbrli:measure></xbrli:unit>
       <xbrli:unit id="pure"><xbrli:measure>xbrli:pure</xbrli:measure></xbrli:unit>
     </ix:resources>
@@ -379,8 +456,10 @@ ${i.dormant
   ${row("Net current assets (liabilities)", fact("core:NetCurrentAssetsLiabilities", netCurrent, E), "—", true)}
   ${row("Total assets less current liabilities",
       fact("core:TotalAssetsLessCurrentLiabilities", totalLessCurrent, E), "—", true)}
-  ${row("Creditors: amounts falling due after more than one year",
-      fact("core:Creditors", i.creditorsAfter, E, { negated: true }), py(i.pyCreditorsAfter))}
+  ${i.creditorsAfter
+    ? row("Creditors: amounts falling due after more than one year",
+        shown(-i.creditorsAfter), py(i.pyCreditorsAfter))
+    : ""}
   ${i.provisions ? row("Provisions for liabilities", fact("core:ProvisionsForLiabilitiesBalanceSheetSubtotal", i.provisions, E, { negated: true }), "—") : ""}
   ${i.accruals ? row("Accruals and deferred income", fact("core:AccruedLiabilitiesDeferredIncome", i.accruals, E, { negated: true }), "—") : ""}
   ${row("Total net assets (liabilities)", fact("core:NetAssetsLiabilities", netAssets, E), py(i.pyNetAssets), true)}

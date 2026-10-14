@@ -15,6 +15,8 @@ export default async function LogPage() {
     errors: { text: string }[];
   }[] = [];
   let problem: string | null = null;
+  let cause: string | null = null;
+  let target: string | null = null;
 
   try {
     const { db } = await import("@/lib/db");
@@ -22,6 +24,9 @@ export default async function LogPage() {
     rows = (await db.select().from(submissions).orderBy(desc(submissions.startedAt)).limit(100)) as typeof rows;
   } catch (e) {
     problem = (e as Error)?.message ?? "Couldn't read the submission log.";
+    const { rootCause, connectionTarget } = await import("@/lib/db");
+    cause = rootCause(e);
+    target = connectionTarget();
   }
 
   return (
@@ -39,9 +44,16 @@ export default async function LogPage() {
             <span>⚠</span>
             <span>
               <b>The log isn&apos;t available yet.</b> Submissions still work — they just aren&apos;t
-              being recorded. This needs the database tables creating; the message underneath is
-              the technical reason.
-              <div className="mono" style={{ marginTop: 7, fontSize: 11, opacity: .8 }}>{problem}</div>
+              being recorded.
+              <div style={{ marginTop: 7 }}><b>Reason:</b> {cause}</div>
+              <div style={{ marginTop: 3 }}><b>Connecting to:</b> <span className="mono">{target}</span></div>
+              {cause && /does not exist/i.test(cause) && (
+                <div style={{ marginTop: 5 }}>
+                  The tables haven&apos;t been created in <i>this</i> database. Check that the
+                  Neon project you ran the setup script in has the same address as above.
+                </div>
+              )}
+              <div className="mono" style={{ marginTop: 7, fontSize: 11, opacity: .6 }}>{problem}</div>
             </span>
           </div>
         )}

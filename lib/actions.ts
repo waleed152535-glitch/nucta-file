@@ -120,6 +120,9 @@ function toAccounts(f: TestFormInput): AccountsInput {
   return {
     companyName: f.companyName,
     companyNo: f.companyNo,
+    // The computation must carry the UTR as ct:TaxReference, and HMRC's
+    // pattern for it is ten digits exactly.
+    utr: f.utr.replace(/\D/g, ""),
     periodFrom: f.periodFrom,
     periodTo: f.periodTo,
     dormant: f.turnover === 0 && profit === 0,

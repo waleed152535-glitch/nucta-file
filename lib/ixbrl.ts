@@ -138,6 +138,8 @@ export const NS = {
 export interface AccountsInput {
   companyName: string;
   companyNo: string;
+  /** The Corporation Tax UTR, which the computation must carry. */
+  utr?: string;
   periodFrom: string;
   periodTo: string;
   priorFrom?: string;
@@ -508,7 +510,8 @@ ${i.dormant
 /** The Corporation Tax computation, also as iXBRL. */
 export function buildComputation(i: AccountsInput & { taxRate: number; taxPayable: number }): string {
   const cx = i.compTaxonomy ?? COMP_TAXONOMIES[0];
-  const D = "D";
+  const D = "D";   // the accounting period
+  const E = "E";   // its end, for the instant facts
   const adjusted = i.profitBeforeTax;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -532,6 +535,25 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
 <body>
 <div style="display:none">
   <ix:header>
+    <ix:hidden>
+      <!--
+        The items every computation must carry.
+
+        HMRC's taxonomy makes this a chain: any reportable fact requires
+        CompanyName, and CompanyName in turn requires the tax reference, both
+        pairs of period dates and the partnership flag. The rule lives in
+        ct-comp-2024-definition-mandatoryItems.xml, and HMRC name that file in
+        the rejection when one is missing. All six of the dated and referenced
+        items are instant facts; only the partnership flag covers a period.
+      -->
+      ${textFact("ct:CompanyName", i.companyName, E)}
+      ${textFact("ct:TaxReference", i.utr ?? "", E)}
+      ${dateFact("ct:PeriodOfAccountStartDate", i.periodFrom, E)}
+      ${dateFact("ct:PeriodOfAccountEndDate", i.periodTo, E)}
+      ${dateFact("ct:StartOfPeriodCoveredByReturn", i.periodFrom, E)}
+      ${dateFact("ct:EndOfPeriodCoveredByReturn", i.periodTo, E)}
+      ${boolFact("ct:CompanyIsAPartnerInAFirm", false, D)}
+    </ix:hidden>
     <ix:references>
       <link:schemaRef xlink:type="simple" xlink:href="${cx.schemaRef}"/>
     </ix:references>
@@ -544,6 +566,12 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
           <xbrli:startDate>${esc(i.periodFrom)}</xbrli:startDate>
           <xbrli:endDate>${esc(i.periodTo)}</xbrli:endDate>
         </xbrli:period>
+      </xbrli:context>
+      <xbrli:context id="${E}">
+        <xbrli:entity>
+          <xbrli:identifier scheme="http://www.companieshouse.gov.uk/">${esc(i.companyNo)}</xbrli:identifier>
+        </xbrli:entity>
+        <xbrli:period><xbrli:instant>${esc(i.periodTo)}</xbrli:instant></xbrli:period>
       </xbrli:context>
       <xbrli:unit id="GBP"><xbrli:measure>iso4217:GBP</xbrli:measure></xbrli:unit>
     </ix:resources>

@@ -117,6 +117,81 @@ const ymd = (v: string): string => String(v ?? "").slice(0, 10);
 export interface Ct600Check { ok: boolean; problems: string[]; warnings: string[] }
 
 /** Refuses to build a return HMRC would reject outright. */
+/** The profits the rate is applied to, exactly as buildCt600 writes them (box 315). */
+export function chargeableProfits(i: Pick<Ct600Input, "tradingProfits" | "lossesBroughtForward" | "otherIncome" | "qualifyingDonations">): number {
+  const netTrading = Math.max(0, i.tradingProfits - (i.lossesBroughtForward ?? 0));
+  return Math.max(0, netTrading + (i.otherIncome ?? 0) - (i.qualifyingDonations ?? 0));
+}
+
+const pounds = (v: number): string =>
+  "£" + v.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+/**
+ * Whether the tax on the return is the tax the profits actually produce.
+ *
+ * From 1 April 2023 there are three regimes, set by profits against two
+ * limits — £50,000 and £250,000 — which are shared equally between the
+ * company and its associated companies and reduced pro rata for a period
+ * shorter than a year:
+ *
+ *   at or below the lower limit   19%, the small profits rate
+ *   at or above the upper limit   25%, the main rate
+ *   in between                    25% less marginal relief of
+ *                                 3/200 × (upper limit − profits)
+ *
+ * The marginal relief formula is the simple form, which holds when the
+ * company has no exempt distributions (dividends received from outside its
+ * group). Nucta File doesn't take those as an input yet, so it can't be used
+ * for a company that has them. Before April 2023 the rate was a flat 19%.
+ */
+export function taxProblems(i: Ct600Input): string[] {
+  const out: string[] = [];
+  const profit = Math.round(chargeableProfits(i));
+  const expectedGross = Math.round(profit * i.rate) / 100;
+  if (Math.abs(i.corporationTax - expectedGross) > 0.005) {
+    out.push(`Corporation Tax is entered as ${pounds(i.corporationTax)}, but ${pounds(profit)} at ${i.rate}% is ${pounds(expectedGross)}.`);
+  }
+
+  const mr = i.marginalRelief ?? 0;
+  if (i.financialYear >= 2023) {
+    const from = new Date(i.periodFrom), to = new Date(i.periodTo);
+    const days = Math.min(365, Math.round((to.getTime() - from.getTime()) / 86400000) + 1);
+    const share = Math.max(0, Math.round(i.associatedCompanies ?? 0)) + 1;
+    const lower = (50000 * days) / 365 / share;
+    const upper = (250000 * days) / 365 / share;
+    const why = [
+      share > 1 ? `shared with ${share - 1} associated compan${share === 2 ? "y" : "ies"}` : "",
+      days < 365 ? `reduced for a ${days}-day period` : "",
+    ].filter(Boolean).join(" and ");
+    const limits = why
+      ? ` (the limits are ${pounds(Math.round(lower))} and ${pounds(Math.round(upper))}, ${why})`
+      : "";
+
+    if (profit <= lower) {
+      if (i.rate !== 19) out.push(`Profits of ${pounds(profit)} are within the small profits limit, so the rate is 19%, not ${i.rate}%${limits}.`);
+      if (mr) out.push("Marginal relief doesn't apply at the small profits rate.");
+    } else if (profit >= upper) {
+      if (i.rate !== 25) out.push(`Profits of ${pounds(profit)} are above the upper limit, so the rate is the 25% main rate, not ${i.rate}%${limits}.`);
+      if (mr) out.push("Marginal relief doesn't apply above the upper limit.");
+    } else {
+      const due = Math.round((3 / 200) * (upper - profit) * 100) / 100;
+      if (i.rate !== 25) {
+        out.push(`Profits of ${pounds(profit)} fall between the limits, so the rate is 25% less marginal relief — not ${i.rate}%${limits}.`);
+      } else if (Math.abs(mr - due) > 0.005) {
+        out.push(`Profits of ${pounds(profit)} fall between the limits, so marginal relief of ${pounds(due)} is due${limits}. Filing without it would overpay.`);
+      }
+    }
+  } else if (i.rate !== 19) {
+    out.push(`Before April 2023 the rate was a flat 19%, not ${i.rate}%.`);
+  }
+
+  const net = Math.round((i.corporationTax - mr) * 100) / 100;
+  if (Math.abs(i.taxPayable - net) > 0.005) {
+    out.push(`Tax payable is entered as ${pounds(i.taxPayable)}, but the tax chargeable is ${pounds(net)}. Nucta File doesn't handle other reliefs or set-offs yet, so these must match.`);
+  }
+  return out;
+}
+
 export function checkCt600(i: Partial<Ct600Input>): Ct600Check {
   const problems: string[] = [];
   const warnings: string[] = [];
@@ -138,6 +213,14 @@ export function checkCt600(i: Partial<Ct600Input>): Ct600Check {
     }
   }
   if (!i.declarantName?.trim()) problems.push("The declaration needs a name.");
+
+  // The arithmetic. HMRC's published business rules don't check that the tax
+  // follows from the profits and the rate — a return with the wrong tax on it
+  // passes their schema and their Schematron and is simply accepted, wrong.
+  // So this is the only place it gets checked, and it blocks rather than warns.
+  if (typeof i.tradingProfits === "number" && typeof i.rate === "number" && typeof i.corporationTax === "number") {
+    for (const p of taxProblems(i as Ct600Input)) problems.push(p);
+  }
   if (!i.accountsAttached) warnings.push("No accounts attached. HMRC expects iXBRL accounts with the return.");
   if (!i.computationsAttached) warnings.push("No computations attached. HMRC expects an iXBRL computation.");
   if ((i.turnover ?? 0) === 0) warnings.push("Turnover is zero — right for a dormant company, otherwise check.");
@@ -216,9 +299,12 @@ export function buildCt600(i: Ct600Input): string {
   p(`    </ChargesAndReliefs>`);
   p(`    <ChargeableProfits>${money(chargeable)}</ChargeableProfits>`);
   p(`    <CorporationTaxChargeable>`);
-  // A claim to the small profits rate has to be declared here, before the
-  // financial year, and the element order is enforced by the schema.
-  if (i.rate < 25) {
+  // Box 329 has to be declared here, before the financial year, and the
+  // element order is enforced by the schema. HMRC's spec words it as "chargeable
+  // at the small profits rate or entitled to marginal relief", so a relief
+  // claim needs it as much as the 19% rate does.
+  const mr = i.marginalRelief ?? 0;
+  if (i.rate < 25 || mr > 0 || i.smallProfitsRate) {
     p(`      <AssociatedCompanies>`);
     p(`        <ThisPeriod>${Math.max(0, Math.round(i.associatedCompanies ?? 0))}</ThisPeriod>`);
     p(`        <StartingOrSmallCompaniesRate>yes</StartingOrSmallCompaniesRate>`);
@@ -228,15 +314,22 @@ export function buildCt600(i: Ct600Input): string {
   p(`        <Year>${i.financialYear}</Year>`);
   p(`        <Details>`);
   p(`          <Profit>${money(Math.round(chargeable))}</Profit>`);
-  // A percentage, not a fraction: 19.00 rather than 0.19. HMRC multiply the
-  // profit by this and refuse the return if the answer isn't the tax shown.
+  // A percentage, not a fraction: 19.00 rather than 0.19. HMRC's published
+  // rules don't check that profit × rate = tax, so taxProblems() does, and
+  // blocks the return if it doesn't hold.
   p(`          <TaxRate>${rate(i.rate)}</TaxRate>`);
   p(`          <Tax>${money(i.corporationTax)}</Tax>`);
   p(`        </Details>`);
   p(`      </FinancialYearOne>`);
   p(`    </CorporationTaxChargeable>`);
   p(`    <CorporationTax>${money(i.corporationTax)}</CorporationTax>`);
-  p(`    <NetCorporationTaxChargeable>${money(i.corporationTax - (i.marginalRelief ?? 0))}</NetCorporationTaxChargeable>`);
+  // Box 435. The element name says ring fence trades because the box predates
+  // April 2023, when marginal relief returned for every company; HMRC's spec
+  // now describes it simply as "Marginal relief", and their computation
+  // taxonomy's reference linkbase maps its marginal relief concept to this box.
+  // The type is non-zero, so it is left out entirely when there is no relief.
+  if (mr > 0) p(`    <MarginalReliefForRingFenceTrades>${money(mr)}</MarginalReliefForRingFenceTrades>`);
+  p(`    <NetCorporationTaxChargeable>${money(i.corporationTax - mr)}</NetCorporationTaxChargeable>`);
   p(`    <TaxReliefsAndDeductions>`);
   p(`      <TotalReliefsAndDeductions>${money(i.totalReliefs ?? 0)}</TotalReliefsAndDeductions>`);
   p(`    </TaxReliefsAndDeductions>`);

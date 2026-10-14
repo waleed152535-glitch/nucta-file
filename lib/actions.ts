@@ -38,6 +38,8 @@ export interface TestFormInput {
   turnover: number;
   tradingProfits: number;
   corporationTax: number;
+  /** Box 435. Due when profits fall between the lower and upper limits. */
+  marginalRelief?: number;
   taxPayable: number;
   rate: number;
   financialYear: number;
@@ -78,10 +80,13 @@ function toCt600(f: TestFormInput, docs?: { accounts: string; computation: strin
     turnover: f.turnover,
     tradingProfits: f.tradingProfits,
     corporationTax: f.corporationTax,
+    marginalRelief: f.marginalRelief ?? 0,
     taxPayable: f.taxPayable,
     rate: f.rate,
     financialYear: f.financialYear,
-    smallProfitsRate: f.rate < 25,
+    // Box 329 asks whether the company is at the small profits rate OR
+    // entitled to marginal relief, so a relief claim needs it as much as 19% does.
+    smallProfitsRate: f.rate < 25 || (f.marginalRelief ?? 0) > 0,
     associatedCompanies: f.associatedCompanies,
     declarantName: f.declarantName,
     declarantStatus: f.declarantStatus,
@@ -101,7 +106,7 @@ function buildDocs(f: TestFormInput): { accounts: string; computation: string } 
   return {
     accounts: f.attachAccounts ? buildAccounts(acc) : "",
     computation: f.attachComputation
-      ? buildComputation({ ...acc, taxRate: f.rate, taxPayable: f.taxPayable })
+      ? buildComputation({ ...acc, taxRate: f.rate, taxPayable: f.taxPayable, grossTax: f.corporationTax, marginalRelief: f.marginalRelief ?? 0 })
       : "",
   };
 }
@@ -116,7 +121,10 @@ function buildDocs(f: TestFormInput): { accounts: string; computation: string } 
  */
 function toAccounts(f: TestFormInput): AccountsInput {
   const profit = f.tradingProfits;
-  const retained = profit - f.corporationTax;
+  // The accounts show the tax the company actually owes, which is after
+  // marginal relief — not the 25% figure before it.
+  const taxCharged = f.corporationTax - (f.marginalRelief ?? 0);
+  const retained = profit - taxCharged;
   return {
     companyName: f.companyName,
     companyNo: f.companyNo,
@@ -134,7 +142,7 @@ function toAccounts(f: TestFormInput): AccountsInput {
     staffCosts: 0,
     otherIncome: 0,
     profitBeforeTax: profit,
-    taxCharge: f.corporationTax,
+    taxCharge: taxCharged,
 
     shareCapitalNotPaid: 0,
     fixedAssets: 0,

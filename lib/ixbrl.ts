@@ -553,7 +553,14 @@ ${i.dormant
 }
 
 /** The Corporation Tax computation, also as iXBRL. */
-export function buildComputation(i: AccountsInput & { taxRate: number; taxPayable: number }): string {
+export function buildComputation(i: AccountsInput & {
+  taxRate: number;
+  taxPayable: number;
+  /** Box 430: tax at the rate, before marginal relief. Defaults to taxPayable. */
+  grossTax?: number;
+  /** Box 435. */
+  marginalRelief?: number;
+}): string {
   const cx = i.compTaxonomy ?? COMP_TAXONOMIES[0];
   // Every concept in HMRC's computational taxonomy sits in a hypercube, and
   // the hypercube decides which dimensions its context must answer. There are
@@ -571,6 +578,12 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
   const ECo = "ECo";
   const DTr = "DTr";
   const adjusted = i.profitBeforeTax;
+  // HMRC's reference linkbase maps these to CT600 boxes 430, 435 and 475, so the
+  // computation and the return carry the same three figures under the same boxes.
+  // The relief concept's name mentions ring fence trades for the same historical
+  // reason the return's box 435 element does.
+  const mr = i.marginalRelief ?? 0;
+  const gross = i.grossTax ?? i.taxPayable + mr;
   // The prefix is `ctcomp` rather than `ct` because HMRC's own CT600 tooling
   // binds `ct` to the return's namespace (http://www.govtalk.gov.uk/taxation/CT/5)
   // and this document is nested inside such a return. Redeclaring a prefix is
@@ -663,7 +676,10 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
 <table>
   <tr><td class="lbl">Profits chargeable to Corporation Tax</td>
     <td class="num">${fact("ctcomp:TotalProfitsChargeableToCorporationTax", adjusted, DCo)}</td></tr>
-  <tr><td class="lbl">Rate applied</td><td class="num">${n2(i.taxRate)}%</td></tr>
+  <tr><td class="lbl">Corporation Tax at ${n2(i.taxRate)}%</td>
+    <td class="num">${fact("ctcomp:CorporationTaxChargeable", gross, DCo)}</td></tr>${mr > 0 ? `
+  <tr><td class="lbl">Less: marginal relief</td>
+    <td class="num">${fact("ctcomp:MarginalRateReliefForRingFenceTradesPayable", mr, DCo)}</td></tr>` : ""}
   <tr class="b"><td class="lbl">Corporation Tax payable</td>
     <td class="num">${fact("ctcomp:NetCorporationTaxPayable", i.taxPayable, DCo)}</td></tr>
 </table>

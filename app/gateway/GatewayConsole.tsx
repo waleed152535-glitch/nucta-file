@@ -12,7 +12,7 @@ import { markForPeople } from "@/lib/ct600-xml";
  * Bumped by hand with every package. It is on the screen so that an identical
  * rejection twice over can be told apart from a deploy that never landed.
  */
-const BUILD = "25 — IRmark with comments";
+const BUILD = "26 — tax check + marginal relief";
 
 /**
  * The gateway console.
@@ -37,6 +37,7 @@ const blank: TestFormInput = {
   turnover: 48000,
   tradingProfits: 12000,
   corporationTax: 2280,
+  marginalRelief: 0,
   taxPayable: 2280,
   rate: 19,
   associatedCompanies: 0,
@@ -241,6 +242,18 @@ export default function GatewayConsole({
                 <div className="field">
                   <label>Tax payable <span className="hint">box 525</span></label>
                   <input type="number" value={f.taxPayable} onChange={num("taxPayable")} />
+                </div>
+              </div>
+
+              <div className="row2">
+                <div className="field">
+                  <label>Marginal relief <span className="hint">box 435</span></label>
+                  <input type="number" value={f.marginalRelief ?? 0} onChange={num("marginalRelief")} />
+                  <span className="note" style={{ fontSize: 11.5 }}>
+                    Only when profits fall between £50,000 and £250,000. Tax payable is then tax
+                    charged minus this. Nucta File checks the figure and won&apos;t build the return
+                    if it&apos;s wrong.
+                  </span>
                 </div>
               </div>
 

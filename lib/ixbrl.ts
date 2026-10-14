@@ -503,7 +503,7 @@ ${i.dormant
 
 <p class="stmt">
   Approved by the board on ${esc(longDate(i.approvedOn))} and signed on its behalf by
-  ${textFact("bus:NameEntityOfficer", i.approvedBy, D)}.
+  ${textFact("bus:NameEntityOfficer", i.approvedBy, "DDir")}.
 </p>
 
 </body>

@@ -571,17 +571,12 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
   const ECo = "ECo";
   const DTr = "DTr";
   const adjusted = i.profitBeforeTax;
-  // The prefix is deliberately not `ct`.
-  //
-  // HMRC's own CT600 tooling binds `ct` to the return's namespace,
-  // http://www.govtalk.gov.uk/taxation/CT/5 — their published Schematron
-  // declares exactly that. This document is nested inside such a return, and
-  // the moment a dimension member put a real `ct:`-prefixed element into it
-  // (rather than a prefix only ever appearing inside an attribute value), the
-  // IRmark started failing. Redeclaring a prefix to a second namespace is
-  // legal XML, but it only takes one namespace fixup on the way through for
-  // the element to be re-serialised under a different prefix, and the IRmark
-  // is a digest of those exact bytes. A prefix of our own avoids the question.
+  // The prefix is `ctcomp` rather than `ct` because HMRC's own CT600 tooling
+  // binds `ct` to the return's namespace (http://www.govtalk.gov.uk/taxation/CT/5)
+  // and this document is nested inside such a return. Redeclaring a prefix is
+  // legal XML, so this is tidiness, not a fix: it was suspected of breaking the
+  // IRmark and wasn't the cause. The real cause was that HMRC canonicalise
+  // with comments — see canonicalWithoutMark in ct600-xml.ts.
   const businessType = "ctcomp:BusinessTypeDimension";
   const businessName = "ctcomp:BusinessNameDimension";
 
@@ -607,7 +602,7 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
 <div style="display:none">
   <ix:header>
     <ix:hidden>
-      <!--
+      ${/*
         The items every computation must carry.
 
         HMRC's taxonomy makes this a chain: any reportable fact requires
@@ -616,8 +611,11 @@ export function buildComputation(i: AccountsInput & { taxRate: number; taxPayabl
         ct-comp-2024-definition-mandatoryItems.xml, and HMRC name that file in
         the rejection when one is missing. All six of the dated and referenced
         items are instant facts; only the partnership flag covers a period.
-      -->
-      ${textFact("ctcomp:CompanyName", i.companyName, ECo)}
+
+        This note is a code comment, not an XML one, on purpose: anything
+        inside <!-- --> is filed with HMRC as part of the client's return and
+        is covered by the IRmark. Notes for developers stay in the code.
+      */ ""}${textFact("ctcomp:CompanyName", i.companyName, ECo)}
       ${textFact("ctcomp:TaxReference", i.utr ?? "", ECo)}
       ${dateFact("ctcomp:PeriodOfAccountStartDate", i.periodFrom, ECo)}
       ${dateFact("ctcomp:PeriodOfAccountEndDate", i.periodTo, ECo)}

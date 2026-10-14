@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { DOMParser } from "@xmldom/xmldom";
 import { ExclusiveCanonicalization } from "xml-crypto/lib/exclusive-canonicalization.js";
-import { C14nCanonicalization } from "xml-crypto/lib/c14n-canonicalization.js";
+import { C14nCanonicalization, C14nCanonicalizationWithComments } from "xml-crypto/lib/c14n-canonicalization.js";
 
 /**
  * Builds a Company Tax Return as XML for HMRC's Corporation Tax service.
@@ -430,9 +430,20 @@ function canonicalWithoutMark(bodyXml: string, method: MarkMethod): string {
     m.parentNode?.removeChild(m);
   }
 
+  // HMRC canonicalise WITH comments. This is not in the step-by-step guide's
+  // wording, but it is in the transform their own Local Test Service applies
+  // for the CT namespace (IRMarkCalc.getTransformStForNamespace), which ends:
+  //
+  //   <dsig:Transform Algorithm='http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments'/>
+  //
+  // Stripping comments gives the same digest only while the return contains
+  // none — true of the CT600 and the accounts, so both were accepted, and
+  // false the moment an attached document carried a comment.
   const engine = method === "exc-c14n"
     ? new ExclusiveCanonicalization()
-    : new C14nCanonicalization();
+    : method === "spec"
+      ? new C14nCanonicalizationWithComments()
+      : new C14nCanonicalization();
 
   // The signature varies between xml-crypto versions; only the node matters.
   const out = String((engine as unknown as { process(n: unknown, o: object): string }).process(root, {}));

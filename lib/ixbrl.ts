@@ -206,7 +206,7 @@ export interface AccountsInput {
   /** Members read from the FRC taxonomy; see FIXED_MEMBERS. */
   accountingStandard?: "FRS102" | "FRS101" | "FullIFRS" | "OtherStandards";
   accountsType?: "FullAccounts" | "AbridgedAccounts" | "FilletedAccounts" | "SmallCompaniesRegimeForAccounts";
-  accountsStatus?: "AuditExemptWithAccountantsReport" | "Audited";
+  accountsStatus?: "AuditExemptWithAccountantsReport" | "AuditExempt-NoAccountantsReport" | "Audited";
   legalForm?: "PrivateLimitedCompanyLtd" | "CompanyLimitedByGuarantee" | "LimitedLiabilityPartnershipLLP";
 }
 
@@ -223,6 +223,15 @@ const show = (v: number): string =>
  */
 const plain = (v: number, decimals = 0): string =>
   decimals > 0 ? Math.abs(v).toFixed(decimals) : String(Math.round(Math.abs(v)));
+
+/**
+ * Puts brackets round a tagged figure when the value is negative.
+ *
+ * The brackets sit outside the ix tag: they are how a reader sees the sign,
+ * and the sign="-" inside the tag is how a machine sees it.
+ */
+const bracket = (value: number, tagged: string): string =>
+  value < 0 ? `( ${tagged} )` : tagged;
 
 /** Accounts show a negative in brackets rather than with a minus sign. */
 const shown = (v: number): string => (v < 0 ? `( ${show(v)} )` : show(v));
@@ -265,7 +274,11 @@ function fact(
     `contextRef="${ctx}"`,
     `unitRef="GBP"`,
     `decimals="${opts.decimals ?? "0"}"`,
-    opts.negated ? `sign="-"` : "",
+    // iXBRL never puts a minus sign in the number itself; a negative value is
+    // written as its size with sign="-". plain() drops the sign, so without
+    // this a loss of 8,000 would be tagged as a profit of 8,000. "negated" is
+    // for concepts whose sign is reversed by definition, and two negatives cancel.
+    (value < 0) !== Boolean(opts.negated) ? `sign="-"` : "",
   ].filter(Boolean).join(" ");
   return `<ix:nonFraction ${attrs}>${plain(value, dp > 0 ? dp : 0)}</ix:nonFraction>`;
 }
@@ -577,6 +590,9 @@ export function buildComputation(i: AccountsInput & {
   const DCo = "DCo";
   const ECo = "ECo";
   const DTr = "DTr";
+  // A loss is reported as AdjustedLossOfPeriod (box 780) against the trade,
+  // not as a negative AdjustedTradingProfitOfThisPeriod (box 155) — HMRC's
+  // reference linkbase maps the two concepts to those two separate boxes.
   const adjusted = i.profitBeforeTax;
   // HMRC's reference linkbase maps these to CT600 boxes 430, 435 and 475, so the
   // computation and the return carry the same three figures under the same boxes.
@@ -664,18 +680,20 @@ export function buildComputation(i: AccountsInput & {
 
 <h2>Adjustment of profit</h2>
 <table>
-  <tr><td class="lbl">Profit per the accounts</td>
-    <td class="num">${fact("ctcomp:ProfitLossPerAccounts", i.profitBeforeTax, DTr)}</td></tr>
+  <tr><td class="lbl">${i.profitBeforeTax < 0 ? "Loss" : "Profit"} per the accounts</td>
+    <td class="num">${bracket(i.profitBeforeTax, fact("ctcomp:ProfitLossPerAccounts", i.profitBeforeTax, DTr))}</td></tr>
   <tr><td class="lbl">Add back: disallowable expenditure</td><td class="num">0</td></tr>
-  <tr><td class="lbl">Less: capital allowances</td><td class="num">0</td></tr>
+  <tr><td class="lbl">Less: capital allowances</td><td class="num">0</td></tr>${adjusted >= 0 ? `
   <tr class="b"><td class="lbl">Adjusted trading profit</td>
-    <td class="num">${fact("ctcomp:AdjustedTradingProfitOfThisPeriod", adjusted, DCo)}</td></tr>
+    <td class="num">${fact("ctcomp:AdjustedTradingProfitOfThisPeriod", adjusted, DCo)}</td></tr>` : `
+  <tr class="b"><td class="lbl">Adjusted trading loss</td>
+    <td class="num">( ${fact("ctcomp:AdjustedLossOfPeriod", -adjusted, DTr)} )</td></tr>`}
 </table>
 
 <h2>Tax payable</h2>
 <table>
   <tr><td class="lbl">Profits chargeable to Corporation Tax</td>
-    <td class="num">${fact("ctcomp:TotalProfitsChargeableToCorporationTax", adjusted, DCo)}</td></tr>
+    <td class="num">${fact("ctcomp:TotalProfitsChargeableToCorporationTax", Math.max(0, adjusted), DCo)}</td></tr>
   <tr><td class="lbl">Corporation Tax at ${n2(i.taxRate)}%</td>
     <td class="num">${fact("ctcomp:CorporationTaxChargeable", gross, DCo)}</td></tr>${mr > 0 ? `
   <tr><td class="lbl">Less: marginal relief</td>

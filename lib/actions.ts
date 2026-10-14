@@ -125,6 +125,12 @@ function toAccounts(f: TestFormInput): AccountsInput {
   // marginal relief — not the 25% figure before it.
   const taxCharged = f.corporationTax - (f.marginalRelief ?? 0);
   const retained = profit - taxCharged;
+  // A profit leaves cash behind. A loss has to have been paid for by someone,
+  // and for a small owner-managed company that is normally the director: the
+  // loss is funded by a director's loan, shown in creditors, which keeps the
+  // balance sheet balancing with the reserve equal to the loss.
+  const cash = retained >= 0 ? retained + f.taxPayable + 1 : 1000;
+  const directorLoan = retained >= 0 ? 0 : cash - 1 - retained;
   return {
     companyName: f.companyName,
     companyNo: f.companyNo,
@@ -146,9 +152,9 @@ function toAccounts(f: TestFormInput): AccountsInput {
 
     shareCapitalNotPaid: 0,
     fixedAssets: 0,
-    currentAssets: Math.max(0, retained + f.taxPayable + 1),
+    currentAssets: cash,
     prepayments: 0,
-    creditorsWithin: f.taxPayable,
+    creditorsWithin: f.taxPayable + directorLoan,
     creditorsAfter: 0,
     provisions: 0,
     accruals: 0,
@@ -158,7 +164,10 @@ function toAccounts(f: TestFormInput): AccountsInput {
     approvedBy: f.declarantName,
     approvedOn: f.periodTo,
     principalActivities: "Online retail",
-    tradingStatus: "trading",
+    // A dormant test company has never traded; and dormant accounts carry no
+    // accountant's report, which the FRC taxonomy has its own status for.
+    tradingStatus: f.turnover === 0 && profit === 0 ? "neverTraded" : "trading",
+    accountsStatus: f.turnover === 0 && profit === 0 ? "AuditExempt-NoAccountantsReport" : "AuditExemptWithAccountantsReport",
     taxonomy: ACCOUNT_TAXONOMIES.find((t) => t.key === f.accountsTaxonomy) ?? ACCOUNT_TAXONOMIES[0],
     compTaxonomy: COMP_TAXONOMIES.find((t) => t.key === f.compTaxonomy) ?? COMP_TAXONOMIES[0],
   };

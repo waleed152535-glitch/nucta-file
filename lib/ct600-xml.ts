@@ -153,7 +153,10 @@ export function taxProblems(i: Ct600Input): string[] {
   }
 
   const mr = i.marginalRelief ?? 0;
-  if (i.financialYear >= 2023) {
+  if (profit === 0) {
+    // Nothing chargeable: no rate is applied and none appears on the return.
+    if (mr) out.push("Marginal relief can't apply when there are no chargeable profits.");
+  } else if (i.financialYear >= 2023) {
     const from = new Date(i.periodFrom), to = new Date(i.periodTo);
     const days = Math.min(365, Math.round((to.getTime() - from.getTime()) / 86400000) + 1);
     const share = Math.max(0, Math.round(i.associatedCompanies ?? 0)) + 1;
@@ -246,7 +249,12 @@ function nestable(doc: string): string {
  * correctly named element in the wrong position is still rejected.
  */
 export function buildCt600(i: Ct600Input): string {
-  const netTrading = Math.max(0, i.tradingProfits - (i.lossesBroughtForward ?? 0));
+  // A negative trading figure is a loss. HMRC's money types are non-negative,
+  // so box 155 carries the profit (nil in a loss year) and the loss itself goes
+  // to box 780 in the losses section further down.
+  const trading = Math.max(0, i.tradingProfits);
+  const lossArising = Math.max(0, -i.tradingProfits);
+  const netTrading = Math.max(0, trading - (i.lossesBroughtForward ?? 0));
   const beforeOther = netTrading + (i.otherIncome ?? 0);
   const beforeDonations = beforeOther;
   const chargeable = Math.max(0, beforeDonations - (i.qualifyingDonations ?? 0));
@@ -286,24 +294,35 @@ export function buildCt600(i: Ct600Input): string {
   p(`  <CompanyTaxCalculation>`);
   p(`    <Income>`);
   p(`      <Trading>`);
-  p(`        <Profits>${money(i.tradingProfits)}</Profits>`);
-  p(`        <LossesBroughtForward>${money(i.lossesBroughtForward ?? 0)}</LossesBroughtForward>`);
-  p(`        <NetProfits>${money(netTrading)}</NetProfits>`);
+  p(`        <Profits>${money(trading)}</Profits>`);
+  // Rule 9150: box 160 may only be completed when box 155 is above zero, and
+  // rule 9148 asks for box 165 only then too. So in a nil or loss year the
+  // trading block is box 155 alone, at nil.
+  if (trading > 0) {
+    p(`        <LossesBroughtForward>${money(i.lossesBroughtForward ?? 0)}</LossesBroughtForward>`);
+    p(`        <NetProfits>${money(netTrading)}</NetProfits>`);
+  }
   p(`      </Trading>`);
   p(`    </Income>`);
-  // Box 235.
-  p(`    <ProfitsBeforeOtherDeductions>${money(beforeOther)}</ProfitsBeforeOtherDeductions>`);
-  // Box 300, which HMRC require whenever box 235 is above zero.
-  p(`    <ChargesAndReliefs>`);
-  p(`      <ProfitsBeforeDonationsAndGroupRelief>${money(beforeDonations)}</ProfitsBeforeDonationsAndGroupRelief>`);
-  p(`    </ChargesAndReliefs>`);
+  if (beforeOther > 0) {
+    // Box 235.
+    p(`    <ProfitsBeforeOtherDeductions>${money(beforeOther)}</ProfitsBeforeOtherDeductions>`);
+    // Box 300, which HMRC require whenever box 235 is above zero.
+    p(`    <ChargesAndReliefs>`);
+    p(`      <ProfitsBeforeDonationsAndGroupRelief>${money(beforeDonations)}</ProfitsBeforeDonationsAndGroupRelief>`);
+    p(`    </ChargesAndReliefs>`);
+  }
   p(`    <ChargeableProfits>${money(chargeable)}</ChargeableProfits>`);
+  const mr = i.marginalRelief ?? 0;
+  // Rule 9144 asks for the financial-year block when box 315 is above zero.
+  // With nothing chargeable there is no rate to apply, so the whole block,
+  // including the small-profits declaration, is left out.
+  if (chargeable > 0) {
   p(`    <CorporationTaxChargeable>`);
   // Box 329 has to be declared here, before the financial year, and the
   // element order is enforced by the schema. HMRC's spec words it as "chargeable
   // at the small profits rate or entitled to marginal relief", so a relief
   // claim needs it as much as the 19% rate does.
-  const mr = i.marginalRelief ?? 0;
   if (i.rate < 25 || mr > 0 || i.smallProfitsRate) {
     p(`      <AssociatedCompanies>`);
     p(`        <ThisPeriod>${Math.max(0, Math.round(i.associatedCompanies ?? 0))}</ThisPeriod>`);
@@ -322,6 +341,7 @@ export function buildCt600(i: Ct600Input): string {
   p(`        </Details>`);
   p(`      </FinancialYearOne>`);
   p(`    </CorporationTaxChargeable>`);
+  }
   p(`    <CorporationTax>${money(i.corporationTax)}</CorporationTax>`);
   // Box 435. The element name says ring fence trades because the box predates
   // April 2023, when marginal relief returned for every company; HMRC's spec
@@ -340,6 +360,18 @@ export function buildCt600(i: Ct600Input): string {
   p(`    <TaxChargeable>${money(i.corporationTax - (i.marginalRelief ?? 0))}</TaxChargeable>`);
   p(`    <TaxPayable>${money(i.taxPayable)}</TaxPayable>`);
   p(`  </CalculationOfTaxOutstandingOrOverpaid>`);
+
+  // Box 780: a UK trading loss arising in this period. The schema places the
+  // losses section after the tax calculation and before the declaration.
+  if (lossArising > 0) {
+    p(`  <LossesDeficitsAndExcess>`);
+    p(`    <AmountArising>`);
+    p(`      <LossesOfTradesUK>`);
+    p(`        <Arising>${money(Math.round(lossArising))}</Arising>`);
+    p(`      </LossesOfTradesUK>`);
+    p(`    </AmountArising>`);
+    p(`  </LossesDeficitsAndExcess>`);
+  }
 
   p(`  <Declaration>`);
   p(`    <AcceptDeclaration>yes</AcceptDeclaration>`);

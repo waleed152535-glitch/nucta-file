@@ -12,7 +12,7 @@ import { markForPeople } from "@/lib/ct600-xml";
  * Bumped by hand with every package. It is on the screen so that an identical
  * rejection twice over can be told apart from a deploy that never landed.
  */
-const BUILD = "26 — tax check + marginal relief";
+const BUILD = "27 — losses + dormant";
 
 /**
  * The gateway console.
@@ -225,7 +225,7 @@ export default function GatewayConsole({
                   <input type="number" value={f.turnover} onChange={num("turnover")} />
                 </div>
                 <div className="field">
-                  <label>Trading profit <span className="hint">box 155</span></label>
+                  <label>Trading profit <span className="hint">box 155 · a loss is a minus number</span></label>
                   <input type="number" value={f.tradingProfits} onChange={num("tradingProfits")} />
                 </div>
               </div>

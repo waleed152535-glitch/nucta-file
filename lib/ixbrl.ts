@@ -48,6 +48,12 @@ export interface AccountsTaxonomy {
   schemaRef: string;
   core: string;
   bus: string;
+  /**
+   * The directors' report taxonomy, where the statutory statements on the
+   * balance sheet live (audit exemption, members' rights, directors'
+   * responsibilities, the regime the accounts are prepared under).
+   */
+  direp: string;
 }
 
 export const ACCOUNT_TAXONOMIES: AccountsTaxonomy[] = [
@@ -57,6 +63,7 @@ export const ACCOUNT_TAXONOMIES: AccountsTaxonomy[] = [
     schemaRef: "https://xbrl.frc.org.uk/FRS-102/2023-01-01/FRS-102-2023-01-01.xsd",
     core: "http://xbrl.frc.org.uk/fr/2023-01-01/core",
     bus: "http://xbrl.frc.org.uk/cd/2023-01-01/business",
+    direp: "http://xbrl.frc.org.uk/reports/2023-01-01/direp",
   },
   {
     key: "frs101-2023",
@@ -64,6 +71,7 @@ export const ACCOUNT_TAXONOMIES: AccountsTaxonomy[] = [
     schemaRef: "https://xbrl.frc.org.uk/FRS-101/2023-01-01/FRS-101-2023-01-01.xsd",
     core: "http://xbrl.frc.org.uk/fr/2023-01-01/core",
     bus: "http://xbrl.frc.org.uk/cd/2023-01-01/business",
+    direp: "http://xbrl.frc.org.uk/reports/2023-01-01/direp",
   },
   {
     key: "core-2023",
@@ -71,6 +79,7 @@ export const ACCOUNT_TAXONOMIES: AccountsTaxonomy[] = [
     schemaRef: "https://xbrl.frc.org.uk/fr/2023-01-01/core/frc-core-2023-01-01.xsd",
     core: "http://xbrl.frc.org.uk/fr/2023-01-01/core",
     bus: "http://xbrl.frc.org.uk/cd/2023-01-01/business",
+    direp: "http://xbrl.frc.org.uk/reports/2023-01-01/direp",
   },
   {
     key: "frs102-2024",
@@ -78,6 +87,9 @@ export const ACCOUNT_TAXONOMIES: AccountsTaxonomy[] = [
     schemaRef: "https://xbrl.frc.org.uk/FRS-102/2024-01-01/FRS-102-2024-01-01.xsd",
     core: "http://xbrl.frc.org.uk/fr/2024-01-01/core",
     bus: "http://xbrl.frc.org.uk/cd/2024-01-01/business",
+    // Follows the FRC's naming exactly as in 2023; the 2024 package isn't held
+    // locally, so this one hasn't been checked against the taxonomy itself.
+    direp: "http://xbrl.frc.org.uk/reports/2024-01-01/direp",
   },
 ];
 
@@ -204,7 +216,7 @@ export interface AccountsInput {
    */
   tradingStatus?: "trading" | "neverTraded" | "ceased";
   /** Members read from the FRC taxonomy; see FIXED_MEMBERS. */
-  accountingStandard?: "FRS102" | "FRS101" | "FullIFRS" | "OtherStandards";
+  accountingStandard?: "Micro-entities" | "SmallEntities" | "FRS102" | "FRS101" | "FullIFRS" | "OtherStandards";
   accountsType?: "FullAccounts" | "AbridgedAccounts" | "FilletedAccounts" | "SmallCompaniesRegimeForAccounts";
   accountsStatus?: "AuditExemptWithAccountantsReport" | "AuditExempt-NoAccountantsReport" | "Audited";
   legalForm?: "PrivateLimitedCompanyLtd" | "CompanyLimitedByGuarantee" | "LimitedLiabilityPartnershipLLP";
@@ -221,6 +233,10 @@ const show = (v: number): string =>
  * A number as XBRL itself accepts it: digits, an optional decimal point, and
  * nothing else. No grouping separators.
  */
+/** A number with thousands commas, for a tag carrying format="ixt2:numdotdecimal". */
+const grouped = (v: number, decimals = 0): string =>
+  Math.abs(v).toLocaleString("en-GB", { minimumFractionDigits: decimals, maximumFractionDigits: decimals, useGrouping: true });
+
 const plain = (v: number, decimals = 0): string =>
   decimals > 0 ? Math.abs(v).toFixed(decimals) : String(Math.round(Math.abs(v)));
 
@@ -231,10 +247,21 @@ const plain = (v: number, decimals = 0): string =>
  * and the sign="-" inside the tag is how a machine sees it.
  */
 const bracket = (value: number, tagged: string): string =>
-  value < 0 ? `( ${tagged} )` : tagged;
+  value < 0 ? `(${tagged})` : tagged;
+
+/**
+ * A cost, tax charge or liability, shown as a deduction.
+ *
+ * HMRC's style guide: "Numbers represented in XBRL … are generally positive
+ * in value", and brackets in the rendering "have no influence over the sign".
+ * So the tag holds the plain amount — a cost of 58,000 is +58,000 against a
+ * debit concept — and only the reader sees brackets.
+ */
+const deduction = (value: number, tagged: string): string =>
+  value > 0 ? `(${tagged})` : tagged;
 
 /** Accounts show a negative in brackets rather than with a minus sign. */
-const shown = (v: number): string => (v < 0 ? `( ${show(v)} )` : show(v));
+const shown = (v: number): string => (v < 0 ? `(${show(v)})` : show(v));
 
 /** Dates read better to a client as "31 January 2024" than as an ISO string. */
 const longDate = (v: string): string => {
@@ -280,7 +307,13 @@ function fact(
     // for concepts whose sign is reversed by definition, and two negatives cancel.
     (value < 0) !== Boolean(opts.negated) ? `sign="-"` : "",
   ].filter(Boolean).join(" ");
-  return `<ix:nonFraction ${attrs}>${plain(value, dp > 0 ? dp : 0)}</ix:nonFraction>`;
+  // Shown with thousands commas, which XBRL can only read through a format:
+  // ixt2:numdotdecimal from the 2011 transformation registry. HMRC's CT
+  // Inline XBRL Style Guide lists that registry (and the 2010 one) as
+  // supported; its own example, "numcommadot", is the 2010 registry's name
+  // for the same thing, which is why pairing that name with the 2011
+  // namespace was refused once before.
+  return `<ix:nonFraction ${attrs} format="ixt2:numdotdecimal">${grouped(value, dp > 0 ? dp : 0)}</ix:nonFraction>`;
 }
 
 /**
@@ -375,11 +408,13 @@ function multiContext(
 }
 
 /** A row in the accounts, with this year and last year side by side. */
-function row(label: string, thisYear: string, lastYear: string, bold = false): string {
+function row(label: string, thisYear: string, lastYear: string | null, bold = false): string {
+  // lastYear is null in a company's first accounts, which have no comparative
+  // column at all rather than a column of dashes.
   return `<tr${bold ? ' class="b"' : ""}>
       <td class="lbl">${esc(label)}</td>
-      <td class="num">${thisYear}</td>
-      <td class="num">${lastYear}</td>
+      <td class="num">${thisYear}</td>${lastYear === null ? "" : `
+      <td class="num">${lastYear}</td>`}
     </tr>`;
 }
 
@@ -395,13 +430,19 @@ export function buildAccounts(i: AccountsInput): string {
   const netAssets = totalLessCurrent - i.creditorsAfter - i.provisions - i.accruals;
   const totalExpenses = i.costOfSales + i.adminExpenses + i.staffCosts;
 
-  const py = (v: number | undefined): string => (v === undefined ? "—" : shown(v));
+  const hasPy = [i.pyTurnover, i.pyProfit, i.pyFixedAssets, i.pyCurrentAssets, i.pyCreditorsWithin, i.pyCreditorsAfter, i.pyNetAssets]
+    .some((v) => v !== undefined);
+  const py = (v: number | undefined): string | null => (!hasPy ? null : v === undefined ? "—" : shown(v));
+  const pyDeduction = (v: number | undefined): string | null =>
+    (!hasPy ? null : v === undefined ? "—" : v > 0 ? `(${show(v)})` : shown(v));
+  const yearHead = `<tr class="hd"><td class="lbl"></td><td class="num">${esc(i.periodTo.slice(0, 4))}<br/>£</td>${
+    hasPy ? `<td class="num">${esc((i.priorTo ?? "").slice(0, 4) || "—")}<br/>£</td>` : ""}</tr>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:ix="${NS.ix}" xmlns:xbrli="${NS.xbrli}"
       xmlns:xlink="${NS.xlink}" xmlns:link="${NS.link}" xmlns:iso4217="${NS.iso4217}"
-      xmlns:xbrldi="${NS.xbrldi}" xmlns:core="${tx.core}" xmlns:bus="${tx.bus}">
+      xmlns:xbrldi="${NS.xbrldi}" xmlns:core="${tx.core}" xmlns:bus="${tx.bus}" xmlns:direp="${tx.direp}" xmlns:ixt2="${NS.ixt}">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <title>${esc(i.companyName)} — accounts for the period ended ${esc(longDate(i.periodTo))}</title>
@@ -437,6 +478,7 @@ export function buildAccounts(i: AccountsInput): string {
       ${fixedFact("bus:EntityTradingStatus", (i.tradingStatus ?? "trading") === "trading" ? D : "DTrade")}
       ${fixedFact("bus:LegalFormEntity", "DLegal")}
       ${fixedFact("core:DirectorSigningFinancialStatements", "DDir")}
+      ${textFact("bus:NameProductionSoftware", "Nucta File", D)}
     </ix:hidden>
     <ix:references>
       <link:schemaRef xlink:type="simple" xlink:href="${tx.schemaRef}"/>
@@ -472,9 +514,9 @@ export function buildAccounts(i: AccountsInput): string {
         </xbrli:entity>
         <xbrli:period><xbrli:instant>${esc(i.priorTo ?? "")}</xbrli:instant></xbrli:period>
       </xbrli:context>` : ""}
-      ${dimContext("DStd", i.companyNo, "bus:AccountingStandardsDimension", `bus:${i.accountingStandard ?? "FRS102"}`, { from: i.periodFrom, to: i.periodTo })}
+      ${dimContext("DStd", i.companyNo, "bus:AccountingStandardsDimension", `bus:${i.accountingStandard ?? "Micro-entities"}`, { from: i.periodFrom, to: i.periodTo })}
       ${dimContext("DType", i.companyNo, "bus:AccountsTypeDimension", `bus:${i.accountsType ?? "FullAccounts"}`, { from: i.periodFrom, to: i.periodTo })}
-      ${dimContext("DStat", i.companyNo, "bus:AccountsStatusDimension", `bus:${i.accountsStatus ?? "AuditExemptWithAccountantsReport"}`, { from: i.periodFrom, to: i.periodTo })}
+      ${dimContext("DStat", i.companyNo, "bus:AccountsStatusDimension", `bus:${i.accountsStatus ?? "AuditExempt-NoAccountantsReport"}`, { from: i.periodFrom, to: i.periodTo })}
       ${(i.tradingStatus ?? "trading") === "trading" ? "" : dimContext("DTrade", i.companyNo, "bus:EntityTradingStatusDimension", i.tradingStatus === "neverTraded" ? "bus:EntityHasNeverTraded" : "bus:EntityNoLongerTradingButTradedInPast", { from: i.periodFrom, to: i.periodTo })}
       ${dimContext("DLegal", i.companyNo, "bus:LegalFormEntityDimension", `bus:${i.legalForm ?? "PrivateLimitedCompanyLtd"}`, { from: i.periodFrom, to: i.periodTo })}
       ${dimContext("DDir", i.companyNo, "bus:EntityOfficersDimension", "bus:Director1", { from: i.periodFrom, to: i.periodTo })}
@@ -495,58 +537,59 @@ ${i.dormant
   ? `<p class="stmt">The company was dormant throughout the period. It received no income and incurred no
      expenditure, and therefore made neither a profit nor a loss.</p>`
   : `<table>
-  <tr class="hd"><td class="lbl"></td><td class="num">${esc(i.periodTo.slice(0, 4))}<br/>£</td><td class="num">${esc((i.priorTo ?? "").slice(0, 4) || "—")}<br/>£</td></tr>
+  ${yearHead}
   ${row("Turnover", fact("core:TurnoverRevenue", i.turnover, D), py(i.pyTurnover))}
-  ${row("Cost of sales", fact("core:CostSales", i.costOfSales, D, { negated: true }), "—")}
-  ${row("Gross profit", fact("core:GrossProfitLoss", i.grossProfit, D), "—", true)}
-  ${row("Administrative expenses", fact("core:AdministrativeExpenses", i.adminExpenses, D, { negated: true }), "—")}
-  ${i.staffCosts ? row("Staff costs", fact("core:StaffCostsEmployeeBenefitsExpense", i.staffCosts, D, { negated: true }), "—") : ""}
-  ${i.otherIncome ? row("Other income", fact("core:OtherOperatingIncomeFormat1", i.otherIncome, D), "—") : ""}
-  ${row("Profit before tax", fact("core:ProfitLossOnOrdinaryActivitiesBeforeTax", i.profitBeforeTax, D), py(i.pyProfit), true)}
-  ${row("Tax on profit", fact("core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", i.taxCharge, D, { negated: true }), "—")}
-  ${row("Profit for the period", fact("core:ProfitLoss", i.profitBeforeTax - i.taxCharge, D), py(i.pyProfit), true)}
+  ${row("Cost of sales", deduction(i.costOfSales, fact("core:CostSales", i.costOfSales, D)), py(undefined))}
+  ${row(i.grossProfit < 0 ? "Gross loss" : "Gross profit", bracket(i.grossProfit, fact("core:GrossProfitLoss", i.grossProfit, D)), py(undefined), true)}
+  ${row("Administrative expenses", deduction(i.adminExpenses, fact("core:AdministrativeExpenses", i.adminExpenses, D)), py(undefined))}
+  ${i.staffCosts ? row("Staff costs", deduction(i.staffCosts, fact("core:StaffCostsEmployeeBenefitsExpense", i.staffCosts, D)), py(undefined)) : ""}
+  ${i.otherIncome ? row("Other income", fact("core:OtherOperatingIncomeFormat1", i.otherIncome, D), py(undefined)) : ""}
+  ${row(i.profitBeforeTax < 0 ? "Loss before tax" : "Profit before tax", bracket(i.profitBeforeTax, fact("core:ProfitLossOnOrdinaryActivitiesBeforeTax", i.profitBeforeTax, D)), py(i.pyProfit), true)}
+  ${row(i.profitBeforeTax < 0 ? "Tax on loss" : "Tax on profit", deduction(i.taxCharge, fact("core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", i.taxCharge, D)), py(undefined))}
+  ${row(i.profitBeforeTax - i.taxCharge < 0 ? "Loss for the period" : "Profit for the period", bracket(i.profitBeforeTax - i.taxCharge, fact("core:ProfitLoss", i.profitBeforeTax - i.taxCharge, D)), py(i.pyProfit), true)}
 </table>`}
 
 <h2>Balance sheet as at ${esc(longDate(i.periodTo))}</h2>
 <table>
-  <tr class="hd"><td class="lbl"></td><td class="num">${esc(i.periodTo.slice(0, 4))}<br/>£</td><td class="num">${esc((i.priorTo ?? "").slice(0, 4) || "—")}<br/>£</td></tr>
+  ${yearHead}
   ${row("Called up share capital not paid",
-      fact("core:CalledUpShareCapitalNotPaidNotExpressedAsCurrentAsset", i.shareCapitalNotPaid, E), "—")}
+      fact("core:CalledUpShareCapitalNotPaidNotExpressedAsCurrentAsset", i.shareCapitalNotPaid, E), py(undefined))}
   ${row("Fixed assets", fact("core:FixedAssets", i.fixedAssets, E), py(i.pyFixedAssets))}
   ${row("Current assets", fact("core:CurrentAssets", i.currentAssets, E), py(i.pyCurrentAssets))}
-  ${i.prepayments ? row("Prepayments and accrued income", fact("core:PrepaymentsAccruedIncome", i.prepayments, E), "—") : ""}
+  ${i.prepayments ? row("Prepayments and accrued income", fact("core:PrepaymentsAccruedIncome", i.prepayments, E), py(undefined)) : ""}
   ${row("Creditors: amounts falling due within one year",
-      fact("core:Creditors", i.creditorsWithin, E, { negated: true }), py(i.pyCreditorsWithin))}
-  ${row("Net current assets (liabilities)", fact("core:NetCurrentAssetsLiabilities", netCurrent, E), "—", true)}
+      deduction(i.creditorsWithin, fact("core:Creditors", i.creditorsWithin, E)), pyDeduction(i.pyCreditorsWithin))}
+  ${row(netCurrent < 0 ? "Net current liabilities" : "Net current assets", bracket(netCurrent, fact("core:NetCurrentAssetsLiabilities", netCurrent, E)), py(undefined), true)}
   ${row("Total assets less current liabilities",
-      fact("core:TotalAssetsLessCurrentLiabilities", totalLessCurrent, E), "—", true)}
+      bracket(totalLessCurrent, fact("core:TotalAssetsLessCurrentLiabilities", totalLessCurrent, E)), py(undefined), true)}
   ${i.creditorsAfter
     ? row("Creditors: amounts falling due after more than one year",
-        shown(-i.creditorsAfter), py(i.pyCreditorsAfter))
+        shown(-i.creditorsAfter), pyDeduction(i.pyCreditorsAfter))
     : ""}
-  ${i.provisions ? row("Provisions for liabilities", fact("core:ProvisionsForLiabilitiesBalanceSheetSubtotal", i.provisions, E, { negated: true }), "—") : ""}
-  ${i.accruals ? row("Accruals and deferred income", fact("core:AccruedLiabilitiesDeferredIncome", i.accruals, E, { negated: true }), "—") : ""}
-  ${row("Total net assets (liabilities)", fact("core:NetAssetsLiabilities", netAssets, E), py(i.pyNetAssets), true)}
-  ${row("Capital and reserves", fact("core:Equity", netAssets, E), py(i.pyNetAssets), true)}
+  ${i.provisions ? row("Provisions for liabilities", deduction(i.provisions, fact("core:ProvisionsForLiabilitiesBalanceSheetSubtotal", i.provisions, E)), py(undefined)) : ""}
+  ${i.accruals ? row("Accruals and deferred income", deduction(i.accruals, fact("core:AccruedLiabilitiesDeferredIncome", i.accruals, E)), py(undefined)) : ""}
+  ${row(netAssets < 0 ? "Net liabilities" : "Net assets", bracket(netAssets, fact("core:NetAssetsLiabilities", netAssets, E)), py(i.pyNetAssets), true)}
+  ${row("Capital and reserves", bracket(netAssets, fact("core:Equity", netAssets, E)), py(i.pyNetAssets), true)}
 </table>
 
-<p class="stmt">
-  For the period ending ${esc(longDate(i.periodTo))} the company was entitled to exemption from audit
-  under section ${i.dormant ? "480" : "477"} of the Companies Act 2006 relating to
-  ${i.dormant ? "dormant" : "small"} companies.
-</p>
-<p class="stmt">
-  The members have not required the company to obtain an audit of its accounts for the period in
-  question in accordance with section 476.
-</p>
-<p class="stmt">
-  The directors acknowledge their responsibilities for complying with the requirements of the Act
-  with respect to accounting records and the preparation of accounts.
-</p>
-<p class="stmt">
-  These accounts have been prepared and delivered in accordance with the provisions applicable to
-  companies subject to the micro-entity provisions.
-</p>
+<p class="stmt">${textFact(
+  i.dormant
+    ? "direp:StatementThatCompanyEntitledToExemptionFromAuditUnderSection480CompaniesAct2006RelatingToDormantCompanies"
+    : "direp:StatementThatCompanyEntitledToExemptionFromAuditUnderSection477CompaniesAct2006RelatingToSmallCompanies",
+  `For the period ending ${longDate(i.periodTo)} the company was entitled to exemption from audit under section ${i.dormant ? "480" : "477"} of the Companies Act 2006 relating to ${i.dormant ? "dormant" : "small"} companies.`,
+  D)}</p>
+<p class="stmt">${textFact(
+  "direp:StatementThatMembersHaveNotRequiredCompanyToObtainAnAudit",
+  "The members have not required the company to obtain an audit of its accounts for the period in question in accordance with section 476.",
+  D)}</p>
+<p class="stmt">${textFact(
+  "direp:StatementThatDirectorsAcknowledgeTheirResponsibilitiesUnderCompaniesAct",
+  "The directors acknowledge their responsibilities for complying with the requirements of the Act with respect to accounting records and the preparation of accounts.",
+  D)}</p>
+<p class="stmt">${textFact(
+  "direp:StatementThatAccountsHaveBeenPreparedInAccordanceWithProvisionsSmallCompaniesRegime",
+  "These accounts have been prepared and delivered in accordance with the provisions applicable to companies subject to the micro-entity provisions.",
+  D)}</p>
 
 <h2>Notes to the financial statements</h2>
 <p class="note">
@@ -613,7 +656,7 @@ export function buildComputation(i: AccountsInput & {
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:ix="${NS.ix}" xmlns:xbrli="${NS.xbrli}"
       xmlns:xlink="${NS.xlink}" xmlns:link="${NS.link}" xmlns:iso4217="${NS.iso4217}"
-      xmlns:ctcomp="${cx.ct}" xmlns:bus="${NS.bus}" xmlns:xbrldi="${NS.xbrldi}">
+      xmlns:ctcomp="${cx.ct}" xmlns:bus="${NS.bus}" xmlns:xbrldi="${NS.xbrldi}" xmlns:ixt2="${NS.ixt}">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <title>${esc(i.companyName)} — Corporation Tax computation</title>
@@ -687,7 +730,7 @@ export function buildComputation(i: AccountsInput & {
   <tr class="b"><td class="lbl">Adjusted trading profit</td>
     <td class="num">${fact("ctcomp:AdjustedTradingProfitOfThisPeriod", adjusted, DCo)}</td></tr>` : `
   <tr class="b"><td class="lbl">Adjusted trading loss</td>
-    <td class="num">( ${fact("ctcomp:AdjustedLossOfPeriod", -adjusted, DTr)} )</td></tr>`}
+    <td class="num">(${fact("ctcomp:AdjustedLossOfPeriod", -adjusted, DTr)})</td></tr>`}
 </table>
 
 <h2>Tax payable</h2>

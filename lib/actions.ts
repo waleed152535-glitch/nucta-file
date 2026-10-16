@@ -164,10 +164,11 @@ function toAccounts(f: TestFormInput): AccountsInput {
     approvedBy: f.declarantName,
     approvedOn: f.periodTo,
     principalActivities: "Online retail",
-    // A dormant test company has never traded; and dormant accounts carry no
-    // accountant's report, which the FRC taxonomy has its own status for.
+    // A dormant test company has never traded.
     tradingStatus: f.turnover === 0 && profit === 0 ? "neverTraded" : "trading",
-    accountsStatus: f.turnover === 0 && profit === 0 ? "AuditExempt-NoAccountantsReport" : "AuditExemptWithAccountantsReport",
+    // The document has no accountant's report in it, so the status mustn't
+    // claim one; the tags have to agree with what the accounts actually say.
+    accountsStatus: "AuditExempt-NoAccountantsReport",
     taxonomy: ACCOUNT_TAXONOMIES.find((t) => t.key === f.accountsTaxonomy) ?? ACCOUNT_TAXONOMIES[0],
     compTaxonomy: COMP_TAXONOMIES.find((t) => t.key === f.compTaxonomy) ?? COMP_TAXONOMIES[0],
   };

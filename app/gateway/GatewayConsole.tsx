@@ -12,7 +12,7 @@ import { markForPeople } from "@/lib/ct600-xml";
  * Bumped by hand with every package. It is on the screen so that an identical
  * rejection twice over can be told apart from a deploy that never landed.
  */
-const BUILD = "30 — accounts fixed for Companies House";
+const BUILD = "31 — Companies House console";
 
 /**
  * The gateway console.

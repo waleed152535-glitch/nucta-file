@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/", label: "Overview", icon: "▣" },
   { section: "Gateway" },
   { href: "/gateway", label: "HMRC test console", icon: "⇄" },
+  { href: "/companies-house", label: "Companies House console", icon: "⌂" },
   { href: "/log", label: "Submission log", icon: "☰" },
   { section: "Setup" },
   { href: "/settings", label: "Credentials", icon: "⚙" },
@@ -22,7 +23,8 @@ export default function Nav() {
     <aside className="side">
       <div className="brand">
         <h1>Nucta File</h1>
-        <div className="tag">HMRC recognised · vendor 9754</div>
+        {/* Not "recognised": HMRC recognition is applied for, not granted. */}
+        <div className="tag">HMRC vendor 9754 · in testing</div>
       </div>
       <nav className="nav">
         {LINKS.map((l, i) =>

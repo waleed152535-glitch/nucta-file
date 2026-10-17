@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/", label: "Overview", icon: "▣" },
+  { section: "Filing" },
+  { href: "/companies", label: "Companies and returns", icon: "▤" },
   { section: "Gateway" },
   { href: "/gateway", label: "HMRC test console", icon: "⇄" },
   { href: "/companies-house", label: "Companies House console", icon: "⌂" },

@@ -218,8 +218,47 @@ export interface AccountsInput {
   /** Members read from the FRC taxonomy; see FIXED_MEMBERS. */
   accountingStandard?: "Micro-entities" | "SmallEntities" | "FRS102" | "FRS101" | "FullIFRS" | "OtherStandards";
   accountsType?: "FullAccounts" | "AbridgedAccounts" | "FilletedAccounts" | "SmallCompaniesRegimeForAccounts";
+  /**
+   * The profit and loss account in the micro-entity format FRS 105 sets out:
+   * turnover, other income, cost of raw materials and consumables, staff
+   * costs, depreciation and other amounts written off assets, other charges,
+   * tax, profit or loss. Tagged with the FRC taxonomy's Format 2 concepts,
+   * which are the ones that format uses. When absent, the older layout
+   * (cost of sales, gross profit, administrative expenses) is used, as the
+   * test consoles do.
+   */
+  micro?: {
+    otherIncome: number;
+    rawMaterials: number;
+    staffCosts: number;
+    depreciation: number;
+    otherCharges: number;
+  };
+  /**
+   * Last year's figures for the comparative column, each tagged against the
+   * prior period (needs priorFrom and priorTo). Used with `micro`. A
+   * company's first accounts leave this out and have no comparative column.
+   */
+  prior?: PriorYear;
   accountsStatus?: "AuditExemptWithAccountantsReport" | "AuditExempt-NoAccountantsReport" | "Audited";
   legalForm?: "PrivateLimitedCompanyLtd" | "CompanyLimitedByGuarantee" | "LimitedLiabilityPartnershipLLP";
+}
+
+/** Where a company is registered, from its number's prefix. */
+const jurisdiction = (companyNo: string): string => {
+  const v = companyNo.trim().toUpperCase();
+  if (v.startsWith("SC")) return "Scotland";
+  if (v.startsWith("NI") || v.startsWith("R")) return "Northern Ireland";
+  return "England and Wales";
+};
+
+/** The comparative figures for micro-entity accounts. */
+export interface PriorYear {
+  turnover: number; otherIncome: number; rawMaterials: number; staffCosts: number;
+  depreciation: number; otherCharges: number; profitBeforeTax: number; tax: number;
+  shareCapitalNotPaid: number; fixedAssets: number; currentAssets: number; prepayments: number;
+  creditorsWithin: number; creditorsAfter: number; provisions: number; accruals: number;
+  employees: number;
 }
 
 const esc = (v: string): string =>
@@ -418,6 +457,79 @@ function row(label: string, thisYear: string, lastYear: string | null, bold = fa
     </tr>`;
 }
 
+/**
+ * The micro-entity profit and loss account, every figure tagged — this
+ * period against "D", last period's against "PD".
+ */
+function microProfitAndLoss(i: AccountsInput): string {
+  const m = i.micro!, p = i.prior, hasPrior = Boolean(p && i.priorFrom && i.priorTo);
+  const profit = i.profitBeforeTax - i.taxCharge;
+  const head = yearHeader(i, hasPrior);
+  // A line appears when either year has an amount.
+  const line = (label: string, concept: string, now: number, then: number | undefined, kind: "plain" | "cost") => {
+    if (!now && !(hasPrior && then)) return "";
+    const show = (v: number, ctx: string) => (kind === "cost" ? deduction(v, fact(concept, v, ctx)) : bracket(v, fact(concept, v, ctx)));
+    return row(label, show(now, "D"), hasPrior ? show(then ?? 0, "PD") : null);
+  };
+  const total = (label: string, concept: string, now: number, then: number | undefined) =>
+    row(label, bracket(now, fact(concept, now, "D")), hasPrior ? bracket(then ?? 0, fact(concept, then ?? 0, "PD")) : null, true);
+  const pyProfit = p ? p.profitBeforeTax - p.tax : undefined;
+  return `<table>
+  ${head}
+  ${row("Turnover", fact("core:TurnoverRevenue", i.turnover, "D"), hasPrior ? fact("core:TurnoverRevenue", p!.turnover, "PD") : null)}
+  ${line("Other income", "core:OtherOperatingIncomeFormat2", m.otherIncome, p?.otherIncome, "plain")}
+  ${line("Cost of raw materials and consumables", "core:RawMaterialsConsumablesUsed", m.rawMaterials, p?.rawMaterials, "cost")}
+  ${line("Staff costs", "core:StaffCostsEmployeeBenefitsExpense", m.staffCosts, p?.staffCosts, "cost")}
+  ${line("Depreciation and other amounts written off assets", "core:DepreciationAmortisationImpairmentExpense", m.depreciation, p?.depreciation, "cost")}
+  ${line("Other charges", "core:OtherOperatingExpensesFormat2", m.otherCharges, p?.otherCharges, "cost")}
+  ${total(i.profitBeforeTax < 0 ? "Loss before tax" : "Profit before tax", "core:ProfitLossOnOrdinaryActivitiesBeforeTax", i.profitBeforeTax, p?.profitBeforeTax)}
+  ${row("Tax", deduction(i.taxCharge, fact("core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", i.taxCharge, "D")),
+      hasPrior ? deduction(p!.tax, fact("core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", p!.tax, "PD")) : null)}
+  ${total(profit < 0 ? "Loss for the period" : "Profit for the period", "core:ProfitLoss", profit, pyProfit)}
+</table>`;
+}
+
+/**
+ * The micro-entity balance sheet (FRS 105 format), every figure tagged.
+ * Creditors carry the maturity dimension — within one year, or after more
+ * than one year — so the two lines can't be read as the same total.
+ */
+function microBalanceSheet(i: AccountsInput): string {
+  const p = i.prior, hasPrior = Boolean(p && i.priorFrom && i.priorTo);
+  const net = (b: { currentAssets: number; prepayments: number; creditorsWithin: number; fixedAssets: number; shareCapitalNotPaid: number; creditorsAfter: number; provisions: number; accruals: number }) => {
+    const netCurrent = b.currentAssets + b.prepayments - b.creditorsWithin;
+    const totalLessCurrent = b.shareCapitalNotPaid + b.fixedAssets + netCurrent;
+    return { netCurrent, totalLessCurrent, netAssets: totalLessCurrent - b.creditorsAfter - b.provisions - b.accruals };
+  };
+  const now = net(i), then = p ? net(p) : undefined;
+  const cell = (concept: string, v: number, ctx: string, kind: "plain" | "cost") =>
+    kind === "cost" ? deduction(v, fact(concept, v, ctx)) : bracket(v, fact(concept, v, ctx));
+  const line = (label: string, concept: string, a: number, b: number | undefined, kind: "plain" | "cost", ctxNow = "E", ctxThen = "PE", always = false, bold = false) => {
+    if (!always && !a && !(hasPrior && b)) return "";
+    return row(label, cell(concept, a, ctxNow, kind), hasPrior ? cell(concept, b ?? 0, ctxThen, kind) : null, bold);
+  };
+  return `<table>
+  ${yearHeader(i, hasPrior)}
+  ${line("Called up share capital not paid", "core:CalledUpShareCapitalNotPaidNotExpressedAsCurrentAsset", i.shareCapitalNotPaid, p?.shareCapitalNotPaid, "plain")}
+  ${line("Fixed assets", "core:FixedAssets", i.fixedAssets, p?.fixedAssets, "plain", "E", "PE", true)}
+  ${line("Current assets", "core:CurrentAssets", i.currentAssets, p?.currentAssets, "plain", "E", "PE", true)}
+  ${line("Prepayments and accrued income", "core:PrepaymentsAccruedIncome", i.prepayments, p?.prepayments, "plain")}
+  ${line("Creditors: amounts falling due within one year", "core:Creditors", i.creditorsWithin, p?.creditorsWithin, "cost", "EW1", "PEW1", true)}
+  ${line(now.netCurrent < 0 ? "Net current liabilities" : "Net current assets", "core:NetCurrentAssetsLiabilities", now.netCurrent, then?.netCurrent, "plain", "E", "PE", true, true)}
+  ${line("Total assets less current liabilities", "core:TotalAssetsLessCurrentLiabilities", now.totalLessCurrent, then?.totalLessCurrent, "plain", "E", "PE", true, true)}
+  ${line("Creditors: amounts falling due after more than one year", "core:Creditors", i.creditorsAfter, p?.creditorsAfter, "cost", "EA1", "PEA1")}
+  ${line("Provisions for liabilities", "core:ProvisionsForLiabilitiesBalanceSheetSubtotal", i.provisions, p?.provisions, "cost")}
+  ${line("Accruals and deferred income", "core:AccruedLiabilitiesDeferredIncome", i.accruals, p?.accruals, "cost")}
+  ${line(now.netAssets < 0 ? "Net liabilities" : "Net assets", "core:NetAssetsLiabilities", now.netAssets, then?.netAssets, "plain", "E", "PE", true, true)}
+  ${line("Capital and reserves", "core:Equity", now.netAssets, then?.netAssets, "plain", "E", "PE", true, true)}
+</table>`;
+}
+
+/** The column headings: this year, and last year when there is one. */
+const yearHeader = (i: AccountsInput, hasPrior: boolean): string =>
+  `<tr class="hd"><td class="lbl"></td><td class="num">${esc(i.periodTo.slice(0, 4))}<br/>£</td>${
+    hasPrior ? `<td class="num">${esc((i.priorTo ?? "").slice(0, 4))}<br/>£</td>` : ""}</tr>`;
+
 export function buildAccounts(i: AccountsInput): string {
   const tx = i.taxonomy ?? ACCOUNT_TAXONOMIES[0];
   const D = "D";        // the period
@@ -519,7 +631,11 @@ export function buildAccounts(i: AccountsInput): string {
       ${dimContext("DStat", i.companyNo, "bus:AccountsStatusDimension", `bus:${i.accountsStatus ?? "AuditExempt-NoAccountantsReport"}`, { from: i.periodFrom, to: i.periodTo })}
       ${(i.tradingStatus ?? "trading") === "trading" ? "" : dimContext("DTrade", i.companyNo, "bus:EntityTradingStatusDimension", i.tradingStatus === "neverTraded" ? "bus:EntityHasNeverTraded" : "bus:EntityNoLongerTradingButTradedInPast", { from: i.periodFrom, to: i.periodTo })}
       ${dimContext("DLegal", i.companyNo, "bus:LegalFormEntityDimension", `bus:${i.legalForm ?? "PrivateLimitedCompanyLtd"}`, { from: i.periodFrom, to: i.periodTo })}
-      ${dimContext("DDir", i.companyNo, "bus:EntityOfficersDimension", "bus:Director1", { from: i.periodFrom, to: i.periodTo })}
+      ${dimContext("DDir", i.companyNo, "bus:EntityOfficersDimension", "bus:Director1", { from: i.periodFrom, to: i.periodTo })}${i.micro ? `
+      ${dimContext("EW1", i.companyNo, "core:MaturitiesOrExpirationPeriodsDimension", "core:WithinOneYear", { at: i.periodTo })}
+      ${dimContext("EA1", i.companyNo, "core:MaturitiesOrExpirationPeriodsDimension", "core:AfterOneYear", { at: i.periodTo })}${i.prior && i.priorTo ? `
+      ${dimContext("PEW1", i.companyNo, "core:MaturitiesOrExpirationPeriodsDimension", "core:WithinOneYear", { at: i.priorTo })}
+      ${dimContext("PEA1", i.companyNo, "core:MaturitiesOrExpirationPeriodsDimension", "core:AfterOneYear", { at: i.priorTo })}` : ""}` : ""}
       <xbrli:unit id="GBP"><xbrli:measure>iso4217:GBP</xbrli:measure></xbrli:unit>
       <xbrli:unit id="pure"><xbrli:measure>xbrli:pure</xbrli:measure></xbrli:unit>
     </ix:resources>
@@ -528,7 +644,7 @@ export function buildAccounts(i: AccountsInput): string {
 
 <h1>${esc(i.companyName)}</h1>
 <div class="sub">
-  Company registration number ${esc(i.companyNo)} (England and Wales)<br/>
+  Company registration number ${esc(i.companyNo)} (${esc(jurisdiction(i.companyNo))})<br/>
   Unaudited micro-entity accounts for the period ended ${esc(longDate(i.periodTo))}${i.dormant ? " (dormant)" : ""}
 </div>
 
@@ -536,6 +652,7 @@ export function buildAccounts(i: AccountsInput): string {
 ${i.dormant
   ? `<p class="stmt">The company was dormant throughout the period. It received no income and incurred no
      expenditure, and therefore made neither a profit nor a loss.</p>`
+  : i.micro ? microProfitAndLoss(i)
   : `<table>
   ${yearHead}
   ${row("Turnover", fact("core:TurnoverRevenue", i.turnover, D), py(i.pyTurnover))}
@@ -550,7 +667,7 @@ ${i.dormant
 </table>`}
 
 <h2>Balance sheet as at ${esc(longDate(i.periodTo))}</h2>
-<table>
+${i.micro ? microBalanceSheet(i) : `<table>
   ${yearHead}
   ${row("Called up share capital not paid",
       fact("core:CalledUpShareCapitalNotPaidNotExpressedAsCurrentAsset", i.shareCapitalNotPaid, E), py(undefined))}
@@ -570,7 +687,7 @@ ${i.dormant
   ${i.accruals ? row("Accruals and deferred income", deduction(i.accruals, fact("core:AccruedLiabilitiesDeferredIncome", i.accruals, E)), py(undefined)) : ""}
   ${row(netAssets < 0 ? "Net liabilities" : "Net assets", bracket(netAssets, fact("core:NetAssetsLiabilities", netAssets, E)), py(i.pyNetAssets), true)}
   ${row("Capital and reserves", bracket(netAssets, fact("core:Equity", netAssets, E)), py(i.pyNetAssets), true)}
-</table>
+</table>`}
 
 <p class="stmt">${textFact(
   i.dormant
@@ -595,7 +712,9 @@ ${i.dormant
 <p class="note">
   <b>1. Employee information.</b> Average number of employees during the period:
   <ix:nonFraction name="core:AverageNumberEmployeesDuringPeriod" contextRef="${D}"
-    unitRef="pure" decimals="0">${plain(i.employees)}</ix:nonFraction>.
+    unitRef="pure" decimals="0">${plain(i.employees)}</ix:nonFraction>${i.micro && i.prior && i.priorFrom ? ` (last period:
+  <ix:nonFraction name="core:AverageNumberEmployeesDuringPeriod" contextRef="${PD}"
+    unitRef="pure" decimals="0">${plain(i.prior.employees)}</ix:nonFraction>)` : ""}.
 </p>
 <p class="note"><b>2. Off balance sheet arrangements.</b> None.</p>
 
@@ -781,4 +900,182 @@ export function checkAccounts(i: AccountsInput): IxbrlCheck {
     warnings.push("Share capital looks large against net assets — worth checking.");
   }
   return { ok: problems.length === 0, problems, warnings };
+}
+
+/**
+ * What the full computation needs beyond the engine's answer: who the
+ * company is and how its trade is described.
+ */
+export interface FullComputationMeta {
+  companyName: string;
+  companyNo: string;
+  utr: string;
+  periodFrom: string;
+  periodTo: string;
+  /** The trade's description, carried as the typed BusinessName member. */
+  tradeName: string;
+  compTaxonomy?: CompTaxonomy;
+}
+
+/**
+ * The full Corporation Tax computation as iXBRL, from the tax engine's result.
+ *
+ * Every figure is tagged with the HMRC computational taxonomy concept for
+ * it, in the context its hypercube requires:
+ *
+ *   DTr   the trade, over the period: profit per accounts, each adjustment,
+ *         capital allowances by pool, a trading loss (box 780)
+ *   DCo   the company, over the period: box 155 trading profit, 160, 165,
+ *         170, 235, 300, 305, 315 and the tax boxes
+ *   ITrB/ITrE   the trade at the start and end of the period, for the
+ *         instant figures: pool values and losses brought and carried forward
+ *
+ * The CT600 box numbers each concept maps to come from the taxonomy's own
+ * reference linkbase, so the computation and the return report the same
+ * figure against the same box.
+ */
+export function buildFullComputation(m: FullComputationMeta, r: import("./tax/computation").ComputationResult, f: import("./tax/computation").ReturnFigures): string {
+  const cx = m.compTaxonomy ?? COMP_TAXONOMIES[0];
+  const DCo = "DCo", ECo = "ECo", DTr = "DTr", ITrB = "ITrB", ITrE = "ITrE";
+  const businessType = "ctcomp:BusinessTypeDimension";
+  const trade: DimMember[] = [
+    { dimension: businessType, member: "ctcomp:Trade" },
+    { dimension: "ctcomp:BusinessNameDimension", typedElement: "ctcomp:BusinessNameDomain", value: m.tradeName.trim() || m.companyName },
+    { dimension: "ctcomp:TerritoryDimension", member: "ctcomp:UK" },
+  ];
+  const dayBefore = (iso: string) => new Date(Date.parse(iso + "T00:00:00Z") - 86_400_000).toISOString().slice(0, 10);
+  const ca = r.capitalAllowances, d = f.disallowable;
+  const pence = { decimals: "2" };
+
+  const tr = (label: string, cellHtml: string, bold = false, note?: string) =>
+    `<tr${bold ? ' class="b"' : ""}><td class="lbl">${esc(label)}${note ? `<div class="why">${esc(note)}</div>` : ""}</td><td class="num">${cellHtml}</td></tr>`;
+  const add = (label: string, concept: string, v: number) => (v ? tr(`Add: ${label}`, fact(concept, v, DTr)) : "");
+  const less = (label: string, concept: string, v: number, ctx = DTr) => (v ? tr(`Less: ${label}`, deduction(v, fact(concept, v, ctx))) : "");
+
+  const saleNet = Math.round(d.lossOnDisposals - f.profitOnDisposals);
+  const beforeCa = r.adjustedTradingProfit;
+  const afterCa = beforeCa - ca.totalAllowances + ca.totalCharges;
+  const yearsLines = r.years.map((y) => {
+    const rate = y.band === "small" ? 19 : 25;
+    const span = r.years.length > 1 ? ` (${longDate(y.from)} to ${longDate(y.to)}, ${y.days} days)` : "";
+    return tr(`£${y.profits.toLocaleString("en-GB")} at ${rate}%${span}`, grouped(y.grossTax, 2));
+  }).join("\n  ");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:ix="${NS.ix}" xmlns:xbrli="${NS.xbrli}"
+      xmlns:xlink="${NS.xlink}" xmlns:link="${NS.link}" xmlns:iso4217="${NS.iso4217}"
+      xmlns:ctcomp="${cx.ct}" xmlns:bus="${NS.bus}" xmlns:xbrldi="${NS.xbrldi}" xmlns:ixt2="${NS.ixt}">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+  <title>${esc(m.companyName)} — Corporation Tax computation</title>
+  <style type="text/css">
+    body{font-family:Georgia,'Times New Roman',serif;font-size:11pt;color:#111;margin:36px auto;max-width:720px;}
+    h1{font-size:15pt;margin:0 0 2px;} h2{font-size:12pt;margin:24px 0 8px;border-bottom:1px solid #999;padding-bottom:3px;}
+    .sub{font-size:10pt;color:#555;margin-bottom:20px;}
+    table{width:100%;border-collapse:collapse;} td{padding:4px 0;vertical-align:top;}
+    .lbl{width:74%;} .num{text-align:right;font-variant-numeric:tabular-nums;}
+    tr.b td{font-weight:bold;border-top:1px solid #bbb;}
+    .why{font-size:9pt;color:#666;font-weight:normal;}
+    .note{font-size:9.5pt;color:#444;margin-top:14px;line-height:1.6;}
+  </style>
+</head>
+<body>
+<div style="display:none">
+  <ix:header>
+    <ix:hidden>
+      ${textFact("ctcomp:CompanyName", m.companyName, ECo)}
+      ${textFact("ctcomp:TaxReference", m.utr.replace(/\D/g, ""), ECo)}
+      ${dateFact("ctcomp:PeriodOfAccountStartDate", m.periodFrom, ECo)}
+      ${dateFact("ctcomp:PeriodOfAccountEndDate", m.periodTo, ECo)}
+      ${dateFact("ctcomp:StartOfPeriodCoveredByReturn", m.periodFrom, ECo)}
+      ${dateFact("ctcomp:EndOfPeriodCoveredByReturn", m.periodTo, ECo)}
+      ${boolFact("ctcomp:CompanyIsAPartnerInAFirm", false, DCo)}
+    </ix:hidden>
+    <ix:references>
+      <link:schemaRef xlink:type="simple" xlink:href="${cx.schemaRef}"/>
+    </ix:references>
+    <ix:resources>
+      ${multiContext(DCo, m.companyNo, [{ dimension: businessType, member: "ctcomp:Company" }], { from: m.periodFrom, to: m.periodTo })}
+      ${multiContext(ECo, m.companyNo, [{ dimension: businessType, member: "ctcomp:Company" }], { at: m.periodTo })}
+      ${multiContext(DTr, m.companyNo, trade, { from: m.periodFrom, to: m.periodTo })}
+      ${multiContext(ITrB, m.companyNo, trade, { at: dayBefore(m.periodFrom) })}
+      ${multiContext(ITrE, m.companyNo, trade, { at: m.periodTo })}
+      <xbrli:unit id="GBP"><xbrli:measure>iso4217:GBP</xbrli:measure></xbrli:unit>
+    </ix:resources>
+  </ix:header>
+</div>
+
+<h1>${esc(m.companyName)}</h1>
+<div class="sub">
+  Corporation Tax computation for the period ${esc(longDate(m.periodFrom))} to ${esc(longDate(m.periodTo))}<br/>
+  Company registration number ${esc(m.companyNo)} · Unique Taxpayer Reference ${esc(m.utr)}<br/>
+  Trade: ${esc(m.tradeName)}
+</div>
+
+<h2>Adjustment of trading profit</h2>
+<table>
+  ${tr(`${r.accountingProfit < 0 ? "Loss" : "Profit"} before tax per the accounts`, bracket(r.accountingProfit, fact("ctcomp:ProfitLossPerAccounts", r.accountingProfit, DTr)))}
+  ${less("Interest received (taxed as non-trading income below)", "ctcomp:AdjustmentsOtherDeductions", f.pl.interestReceived)}
+  ${add("Depreciation", "ctcomp:AdjustmentsDepreciation", Math.round(f.pl.depreciation))}
+  ${add("Entertaining", "ctcomp:AdjustmentsEntertaining", Math.round(d.entertainment))}
+  ${add("Fines and penalties", "ctcomp:AdjustmentsPenaltiesAndFines", Math.round(d.finesAndPenalties))}
+  ${add("Donations", "ctcomp:AdjustmentsDonations", Math.round(d.charitableDonations + d.politicalDonations))}
+  ${add("Expenses not wholly and exclusively for the trade", "ctcomp:AdjustmentsOtherExpenditureNotWhollyAndExclusivelyForPurposesOfTradeOrBusiness", Math.round(d.privateExpenses))}
+  ${add("Capital expenditure charged in the accounts", "ctcomp:AdjustmentsCapitalExpenditure", Math.round(d.capitalItemsExpensed))}
+  ${saleNet ? tr(saleNet > 0 ? "Add: Loss on sale of fixed assets" : "Less: Profit on sale of fixed assets", saleNet > 0 ? fact("ctcomp:AdjustmentsLossOrProfitOnSale", saleNet, DTr) : `(${fact("ctcomp:AdjustmentsLossOrProfitOnSale", saleNet, DTr)})`) : ""}
+  ${add("Other expenses not allowed", "ctcomp:AdjustmentsOtherAdditions", Math.round(d.other))}
+  ${tr(`Adjusted ${beforeCa < 0 ? "loss" : "profit"} before capital allowances`, bracket(beforeCa, fact("ctcomp:AdjustedProfitOrLossBeforeAccountingPeriodAdjustments", beforeCa, DTr)), true)}
+  ${ca.totalAllowances ? tr("Less: Capital allowances (see below)", deduction(ca.totalAllowances, fact("ctcomp:TotalCapitalAllowances", ca.totalAllowances, DTr))) : ""}
+  ${ca.totalCharges ? tr("Add: Balancing charges (see below)", fact("ctcomp:TotalBalancingCharges", ca.totalCharges, DTr)) : ""}
+  ${afterCa >= 0
+    ? tr("Trading profit", fact("ctcomp:AdjustedTradingProfitOfThisPeriod", afterCa, DCo), true)
+    : tr("Trading loss", `(${fact("ctcomp:AdjustedLossOfPeriod", -afterCa, DTr)})`, true)}
+</table>
+${ca.totalAllowances || ca.totalCharges || ca.main.broughtForward || ca.special.broughtForward ? `
+<h2>Capital allowances</h2>
+<table>
+  ${ca.main.broughtForward ? tr("Main pool brought forward", fact("ctcomp:MainPoolWrittenDownValue", ca.main.broughtForward, ITrB)) : ""}
+  ${ca.special.broughtForward ? tr("Special rate pool brought forward", fact("ctcomp:SpecialRatePoolWrittenDownValue", ca.special.broughtForward, ITrB)) : ""}
+  ${ca.fullExpensing ? tr("Full expensing on new plant and machinery (100%)", fact("ctcomp:MainPoolTotalFullExpensingAllowance", ca.fullExpensing, DTr)) : ""}
+  ${ca.zeroEmissionCars ? tr("First-year allowance on new zero-emission cars (100%)", fact("ctcomp:MainPoolFYAForCarsWithLowCO2Emissions", ca.zeroEmissionCars, DTr)) : ""}
+  ${ca.aiaOnMain ? tr("Annual Investment Allowance — main rate", fact("ctcomp:MainPoolAnnualInvestmentAllowance", ca.aiaOnMain, DTr)) : ""}
+  ${ca.aiaOnSpecial ? tr("Annual Investment Allowance — special rate", fact("ctcomp:SpecialRatePoolAnnualInvestmentAllowance", ca.aiaOnSpecial, DTr)) : ""}
+  ${ca.main.allowance ? tr(ca.main.smallPoolWriteOff ? "Main pool written off (£1,000 or less)" : `Main pool writing down allowance at ${ca.mainRate}%${ca.yearFraction !== 1 ? `, for ${Math.round(ca.yearFraction * 365)} days` : ""}`, fact("ctcomp:MainPoolWritingDownAllowances", ca.main.allowance, DTr)) : ""}
+  ${ca.special.allowance ? tr(ca.special.smallPoolWriteOff ? "Special rate pool written off (£1,000 or less)" : `Special rate pool writing down allowance at 6%${ca.yearFraction !== 1 ? `, for ${Math.round(ca.yearFraction * 365)} days` : ""}`, fact("ctcomp:SpecialRatePoolWritingDownAllowance", ca.special.allowance, DTr)) : ""}
+  ${ca.totalAllowances ? tr("Total capital allowances", fact("ctcomp:TotalCapitalAllowances", ca.totalAllowances, DTr), true) : ""}
+  ${ca.main.balancingCharge ? tr("Balancing charge — main pool", fact("ctcomp:MainPoolBalancingCharges", ca.main.balancingCharge, DTr)) : ""}
+  ${ca.fullExpensingCharge ? tr("Balancing charge — assets that had full expensing", fact("ctcomp:MainPoolBalancingChargesInRespectOfFullExpensing", ca.fullExpensingCharge, DTr)) : ""}
+  ${ca.special.balancingCharge ? tr("Balancing charge — special rate pool", fact("ctcomp:SpecialRatePoolBalancingCharge", ca.special.balancingCharge, DTr)) : ""}
+  ${tr("Main pool carried forward", fact("ctcomp:MainPoolWrittenDownValue", ca.main.carriedForward, ITrE))}
+  ${ca.special.carriedForward || ca.special.broughtForward ? tr("Special rate pool carried forward", fact("ctcomp:SpecialRatePoolWrittenDownValue", ca.special.carriedForward, ITrE)) : ""}
+</table>` : ""}
+
+<h2>Profits chargeable to Corporation Tax</h2>
+<table>
+  ${tr("Trading profit", fact("ctcomp:AdjustedTradingProfitOfThisPeriod", r.tradingProfit, DCo))}
+  ${r.lossesUsed ? tr("Less: Trading losses brought forward", deduction(r.lossesUsed, fact("ctcomp:TradingLossesBroughtForwardSetAgainstTradingProfits", r.lossesUsed, DCo))) : ""}
+  ${r.tradingProfit ? tr("Net trading profits", fact("ctcomp:NetTradingProfits", r.netTradingProfit, DCo)) : ""}
+  ${r.nonTradingInterest ? tr("Add: Interest received (non-trading loan relationships)", fact("ctcomp:ProfitsAndGainsFromNon-tradingLoanRelationships", r.nonTradingInterest, DCo)) : ""}
+  ${r.profitsBeforeDeductions ? tr("Profits before other deductions and reliefs", fact("ctcomp:ProfitsBeforeOtherDeductionsAndReliefs", r.profitsBeforeDeductions, DCo), true) : ""}
+  ${r.qualifyingDonations ? tr("Less: Qualifying charitable donations", deduction(r.qualifyingDonations, fact("ctcomp:QualifyingDonations", r.qualifyingDonations, DCo))) : ""}
+  ${tr("Profits chargeable to Corporation Tax", fact("ctcomp:TotalProfitsChargeableToCorporationTax", r.chargeableProfits, DCo), true)}
+</table>
+
+<h2>Corporation Tax</h2>
+<table>
+  ${r.chargeableProfits ? yearsLines : ""}
+  ${tr("Corporation Tax", fact("ctcomp:CorporationTaxChargeable", r.corporationTax, DCo, pence))}
+  ${r.marginalRelief ? tr("Less: Marginal relief", deduction(r.marginalRelief, fact("ctcomp:MarginalRateReliefForRingFenceTradesPayable", r.marginalRelief, DCo, pence)), false,
+      `3/200 × (upper limit − profits)${f.associatedCompanies ? `, with the limits shared with ${f.associatedCompanies} associated compan${f.associatedCompanies === 1 ? "y" : "ies"}` : ""}${r.capitalAllowances.yearFraction !== 1 ? ", and reduced for a short period" : ""}.`) : ""}
+  ${tr("Corporation Tax payable", fact("ctcomp:NetCorporationTaxPayable", r.taxChargeable, DCo, pence), true)}
+</table>
+
+<h2>Carried forward to the next period</h2>
+<table>
+  ${tr("Trading losses carried forward", fact("ctcomp:BalanceOfLossesBroughtForwardCarriedForward", r.carryForward.tradingLosses, ITrE))}
+</table>
+
+</body>
+</html>`;
 }

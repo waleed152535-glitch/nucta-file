@@ -103,16 +103,16 @@ export const ATTACH_LAYOUTS: { key: AttachLayout; label: string; detail: string 
   },
 ];
 
-const esc = (v: string): string =>
+export const esc = (v: string): string =>
   String(v ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 
-const money = (v: number): string => (Math.round(v * 100) / 100).toFixed(2);
+export const money = (v: number): string => (Math.round(v * 100) / 100).toFixed(2);
 const whole = (v: number): string => String(Math.round(v));
 /** A tax rate as HMRC want it: a percentage to two places, so 19.00. */
-const rate = (v: number): string => (Math.round(v * 100) / 100).toFixed(2);
-const ymd = (v: string): string => String(v ?? "").slice(0, 10);
+export const rate = (v: number): string => (Math.round(v * 100) / 100).toFixed(2);
+export const ymd = (v: string): string => String(v ?? "").slice(0, 10);
 
 export interface Ct600Check { ok: boolean; problems: string[]; warnings: string[] }
 
@@ -237,7 +237,7 @@ export function checkCt600(i: Partial<Ct600Input>): Ct600Check {
  * A document can only carry one declaration, and it has to be the first
  * thing in the file. An embedded one makes the whole envelope invalid.
  */
-function nestable(doc: string): string {
+export function nestable(doc: string): string {
   return doc.replace(/^\s*<\?xml[^>]*\?>\s*/, "").trim();
 }
 

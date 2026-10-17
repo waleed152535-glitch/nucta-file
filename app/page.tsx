@@ -14,27 +14,32 @@ const STAGES = [
   {
     title: "Vendor registration",
     done: true,
-    body: "HMRC's Software Developers Support Team issued vendor ID 9754 and test credentials. Companies House has been asked for test presenter credentials.",
+    body: "HMRC's Software Developers Support Team issued vendor ID 9754 and test credentials.",
   },
   {
     title: "The envelope and the IRmark",
-    done: false,
-    body: "A Company Tax Return is a GovTalk message signed with an IRmark. The generator is written; whether HMRC agrees with our fingerprint is what the test console settles.",
+    done: true,
+    body: "HMRC's test service accepted five returns with accounts and computations attached — small profits rate, main rate, marginal relief, a loss and a dormant company (build 30).",
   },
   {
-    title: "Recognition testing",
+    title: "The tax engine and step-by-step returns",
+    done: true,
+    body: "Returns are worked out from the accounts: disallowed expenses, capital allowances, losses, interest and donations, then the 19%/25% rates with marginal relief. Accounts are built from real balance-sheet figures. Each year's closing figures carry into the next.",
+  },
+  {
+    title: "HMRC recognition",
     done: false,
-    body: "HMRC publish a set of test scenarios each year. Passing them is what lets the product be listed as recognised software — the thing WeFile advertises on its homepage.",
+    body: "The applicant's pack has been requested from sdsteam@hmrc.gov.uk. Recognition is what allows live filing for customers and a listing on GOV.UK, and it is renewed every year.",
   },
   {
     title: "Accounts to Companies House",
     done: false,
-    body: "The same iXBRL accounts go to Companies House through their own gateway, so a client's year end is one job rather than two.",
+    body: "Built and checked against Companies House's schemas; waiting for test presenter credentials, then at least four test filings and authorisation.",
   },
   {
-    title: "Beyond micro-entities",
+    title: "More companies covered",
     done: false,
-    body: "FRS 105 covers most Amazon sellers. FRS 102 1A, full FRS 102, dormant accounts, amended returns and losses carried back are what a competitor has to cover too.",
+    body: "Next: director's loans (CT600A), then losses carried back, group relief, property income and FRS 102 small-company accounts.",
   },
 ];
 
@@ -62,7 +67,8 @@ export default function Home() {
             at the moment of submission.
           </p>
           <div className="acts">
-            <Link href="/gateway" className="btn">Open the HMRC test console</Link>
+            <Link href="/companies" className="btn">Companies and returns</Link>
+            <Link href="/gateway" className="btn ghost">HMRC test console</Link>
             <Link href="/settings" className="btn ghost">Credentials ({ready} of {checks.length} set)</Link>
           </div>
         </div>

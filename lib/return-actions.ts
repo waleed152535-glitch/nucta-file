@@ -11,6 +11,7 @@ import { companyNumberProblem } from "./companies-house";
 import { checkMicroAccounts } from "./accounts/micro";
 import { normaliseReturnData, toCompanyReturnInput, toFigures, blankReturnData, type ReturnData } from "./return-model";
 import { fromDay, toDay } from "./tax/dates";
+import { directorsLoans } from "./tax/directors-loans";
 
 /**
  * Companies and their returns, for the filing screens.
@@ -121,7 +122,17 @@ export async function startReturn(companyId: string, periodStart: string, period
         pl: prev.pl, taxCharge: r.taxChargeable, balanceSheet: prev.balanceSheet, director: prev.director, approvedOn: prev.approvedOn,
       });
       const b = prev.balanceSheet;
+      const prevLoans = prev.participators.length ? directorsLoans(before.periodStart, before.periodEnd, prev.participators) : null;
       Object.assign(data, {
+        // Each loan account opens where it closed; repayments made after last
+        // year end happened in this year, so they start as this year's repayments.
+        participators: prev.participators.map((x, n) => {
+          const res = prevLoans?.people[n];
+          return {
+            ...x, openingOwed: res?.closingOwed ?? 0, openingCredit: res?.closingCredit ?? 0,
+            advances: 0, advancesFrom6April2026: 0, repaid: x.later.reduce((t, l) => t + (l.amount || 0), 0), later: [],
+          };
+        }),
         activity: prev.activity,
         scope: prev.scope,
         associatedCompanies: prev.associatedCompanies,
@@ -204,6 +215,8 @@ export interface ReturnPreview {
     corporationTax: number; marginalRelief: number; taxChargeable: number;
     carryForward: { tradingLosses: number; mainPool: number; specialPool: number };
   } | null;
+  /** Tax on director's loans (CT600A box A80 / CT600 box 480), when there are any. */
+  loans: { a80: number; a75: number; amendmentDue: number; dueDate: string } | null;
   accountsHtml: string | null;
   computationHtml: string | null;
 }
@@ -216,7 +229,7 @@ async function prepared(id: string) {
 
 export async function previewReturn(id: string): Promise<ReturnPreview> {
   const { r, p } = await prepared(id);
-  if (!p) return { ok: false, problems: [r.error ?? "The return couldn't be opened."], warnings: [], lines: [], summary: null, accountsHtml: null, computationHtml: null };
+  if (!p) return { ok: false, problems: [r.error ?? "The return couldn't be opened."], warnings: [], lines: [], summary: null, loans: null, accountsHtml: null, computationHtml: null };
   const c = p.computation;
   return {
     ok: p.ok, problems: p.problems, warnings: p.warnings,
@@ -225,6 +238,7 @@ export async function previewReturn(id: string): Promise<ReturnPreview> {
       accountingProfit: c.accountingProfit, tradingProfit: c.tradingProfit, tradingLoss: c.tradingLoss, chargeableProfits: c.chargeableProfits,
       corporationTax: c.corporationTax, marginalRelief: c.marginalRelief, taxChargeable: c.taxChargeable, carryForward: c.carryForward,
     } : null,
+    loans: p.loans?.needed ? { a80: p.loans.a80, a75: p.loans.a75, amendmentDue: p.loans.amendmentDue, dueDate: p.loans.dueDate } : null,
     accountsHtml: p.accountsHtml, computationHtml: p.computationHtml,
   };
 }

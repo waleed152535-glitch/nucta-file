@@ -39,7 +39,7 @@ const STAGES = [
   {
     title: "More companies covered",
     done: false,
-    body: "Next: director's loans (CT600A), then losses carried back, group relief, property income and FRS 102 small-company accounts.",
+    body: "Director's loans (CT600A and the s455 charge) are handled. Next: losses carried back, group relief, property income and FRS 102 small-company accounts.",
   },
 ];
 

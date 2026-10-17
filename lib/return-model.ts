@@ -10,6 +10,7 @@ import type { ScopeAnswers } from "./tax/scope";
 import type { BalanceSheet } from "./accounts/micro";
 import type { PriorYear } from "./ixbrl";
 import type { CompanyReturnInput } from "./filing";
+import type { ParticipatorAccount } from "./tax/directors-loans";
 
 export interface ReturnData {
   activity: string;
@@ -26,6 +27,8 @@ export interface ReturnData {
   aiaAvailable: number | null;
   tradingLossesBroughtForward: number;
   qualifyingDonations: number;
+  /** Directors' and shareholders' loan accounts. */
+  participators: ParticipatorAccount[];
   balanceSheet: BalanceSheet;
   /** Last year's figures; absent for a company's first accounts. */
   prior: { from: string; to: string; figures: PriorYear } | null;
@@ -57,7 +60,7 @@ export function blankReturnData(): ReturnData {
     activity: "", scope: {}, associatedCompanies: 0,
     pl: blankPL(), disallowable: blankDisallowable(), profitOnDisposals: 0,
     additions: [], disposals: [], mainPoolBroughtForward: 0, specialPoolBroughtForward: 0, aiaAvailable: null,
-    tradingLossesBroughtForward: 0, qualifyingDonations: 0,
+    tradingLossesBroughtForward: 0, qualifyingDonations: 0, participators: [],
     balanceSheet: blankBalanceSheet(), prior: null,
     director: "", approvedOn: "", declarantName: "", declarantStatus: "Director",
   };
@@ -75,6 +78,7 @@ export function normaliseReturnData(d: Partial<ReturnData> | null | undefined): 
     scope: { ...(d.scope ?? {}) },
     additions: d.additions ?? [],
     disposals: d.disposals ?? [],
+    participators: d.participators ?? [],
   };
 }
 
@@ -105,5 +109,6 @@ export function toCompanyReturnInput(
     approvedOn: d.approvedOn,
     declarant: { name: d.declarantName, status: d.declarantStatus },
     scope: d.scope,
+    participators: d.participators,
   };
 }

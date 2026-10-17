@@ -7,13 +7,14 @@ import type { ReturnData } from "@/lib/return-model";
 import { SCOPE_QUESTIONS } from "@/lib/tax/scope";
 import { compute, figureProblems } from "@/lib/tax/computation";
 import { checkMicroAccounts } from "@/lib/accounts/micro";
+import { directorsLoans, type ParticipatorAccount } from "@/lib/tax/directors-loans";
 import type { AssetKind, DisposalPool } from "@/lib/tax/capital-allowances";
 import { toFigures } from "@/lib/return-model";
 import { Money, Whole, Text, DateField, YesNo, gbp } from "./fields";
 
 const STEPS = [
   "The company", "Profit and loss", "Expenses tax doesn't allow", "Equipment and vehicles",
-  "Last year", "Balance sheet", "Approval", "Check and send",
+  "Director's loans", "Last year", "Balance sheet", "Approval", "Check and send",
 ] as const;
 
 const ASSET_KINDS: { key: AssetKind; label: string }[] = [
@@ -54,12 +55,15 @@ export default function ReturnWizard(props: {
     const figures = toFigures(props.periodStart, props.periodEnd, d);
     const problems = figureProblems(figures);
     const r = problems.length ? null : compute(figures);
+    const people = d.participators.filter((p) => p.name.trim() || p.openingOwed || p.advances || p.repaid);
+    const loans = people.length ? directorsLoans(props.periodStart, props.periodEnd, people) : null;
     const acc = r ? checkMicroAccounts({
       companyName: props.company.name, companyNo: props.company.companyNo ?? "", periodFrom: props.periodStart, periodTo: props.periodEnd,
-      principalActivities: d.activity, pl: d.pl, taxCharge: r.taxChargeable, balanceSheet: d.balanceSheet, director: d.director || "x",
+      principalActivities: d.activity, pl: d.pl, taxCharge: r.taxChargeable,
+      balanceSheet: { ...d.balanceSheet, owedByParticipators: loans?.a75 ?? 0 }, director: d.director || "x",
       approvedOn: d.approvedOn || "9999-12-31",
     }) : null;
-    return { problems, r, acc };
+    return { problems, r, acc, loans };
   }, [d, props.periodStart, props.periodEnd, props.company]);
 
   const save = (next?: number) => start(async () => {
@@ -88,8 +92,8 @@ export default function ReturnWizard(props: {
         </div>
         {live.r && (
           <div style={{ textAlign: "right" }}>
-            <div className="note">Corporation Tax so far</div>
-            <div style={{ fontSize: 22, fontWeight: 600 }}>{gbp(live.r.taxChargeable, true)}</div>
+            <div className="note">Corporation Tax so far{(live.loans?.a80 ?? 0) > 0 ? " (with tax on loans)" : ""}</div>
+            <div style={{ fontSize: 22, fontWeight: 600 }}>{gbp(live.r.taxChargeable + (live.loans?.problems.length ? 0 : live.loans?.a80 ?? 0), true)}</div>
           </div>
         )}
       </div>
@@ -97,13 +101,13 @@ export default function ReturnWizard(props: {
       <div className="content">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
           {STEPS.map((s, i) => (
-            <button key={s} type="button" className={`btn sm ${i === step ? "" : "ghost"}`} onClick={() => { setStep(i); if (i === 7) check(); }}>
+            <button key={s} type="button" className={`btn sm ${i === step ? "" : "ghost"}`} onClick={() => { setStep(i); if (i === 8) check(); }}>
               {i + 1}. {s}
             </button>
           ))}
         </div>
 
-        {d.carriedFrom && step < 7 && (
+        {d.carriedFrom && step < 8 && (
           <div className="banner info">
             <span>ℹ</span>
             <span>Opening figures — pool values, losses, reserves and last year&apos;s accounts — were carried forward from the return for {d.carriedFrom}.</span>
@@ -246,7 +250,81 @@ export default function ReturnWizard(props: {
           </div>
         )}
 
-        {step === 4 && (
+        {step === 4 && (() => {
+          const setP = (n: number, patch: Partial<ParticipatorAccount>) =>
+            set("participators", d.participators.map((x, i) => (i === n ? { ...x, ...patch } : x)));
+          const blankPerson = (): ParticipatorAccount => ({ name: "", isDirector: true, openingOwed: 0, openingCredit: 0, advances: 0,
+            advancesFrom6April2026: 0, repaid: 0, later: [], interestCharged: false, terms: "" });
+          // Only a year that straddles 6 April 2026 needs the split; after it, every loan is at 35.75%.
+          const spansHigher = props.periodStart < "2026-04-06" && props.periodEnd >= "2026-04-06";
+          return (
+            <div className="card">
+              <div className="hd"><h3>Director&apos;s loans</h3><span className="note">Money directors or shareholders borrowed from the company</span></div>
+              <div className="bd">
+                <p className="note" style={{ marginTop: 0 }}>
+                  Add each director or shareholder whose loan account owed the company money at any time this year — money taken out that
+                  wasn&apos;t salary, dividends or expenses. Leave this empty if there were none. Money the <i>company</i>{" "}owes them goes on the
+                  balance sheet as &ldquo;owed to directors&rdquo; instead.
+                </p>
+                {d.participators.map((x, n) => (
+                  <div key={n} className="card" style={{ padding: 12, marginBottom: 10 }}>
+                    <div className="row2">
+                      <Text label="Name" value={x.name} onChange={(v) => setP(n, { name: v })} />
+                      <div className="field"><label>They are</label>
+                        <select value={x.isDirector ? "d" : "s"} onChange={(e) => setP(n, { isDirector: e.target.value === "d" })}>
+                          <option value="d">A director (or director and shareholder)</option>
+                          <option value="s">A shareholder, or a director&apos;s or shareholder&apos;s relative</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="row3">
+                      <Money label="Owed at the start of the year" hint="from earlier years" value={x.openingOwed} onChange={(v) => setP(n, { openingOwed: v })} />
+                      <Money label="Lent to them this year" hint="incl. personal costs the company paid" value={x.advances} onChange={(v) => setP(n, { advances: v })} />
+                      <Money label="Repaid during the year" hint="incl. salary or dividends credited" value={x.repaid} onChange={(v) => setP(n, { repaid: v })} />
+                    </div>
+                    {spansHigher && (
+                      <Money label="Of the amount lent, how much was on or after 6 April 2026?" hint="taxed at 35.75%" value={x.advancesFrom6April2026} onChange={(v) => setP(n, { advancesFrom6April2026: v })} />
+                    )}
+                    <Money label="If their account was in credit at the start instead" hint="the company owed them" value={x.openingCredit} onChange={(v) => setP(n, { openingCredit: v })} />
+                    <h4 style={{ margin: "10px 0 6px", fontSize: 13 }}>Repaid after the year end (already happened)</h4>
+                    {x.later.map((r, k) => (
+                      <div className="row3" key={k}>
+                        <Money label="Amount" value={r.amount} onChange={(v) => setP(n, { later: x.later.map((y, j) => (j === k ? { ...y, amount: v } : y)) })} />
+                        <DateField label="Date" value={r.date} onChange={(v) => setP(n, { later: x.later.map((y, j) => (j === k ? { ...y, date: v } : y)) })} />
+                        <div className="field"><label>How</label>
+                          <select value={r.how} onChange={(e) => setP(n, { later: x.later.map((y, j) => (j === k ? { ...y, how: e.target.value as "repaid" | "released" } : y)) })}>
+                            <option value="repaid">Repaid</option>
+                            <option value="released">Written off by the company</option>
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                    <button type="button" className="btn ghost sm" onClick={() => setP(n, { later: [...x.later, { amount: 0, date: "", how: "repaid" }] })}>+ Add a repayment after the year end</button>
+                    <div style={{ marginTop: 10 }}>
+                      <YesNo question="Is interest charged on the loan?" value={x.interestCharged} onChange={(v) => setP(n, { interestCharged: v })} />
+                    </div>
+                    {x.isDirector && <Text label="Terms, for the accounts" hint="optional" value={x.terms} onChange={(v) => setP(n, { terms: v })} placeholder="The loan is unsecured, interest free and repayable on demand." />}
+                    <button type="button" className="btn ghost sm" onClick={() => set("participators", d.participators.filter((_, i) => i !== n))}>Remove this person</button>
+                  </div>
+                ))}
+                <button type="button" className="btn ghost sm" onClick={() => set("participators", [...d.participators, blankPerson()])}>+ Add a director or shareholder</button>
+                {live.loans && (
+                  <div className={`banner ${live.loans.problems.length ? "bad" : "info"}`} style={{ marginTop: 14 }}>
+                    <span>{live.loans.problems.length ? "✕" : "ℹ"}</span>
+                    <span>
+                      {live.loans.problems.length
+                        ? <ul style={{ margin: 0, paddingLeft: 18 }}>{live.loans.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
+                        : <><b>Tax on director&apos;s loans: {gbp(live.loans.a80, true)}</b> · owed to the company at the year end {gbp(live.loans.a75)}
+                          {live.loans.warnings.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{live.loans.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}</>}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {step === 5 && (
           <div className="card">
             <div className="hd"><h3>Last year</h3><span className="note">For the comparative column in the accounts</span></div>
             <div className="bd">
@@ -295,7 +373,7 @@ export default function ReturnWizard(props: {
           </div>
         )}
 
-        {step === 5 && (
+        {step === 6 && (
           <div className="card">
             <div className="hd"><h3>Balance sheet</h3><span className="note">At {longDate(props.periodEnd)}</span></div>
             <div className="bd">
@@ -320,6 +398,7 @@ export default function ReturnWizard(props: {
                 <Money label="Dividends paid this year" value={d.balanceSheet.dividendsPaid} onChange={(v) => setIn("balanceSheet", "dividendsPaid", v)} />
               </div>
               <Whole label="Average number of employees" hint="including paid directors" value={d.balanceSheet.employees} onChange={(v) => setIn("balanceSheet", "employees", v)} />
+              {(live.loans?.a75 ?? 0) > 0 && <p className="note">Also counted as owed to the company: {gbp(live.loans!.a75)} from director&apos;s loans (the director&apos;s loans step).</p>}
               {live.r && live.acc && (() => {
                 const diff = live.acc.netAssets - live.acc.capitalAndReserves;
                 return (
@@ -337,7 +416,7 @@ export default function ReturnWizard(props: {
           </div>
         )}
 
-        {step === 6 && (
+        {step === 7 && (
           <div className="card">
             <div className="hd"><h3>Approval</h3></div>
             <div className="bd">
@@ -357,7 +436,7 @@ export default function ReturnWizard(props: {
           </div>
         )}
 
-        {step === 7 && (
+        {step === 8 && (
           <div className="card">
             <div className="hd"><h3>Check and send</h3></div>
             <div className="bd">
@@ -379,7 +458,11 @@ export default function ReturnWizard(props: {
                   <div>
                     <div className="kv"><span className="k">Corporation Tax</span><span className="v">{gbp(preview.summary.corporationTax, true)}</span></div>
                     {preview.summary.marginalRelief > 0 && <div className="kv"><span className="k">Marginal relief</span><span className="v">−{gbp(preview.summary.marginalRelief, true)}</span></div>}
-                    <div className="kv"><span className="k"><b>Tax payable</b></span><span className="v"><b>{gbp(preview.summary.taxChargeable, true)}</b></span></div>
+                    <div className="kv"><span className="k"><b>{preview.loans ? "Corporation Tax payable" : "Tax payable"}</b></span><span className="v"><b>{gbp(preview.summary.taxChargeable, true)}</b></span></div>
+                    {preview.loans && <>
+                      <div className="kv"><span className="k">Tax on director&apos;s loans</span><span className="v">{gbp(preview.loans.a80, true)}</span></div>
+                      <div className="kv"><span className="k"><b>Total payable by {preview.loans.dueDate}</b></span><span className="v"><b>{gbp(preview.summary.taxChargeable + preview.loans.a80, true)}</b></span></div>
+                    </>}
                   </div>
                 </div>
               )}
@@ -424,15 +507,15 @@ export default function ReturnWizard(props: {
           </div>
         )}
 
-        {live.problems.length > 0 && step < 7 && (
+        {live.problems.length > 0 && step < 8 && (
           <div className="banner warn"><span>⚠</span><span><ul style={{ margin: 0, paddingLeft: 18 }}>{live.problems.map((p, i) => <li key={i}>{p}</li>)}</ul></span></div>
         )}
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
           {step > 0 && <button type="button" className="btn ghost" disabled={pending} onClick={() => save(step - 1)}>Back</button>}
-          {step < 6 && <button type="button" className="btn" disabled={pending} onClick={() => save(step + 1)}>Save and continue</button>}
-          {step === 6 && <button type="button" className="btn" disabled={pending} onClick={() => { setStep(7); check(); }}>Save and check</button>}
-          {step === 7 && <button type="button" className="btn ghost" disabled={pending} onClick={check}>Check again</button>}
+          {step < 7 && <button type="button" className="btn" disabled={pending} onClick={() => save(step + 1)}>Save and continue</button>}
+          {step === 7 && <button type="button" className="btn" disabled={pending} onClick={() => { setStep(8); check(); }}>Save and check</button>}
+          {step === 8 && <button type="button" className="btn ghost" disabled={pending} onClick={check}>Check again</button>}
           {saved && <span className="note">{saved}</span>}
         </div>
       </div>

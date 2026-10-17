@@ -12,6 +12,7 @@
 
 import { esc, money, nestable, rate, ymd } from "./ct600-xml";
 import type { ComputationResult } from "./tax/computation";
+import type { LoansResult } from "./tax/directors-loans";
 
 export interface ReturnParty {
   companyName: string;
@@ -38,7 +39,8 @@ export interface ReturnDocuments {
  */
 const ZERO_EMISSION_BOX_CLOSED_FROM = "2026-04-01";
 
-export function buildCt600FromComputation(p: ReturnParty, r: ComputationResult, docs: ReturnDocuments): string {
+export function buildCt600FromComputation(p: ReturnParty, r: ComputationResult, docs: ReturnDocuments, loans?: LoansResult | null): string {
+  const ct600a = Boolean(loans?.needed);
   const L: string[] = [];
   const o = (s: string) => L.push(s);
   const ca = r.capitalAllowances;
@@ -61,6 +63,12 @@ export function buildCt600FromComputation(p: ReturnParty, r: ComputationResult, 
   o(`    <Computations>`);
   o(`      <ThisPeriodComputations>yes</ThisPeriodComputations>`);
   o(`    </Computations>`);
+  // Box 95: the CT600A page is included (rules N030.0, N095.0).
+  if (ct600a) {
+    o(`    <SupplementaryPages>`);
+    o(`      <CT600A>yes</CT600A>`);
+    o(`    </SupplementaryPages>`);
+  }
   o(`  </ReturnInfoSummary>`);
   o(`  <Turnover>`);
   o(`    <Total>${money(p.turnover)}</Total>`);
@@ -127,10 +135,14 @@ export function buildCt600FromComputation(p: ReturnParty, r: ComputationResult, 
   o(`    </TaxReliefsAndDeductions>`);
   o(`  </CompanyTaxCalculation>`);
 
+  // Box 480 = A80 (rule SA078.1), only with the CT600A (F097.0); 510 = 475 + 480 (F093.1).
+  const s455 = ct600a ? loans!.a80 : 0;
+  const total = Math.round((r.taxChargeable + s455) * 100) / 100;
   o(`  <CalculationOfTaxOutstandingOrOverpaid>`);
   o(`    <NetCorporationTaxLiability>${money(r.taxChargeable)}</NetCorporationTaxLiability>`);
-  o(`    <TaxChargeable>${money(r.taxChargeable)}</TaxChargeable>`);
-  o(`    <TaxPayable>${money(r.taxChargeable)}</TaxPayable>`);
+  if (ct600a) o(`    <LoansToParticipators>${money(s455)}</LoansToParticipators>`);
+  o(`    <TaxChargeable>${money(total)}</TaxChargeable>`);
+  o(`    <TaxPayable>${money(total)}</TaxPayable>`);
   o(`  </CalculationOfTaxOutstandingOrOverpaid>`);
 
   // Capital allowances and charges included in the trading profit (boxes 688–730).
@@ -180,6 +192,45 @@ export function buildCt600FromComputation(p: ReturnParty, r: ComputationResult, 
   o(`    <Name>${esc(p.declarantName)}</Name>`);
   o(`    <Status>${esc(p.declarantStatus)}</Status>`);
   o(`  </Declaration>`);
+
+  // The CT600A supplementary page (schema type CTA), after the declaration.
+  if (ct600a) {
+    const l = loans!;
+    o(`  <LoansByCloseCompanies>`);
+    // A5: loans were made in the period and all were repaid, released or written off before it ended.
+    o(`    <BeforeEndPeriod>${l.allClearedBeforeEnd ? "yes" : "no"}</BeforeEndPeriod>`);
+    if (l.a15 > 0) {
+      o(`    <LoansInformation>`);
+      for (const x of l.people.filter((x) => x.newOutstanding > 0)) {
+        o(`      <Loan>`);
+        o(`        <Name>${esc(x.name)}</Name>`);                                 // A10A
+        o(`        <AmountOfLoan>${money(x.newOutstanding)}</AmountOfLoan>`);     // A10B
+        o(`      </Loan>`);
+      }
+      o(`      <TotalLoans>${money(l.a15)}</TotalLoans>`);                          // A15 = Σ A10B (SA012)
+      o(`      <TaxChargeable>${money(l.a20)}</TaxChargeable>`);                   // A20 = A15 × rate (SA014)
+      o(`    </LoansInformation>`);
+    }
+    if (l.a40 > 0) {
+      o(`    <ReliefEarlierThan>`);
+      for (const x of l.people) for (const rr of x.relief) {
+        o(`      <Loan>`);
+        o(`        <Name>${esc(x.name)}</Name>`);                                 // A25A
+        if (rr.how === "repaid") o(`        <AmountRepaid>${money(rr.amount)}</AmountRepaid>`); // A25B
+        else o(`        <AmountReleasedOrWrittenOff>${money(rr.amount)}</AmountReleasedOrWrittenOff>`); // A25C
+        o(`        <Date>${ymd(rr.date)}</Date>`);                                // A25D (SA018)
+        o(`      </Loan>`);
+      }
+      if (l.a30 > 0) o(`      <TotalAmountRepaid>${money(l.a30)}</TotalAmountRepaid>`);              // A30
+      if (l.a35 > 0) o(`      <TotalAmountReleasedOrWritten>${money(l.a35)}</TotalAmountReleasedOrWritten>`); // A35
+      o(`      <TotalLoans>${money(l.a40)}</TotalLoans>`);                          // A40 = A30 + A35
+      o(`      <ReliefDue>${money(l.a45)}</ReliefDue>`);                           // A45 = A40 × rate, ≤ A20
+      o(`    </ReliefEarlierThan>`);
+    }
+    if (l.a75 > 0) o(`    <TotalLoansOutstanding>${money(l.a75)}</TotalLoansOutstanding>`); // A75
+    o(`    <TaxPayable>${money(l.a80)}</TaxPayable>`);                             // A80 = A20 − A45
+    o(`  </LoansByCloseCompanies>`);
+  }
 
   // Computation first, then accounts, in one XBRLsubmission — the layout of
   // the returns HMRC accepted on build 30.

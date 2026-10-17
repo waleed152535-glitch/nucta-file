@@ -203,7 +203,7 @@ t("addition outside the period refused", figureProblems(base({ capitalAllowances
 t("ordinary figures pass", figureProblems(profitOf(10_000)).length === 0, figureProblems(profitOf(10_000)));
 const fine = Object.fromEntries(SCOPE_QUESTIONS.map((q) => [q.key, q.expect])) as unknown as ScopeAnswers;
 t("in-scope company passes", scopeProblems(fine).length === 0);
-t("director's loan refused with the reason", scopeProblems({ ...fine, loansToParticipators: true })[0]?.includes("CT600A"));
+t("loan arrangements refused with the reason", scopeProblems({ ...fine, loanArrangements: true })[0]?.includes("464"));
 t("unanswered question asked", scopeProblems({}).length === SCOPE_QUESTIONS.length);
 
 console.log(`\n${pass} passed, ${fail} failed`);

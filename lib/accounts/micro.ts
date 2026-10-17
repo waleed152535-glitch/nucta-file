@@ -43,6 +43,22 @@ export interface BalanceSheet {
   dividendsPaid: number;
   /** Average number of employees, including directors. */
   employees: number;
+  /**
+   * Owed to the company by directors and shareholders at the end (overdrawn
+   * director's loan accounts). Worked out from the director's loans step,
+   * not typed in, and counted in current assets.
+   */
+  owedByParticipators?: number;
+}
+
+/** One director's loan account, for the accounts note (Companies Act 2006 s413). */
+export interface DirectorLoanNote {
+  name: string;
+  opening: number;
+  advanced: number;
+  repaid: number;
+  closing: number;
+  terms: string;
 }
 
 export interface MicroAccountsFigures {
@@ -60,6 +76,8 @@ export interface MicroAccountsFigures {
   approvedOn: string;
   /** Last year's figures and dates, for the comparative column. */
   prior?: { from: string; to: string; figures: PriorYear };
+  /** Directors' loan accounts, for the note the Companies Act requires. */
+  directorsLoans?: DirectorLoanNote[];
 }
 
 const r = (v: number): number => Math.round(v);
@@ -83,14 +101,15 @@ export function checkMicroAccounts(f: MicroAccountsFigures): MicroAccountsCheck 
   const tax = Math.round(f.taxCharge);
   const profitAfterTax = profitBeforeTax - tax;
   const ctOwed = r(b.corporationTaxOwed ?? f.taxCharge);
-  const currentAssets = r(b.stock + b.debtors + b.cash);
+  const currentAssets = r(b.stock + b.debtors + b.cash + (b.owedByParticipators ?? 0));
   const creditorsWithin = r(b.creditorsWithin + b.owedToDirectors + ctOwed);
   const netAssets = r(b.shareCapitalNotPaid + b.fixedAssets + currentAssets + b.prepayments - creditorsWithin - b.creditorsAfter - b.provisions);
   const reservesCarriedForward = r(b.reservesBroughtForward + profitAfterTax - b.dividendsPaid);
   const capitalAndReserves = r(b.shareCapital) + reservesCarriedForward;
 
   const negative = Object.entries(b).filter(([k, v]) => k !== "reservesBroughtForward" && typeof v === "number" && v < 0).map(([k]) => k);
-  if (negative.length) problems.push(`These should be positive amounts: ${negative.join(", ")}.`);
+  if (b.cash < 0) problems.push("Cash can't be negative. An overdraft is money owed — enter it as owed by the company.");
+  if (negative.filter((k) => k !== "cash").length) problems.push(`These should be positive amounts: ${negative.filter((k) => k !== "cash").join(", ")}.`);
   if (b.shareCapitalNotPaid > b.shareCapital) problems.push("Unpaid share capital can't be more than the share capital itself.");
   if (!(b.shareCapital > 0)) problems.push("A company limited by shares has share capital — enter it (often £1 or £100).");
   if (Math.abs(netAssets - capitalAndReserves) >= 1) {
@@ -146,7 +165,7 @@ export function microAccounts(f: MicroAccountsFigures): AccountsInput {
 
     shareCapitalNotPaid: r(b.shareCapitalNotPaid),
     fixedAssets: r(b.fixedAssets),
-    currentAssets: r(b.stock + b.debtors + b.cash),
+    currentAssets: r(b.stock + b.debtors + b.cash + (b.owedByParticipators ?? 0)),
     prepayments: r(b.prepayments),
     creditorsWithin: r(b.creditorsWithin + b.owedToDirectors + (b.corporationTaxOwed ?? f.taxCharge)),
     creditorsAfter: r(b.creditorsAfter),
@@ -162,5 +181,6 @@ export function microAccounts(f: MicroAccountsFigures): AccountsInput {
     accountsType: "FullAccounts",
     accountsStatus: "AuditExempt-NoAccountantsReport",
     legalForm: "PrivateLimitedCompanyLtd",
+    directorsLoans: f.directorsLoans?.filter((l) => l.opening || l.advanced || l.repaid || l.closing),
   };
 }

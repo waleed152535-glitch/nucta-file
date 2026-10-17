@@ -240,6 +240,8 @@ export interface AccountsInput {
    * company's first accounts leave this out and have no comparative column.
    */
   prior?: PriorYear;
+  /** Directors' loan accounts, shown in the note s413 Companies Act 2006 requires. */
+  directorsLoans?: { name: string; opening: number; advanced: number; repaid: number; closing: number; terms: string }[];
   accountsStatus?: "AuditExemptWithAccountantsReport" | "AuditExempt-NoAccountantsReport" | "Audited";
   legalForm?: "PrivateLimitedCompanyLtd" | "CompanyLimitedByGuarantee" | "LimitedLiabilityPartnershipLLP";
 }
@@ -525,6 +527,27 @@ function microBalanceSheet(i: AccountsInput): string {
 </table>`;
 }
 
+/**
+ * Note 3: advances to directors (Companies Act 2006 s413). Each director's
+ * account is described in words, with its terms; the totals are tagged with
+ * the FRC directors' report concepts for advances made, repaid and
+ * outstanding.
+ */
+function directorsLoanNote(loans: NonNullable<AccountsInput["directorsLoans"]>): string {
+  const sum = (k: "advanced" | "repaid" | "closing") => loans.reduce((s, l) => s + Math.round(l[k]), 0);
+  const words = loans.map((l) =>
+    `${l.name} owed the company £${show(l.opening)} at the start of the period; £${show(l.advanced)} was advanced and £${show(l.repaid)} repaid during the period, leaving £${show(l.closing)} owed at the end. ${l.terms.trim() || "The loan is unsecured, interest free and repayable on demand."}`,
+  ).join(" ");
+  return `
+<p class="note">
+  <b>3. Advances to directors.</b>
+  ${textFact("direp:GeneralDescriptionAdvancesCreditsToDirectorsIncludingTermsInterestRates", words, "D")}
+  In total £${fact("direp:AdvancesCreditsMadeInPeriodDirectors", sum("advanced"), "D")} was advanced and
+  £${fact("direp:AdvancesCreditsRepaidInPeriodDirectors", sum("repaid"), "D")} repaid during the period, and
+  £${fact("direp:AdvancesCreditsDirectors", sum("closing"), "E")} was owed by directors at the period end.
+</p>`;
+}
+
 /** The column headings: this year, and last year when there is one. */
 const yearHeader = (i: AccountsInput, hasPrior: boolean): string =>
   `<tr class="hd"><td class="lbl"></td><td class="num">${esc(i.periodTo.slice(0, 4))}<br/>£</td>${
@@ -716,7 +739,7 @@ ${i.micro ? microBalanceSheet(i) : `<table>
   <ix:nonFraction name="core:AverageNumberEmployeesDuringPeriod" contextRef="${PD}"
     unitRef="pure" decimals="0">${plain(i.prior.employees)}</ix:nonFraction>)` : ""}.
 </p>
-<p class="note"><b>2. Off balance sheet arrangements.</b> None.</p>
+<p class="note"><b>2. Off balance sheet arrangements.</b> None.</p>${i.directorsLoans?.length ? directorsLoanNote(i.directorsLoans) : ""}
 
 <p class="stmt">
   Approved by the board on ${esc(longDate(i.approvedOn))} and signed on its behalf by
@@ -934,7 +957,7 @@ export interface FullComputationMeta {
  * reference linkbase, so the computation and the return report the same
  * figure against the same box.
  */
-export function buildFullComputation(m: FullComputationMeta, r: import("./tax/computation").ComputationResult, f: import("./tax/computation").ReturnFigures): string {
+export function buildFullComputation(m: FullComputationMeta, r: import("./tax/computation").ComputationResult, f: import("./tax/computation").ReturnFigures, loans?: import("./tax/directors-loans").LoansResult | null): string {
   const cx = m.compTaxonomy ?? COMP_TAXONOMIES[0];
   const DCo = "DCo", ECo = "ECo", DTr = "DTr", ITrB = "ITrB", ITrE = "ITrE";
   const businessType = "ctcomp:BusinessTypeDimension";
@@ -1001,6 +1024,11 @@ export function buildFullComputation(m: FullComputationMeta, r: import("./tax/co
       ${multiContext(DTr, m.companyNo, trade, { from: m.periodFrom, to: m.periodTo })}
       ${multiContext(ITrB, m.companyNo, trade, { at: dayBefore(m.periodFrom) })}
       ${multiContext(ITrE, m.companyNo, trade, { at: m.periodTo })}
+      ${(loans?.needed ? loans.people.filter((x) => x.taxable > 0) : []).map((x, n) =>
+        multiContext(`LP${n + 1}`, m.companyNo, [
+          { dimension: businessType, member: "ctcomp:Company" },
+          { dimension: "ctcomp:ParticipatorDimension", typedElement: "ctcomp:ParticipatorDomain", value: x.name },
+        ], { from: m.periodFrom, to: m.periodTo })).join("\n      ")}
       <xbrli:unit id="GBP"><xbrli:measure>iso4217:GBP</xbrli:measure></xbrli:unit>
     </ix:resources>
   </ix:header>
@@ -1070,6 +1098,19 @@ ${ca.totalAllowances || ca.totalCharges || ca.main.broughtForward || ca.special.
       `3/200 × (upper limit − profits)${f.associatedCompanies ? `, with the limits shared with ${f.associatedCompanies} associated compan${f.associatedCompanies === 1 ? "y" : "ies"}` : ""}${r.capitalAllowances.yearFraction !== 1 ? ", and reduced for a short period" : ""}.`) : ""}
   ${tr("Corporation Tax payable", fact("ctcomp:NetCorporationTaxPayable", r.taxChargeable, DCo, pence), true)}
 </table>
+
+${loans?.needed ? `
+<h2>Tax on loans to participators (section 455)</h2>
+<table>
+  ${loans.people.map((x) => tr(`${x.name}: lent this period and still owed at ${longDate(m.periodTo)}`, grouped(x.newOutstanding))).join("\n  ")}
+  ${loans.a40 ? tr("Less: repaid, released or written off within 9 months of the year end", `(${grouped(loans.a40)})`) : ""}
+  ${loans.people.filter((x) => x.taxable > 0).map((x, n) =>
+    `<tr><td class="lbl">Chargeable — ${textFact("ctcomp:NameOfParticipator", x.name, `LP${n + 1}`)}</td><td class="num">${fact("ctcomp:LoanToParticipatorAmountTaxable", x.taxable, `LP${n + 1}`)}</td></tr>`).join("\n  ")}
+  ${tr("Tax at 33.75%", fact("ctcomp:TaxPayableOnLoansToParticipators", loans.a80, DCo, pence), true)}
+  ${tr("Corporation Tax and tax on loans, together", grouped(Math.round((r.taxChargeable + loans.a80) * 100) / 100, 2), true)}
+</table>
+<p class="note">Loans still owed at ${esc(longDate(m.periodTo))}, from this and earlier periods: £${grouped(loans.a75)}.
+The tax on loans is repaid to the company once the loans are repaid.</p>` : ""}
 
 <h2>Carried forward to the next period</h2>
 <table>

@@ -10,8 +10,12 @@
 export interface ScopeAnswers {
   /** Is the company UK resident, with its trade carried on in the UK? */
   ukResidentUkTrade: boolean;
-  /** Did it lend money to a director or shareholder (or their family) that was still owed at the period end, or was any such loan written off? */
-  loansToParticipators: boolean;
+  /**
+   * Did a director or shareholder repay a loan and borrow £5,000 or more again
+   * within 30 days, or receive a benefit under an arrangement rather than a
+   * loan? Ordinary director's loans are handled; these two cases aren't.
+   */
+  loanArrangements: boolean;
   /** Is it claiming or giving up losses within a group (group relief)? Associated companies alone are fine. */
   groupRelief: boolean;
   /** Is it claiming research and development relief or a creative industry relief? */
@@ -34,7 +38,7 @@ export interface ScopeAnswers {
 
 export const SCOPE_QUESTIONS: { key: keyof ScopeAnswers; ask: string; expect: boolean; why: string }[] = [
   { key: "ukResidentUkTrade", expect: true, ask: "Is the company UK resident, with one trade carried on in the UK?", why: "Non-resident companies and overseas trades are taxed under different rules." },
-  { key: "loansToParticipators", expect: false, ask: "At the period end, did a director or shareholder (or their family) owe the company money — an overdrawn director's loan account — or was such a loan written off?", why: "This needs the CT600A supplementary page and the s455 charge. It's the next thing being added." },
+  { key: "loanArrangements", expect: false, ask: "Did a director or shareholder repay a loan and then borrow £5,000 or more again within 30 days, or receive a benefit from the company under an arrangement rather than a loan?", why: "These are taxed under special rules (sections 464A and 464C) that need an accountant. Ordinary director's loans are fine — enter them in the director's loans step." },
   { key: "groupRelief", expect: false, ask: "Is the company claiming or giving up losses with other companies in a group (group relief)?", why: "Group relief needs the CT600C page." },
   { key: "researchOrCreativeRelief", expect: false, ask: "Is the company claiming research and development relief, or a creative industry relief?", why: "These claims have their own pages and detailed rules." },
   { key: "chargeableGains", expect: false, ask: "Did the company sell or give away land, buildings, shares or other investments?", why: "Gains on these are calculated separately and added to profits." },

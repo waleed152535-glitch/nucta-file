@@ -48,18 +48,20 @@ t("computation tags the AIA", (r.computationHtml ?? "").includes('name="ctcomp:M
 t("accounts in micro-entity format", (r.accountsHtml ?? "").includes("core:RawMaterialsConsumablesUsed"));
 
 // Refusals before anything is built.
-const loans = prepareReturn(toCompanyReturnInput(company, "2024-07-01", "2025-06-30", { ...d, scope: { ...inScope, loansToParticipators: true } }));
-t("director's loan company refused, nothing built", !loans.ok && loans.ct600 === null && loans.problems[0].includes("CT600A"));
+const loans = prepareReturn(toCompanyReturnInput(company, "2024-07-01", "2025-06-30", { ...d, scope: { ...inScope, loanArrangements: true } }));
+t("loan arrangements refused, nothing built", !loans.ok && loans.ct600 === null && loans.problems[0].includes("464"));
 const unbalanced = prepareReturn(toCompanyReturnInput(company, "2024-07-01", "2025-06-30", { ...d, balanceSheet: { ...d.balanceSheet, cash: 50_000 } }));
 t("unbalanced balance sheet refused with the amount", !unbalanced.ok && unbalanced.problems.some((p) => p.includes("£1,000")), unbalanced.problems);
 const badUtr = prepareReturn(toCompanyReturnInput({ ...company, utr: "123" }, "2024-07-01", "2025-06-30", d));
 t("bad UTR refused", !badUtr.ok && badUtr.problems.some((p) => p.includes("10 digits")));
 
 // From April 2026, a new electric car goes in box 725 (other allowances), as HMRC advise.
-const ev = prepareReturn(toCompanyReturnInput(company, "2026-04-01", "2027-03-31", {
+const ev = prepareReturn({ ...toCompanyReturnInput(company, "2026-04-01", "2027-03-31", {
   ...d, additions: [{ description: "Electric car", kind: "carZeroEmissionNew", cost: 32_000, date: "2026-05-20" }], mainPoolBroughtForward: 0,
   balanceSheet: { ...d.balanceSheet, cash: 0 },
-}));
+}), today: "2027-06-01" });
+const early = prepareReturn(toCompanyReturnInput(company, "2026-04-01", "2027-03-31", d));
+t("a period that hasn't ended yet is refused (HMRC rule 9106)", !early.ok && early.problems.some((p) => p.includes("hasn't ended")));
 t("electric car from April 2026 reported under other allowances", ev.computation !== null && (() => {
   // Build regardless of balance to inspect the box: rebalance by cash.
   const c = ev.computation!; return c.capitalAllowances.zeroEmissionCars === 32_000;

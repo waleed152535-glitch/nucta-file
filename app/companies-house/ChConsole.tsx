@@ -288,8 +288,13 @@ export default function ChConsole({ checks, gateway }: { checks: Check[]; gatewa
                   <div className="check" key={s.submissionNumber}>
                     <span className={`mark ${s.statusCode === "ACCEPT" ? "ok" : "no"}`}>{s.statusCode === "ACCEPT" ? "✓" : "–"}</span>
                     <span>
-                      <div className="t mono">{s.submissionNumber} · {s.statusCode}</div>
+                      <div className="t">
+                        <span className="mono">{s.submissionNumber}</span>
+                        {s.companyNumber && <span className="mono"> · company {s.companyNumber}</span>}
+                        {" — "}{s.meaning || s.statusCode}
+                      </div>
                       {s.reasons.length > 0 && <div className="d">{s.reasons.join(" · ")}</div>}
+                      {s.comment && <div className="d">Examiner&apos;s note: {s.comment}</div>}
                     </span>
                   </div>
                 ))}

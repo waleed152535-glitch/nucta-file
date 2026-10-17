@@ -5,10 +5,16 @@ import { buildAccounts } from "./ixbrl";
 import { accountsFromFigures } from "./accounts-from-figures";
 import { taxProblems, type Ct600Input } from "./ct600-xml";
 import {
-  chPresenter, companyNumberProblem, authCodeProblem, nextTransactionId, newSubmissionNumber,
+  chPresenter, companyNumberProblem, authCodeProblem, formHeaderProblems, nextTransactionId, newSubmissionNumber,
   buildChAccountsEnvelope, buildChStatusEnvelope, buildChAckEnvelope, redactCh, parseChReply,
-  postToCompaniesHouse, ixbrlForCompaniesHouse, CH_MAX_DATA_CHARS, type ChPresenter, type ChReply, type ChStatus,
+  postToCompaniesHouse, ixbrlForCompaniesHouse, chErrorHelp, CH_MAX_DATA_CHARS, type ChPresenter, type ChReply, type ChStatus,
 } from "./companies-house";
+
+/** One gateway error as a line for the screen: the number, Companies House's text, and what it means. */
+const errLine = (e: { number: string; text: string }): string => {
+  const help = chErrorHelp(e.number);
+  return `${e.number ? `${e.number}: ` : ""}${e.text || "(no text given)"}${help ? ` — ${help}` : ""}`;
+};
 
 /** What the Companies House console asks for. */
 export interface ChFormInput {
@@ -60,6 +66,7 @@ function check(f: ChFormInput): { problems: string[]; warnings: string[] } {
   if (!f.contactName.trim() || !f.contactNumber.trim()) {
     problems.push("A contact name and phone number are needed; Companies House show them against the filing.");
   }
+  problems.push(...formHeaderProblems(f));
   // The same arithmetic guard as the tax return: these figures become the
   // company's public accounts, so a wrong tax charge is a wrong balance sheet.
   if (isDate(f.periodFrom) && isDate(f.periodTo)) {
@@ -191,7 +198,7 @@ export async function sendChAccounts(f: ChFormInput): Promise<ChAttempt> {
         ? "Companies House refused the submission. It has not been delivered."
         : `Companies House replied with HTTP ${res.status}.`,
     detail: [
-      ...failed.map((e) => `${e.number ? `${e.number}: ` : ""}${e.text}`),
+      ...failed.map(errLine),
       ...reply.errors.filter((e) => e.type === "warning").map((e) => `Warning: ${e.text}`),
       ...(outcome === "received" && reply.timestamp ? [`Received at ${reply.timestamp} — the legal receipt time.`] : []),
     ],
@@ -240,7 +247,7 @@ export interface ChPoll {
   reply: string | null;
 }
 
-const OUTCOME: Record<string, string> = { ACCEPT: "accepted", REJECT: "rejected", PENDING: "pending", PARKED: "parked" };
+const OUTCOME: Record<string, string> = { ACCEPT: "accepted", REJECT: "rejected", PENDING: "pending", PARKED: "parked", INTERNAL_FAILURE: "failed" };
 
 /**
  * Asks Companies House for results.
@@ -263,7 +270,7 @@ export async function checkChStatus(submissionNumber?: string): Promise<ChPoll> 
   const reply = parseChReply(res.text);
   const failed = reply.errors.filter((e) => e.type !== "warning");
   if (failed.length || res.status < 200 || res.status >= 300) {
-    return { ok: false, headline: "Companies House refused the status request.", detail: failed.map((e) => `${e.number ? `${e.number}: ` : ""}${e.text}`), statuses: reply.statuses, acknowledged: false, reply: res.text };
+    return { ok: false, headline: "Companies House refused the status request.", detail: failed.map(errLine), statuses: reply.statuses, acknowledged: false, reply: res.text };
   }
 
   await recordPoll(reply.statuses, res);
@@ -279,10 +286,24 @@ export async function checkChStatus(submissionNumber?: string): Promise<ChPoll> 
   }
 
   const found = reply.statuses.filter((s) => s.submissionNumber);
+  // TIS 2.5: an unknown number comes back as "No Transaction Found".
+  const notFound = reply.statuses.some((s) => s.reasons.some((r) => /no transaction found/i.test(r)));
+  const one = sn ? found.find((s) => s.submissionNumber === sn) : undefined;
+  const headline = sn
+    ? notFound || !one
+      ? `Companies House have no record of submission ${sn}. Results are kept for 90 days after examination finishes.`
+      : `Submission ${sn}: ${one.meaning || one.statusCode}`
+    : found.length ? `${found.length} result${found.length === 1 ? "" : "s"} from Companies House.` : "Nothing new from Companies House yet.";
   return {
     ok: true,
-    headline: found.length ? `${found.length} result${found.length === 1 ? "" : "s"} from Companies House.` : "Nothing new from Companies House yet.",
+    headline,
     detail: [
+      ...(one?.statusCode === "PENDING" && presenter.test
+        ? ["In testing, Companies House staff often check submissions with attachments, such as accounts, by hand, so a result can take a while."]
+        : []),
+      ...(!sn && !found.length
+        ? ["Collecting all results only shows submissions Companies House have finished with. To see one that's still being examined, check it by its number."]
+        : []),
       ...(!sn && found.length && !acknowledged ? ["The results couldn't be acknowledged, so they'll be sent again next time. That's harmless."] : []),
     ],
     statuses: reply.statuses,

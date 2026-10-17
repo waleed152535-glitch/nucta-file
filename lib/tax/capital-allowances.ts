@@ -69,6 +69,11 @@ export interface Disposal {
   pool: DisposalPool;
   /** What it was sold for — or its market value if given away — capped at what it cost. */
   proceeds: number;
+  /**
+   * When it was sold or scrapped. Needed when the accounts cover more than
+   * twelve months, to put the sale in the right Corporation Tax period.
+   */
+  date?: string;
 }
 
 export interface CapitalAllowanceInput {

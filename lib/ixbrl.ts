@@ -938,6 +938,18 @@ export interface FullComputationMeta {
   /** The trade's description, carried as the typed BusinessName member. */
   tradeName: string;
   compTaxonomy?: CompTaxonomy;
+  /**
+   * When the accounts cover more than 12 months: the whole period of account,
+   * its profit before tax, which of the two returns this is, and the other
+   * return's dates. The figures passed in are already this period's share.
+   */
+  periodOfAccount?: {
+    from: string;
+    to: string;
+    profitPerAccounts: number;
+    partNumber: number;
+    otherPart: { periodFrom: string; periodTo: string; days: number };
+  };
 }
 
 /**
@@ -969,6 +981,9 @@ export function buildFullComputation(m: FullComputationMeta, r: import("./tax/co
   const dayBefore = (iso: string) => new Date(Date.parse(iso + "T00:00:00Z") - 86_400_000).toISOString().slice(0, 10);
   const ca = r.capitalAllowances, d = f.disallowable;
   const pence = { decimals: "2" };
+  const poa = m.periodOfAccount;
+  const daysHere = Math.round((Date.parse(m.periodTo) - Date.parse(m.periodFrom)) / 86_400_000) + 1;
+  const daysAll = poa ? daysHere + poa.otherPart.days : daysHere;
 
   const tr = (label: string, cellHtml: string, bold = false, note?: string) =>
     `<tr${bold ? ' class="b"' : ""}><td class="lbl">${esc(label)}${note ? `<div class="why">${esc(note)}</div>` : ""}</td><td class="num">${cellHtml}</td></tr>`;
@@ -1009,8 +1024,8 @@ export function buildFullComputation(m: FullComputationMeta, r: import("./tax/co
     <ix:hidden>
       ${textFact("ctcomp:CompanyName", m.companyName, ECo)}
       ${textFact("ctcomp:TaxReference", m.utr.replace(/\D/g, ""), ECo)}
-      ${dateFact("ctcomp:PeriodOfAccountStartDate", m.periodFrom, ECo)}
-      ${dateFact("ctcomp:PeriodOfAccountEndDate", m.periodTo, ECo)}
+      ${dateFact("ctcomp:PeriodOfAccountStartDate", poa?.from ?? m.periodFrom, ECo)}
+      ${dateFact("ctcomp:PeriodOfAccountEndDate", poa?.to ?? m.periodTo, ECo)}
       ${dateFact("ctcomp:StartOfPeriodCoveredByReturn", m.periodFrom, ECo)}
       ${dateFact("ctcomp:EndOfPeriodCoveredByReturn", m.periodTo, ECo)}
       ${boolFact("ctcomp:CompanyIsAPartnerInAFirm", false, DCo)}
@@ -1039,11 +1054,23 @@ export function buildFullComputation(m: FullComputationMeta, r: import("./tax/co
   Corporation Tax computation for the period ${esc(longDate(m.periodFrom))} to ${esc(longDate(m.periodTo))}<br/>
   Company registration number ${esc(m.companyNo)} · Unique Taxpayer Reference ${esc(m.utr)}<br/>
   Trade: ${esc(m.tradeName)}
-</div>
+</div>${poa ? `
+
+<h2>Accounts for more than 12 months</h2>
+<p class="note" style="margin-top:0">The accounts run from ${esc(longDate(poa.from))} to ${esc(longDate(poa.to))}, ${daysAll} days. A Corporation Tax
+period can't be longer than 12 months, so they make two returns: ${poa.partNumber === 1
+    ? `this one, for the first 12 months, and one for ${esc(longDate(poa.otherPart.periodFrom))} to ${esc(longDate(poa.otherPart.periodTo))}`
+    : `one for ${esc(longDate(poa.otherPart.periodFrom))} to ${esc(longDate(poa.otherPart.periodTo))}, and this one, for the rest`}.
+The figures from the accounts below are this period's share by days, ${daysHere}/${daysAll}, line by line (CTA 2009 s52).
+Capital allowances are worked out for this period alone, from the dates of purchases and sales.</p>
+<table>
+  ${tr(`${poa.profitPerAccounts < 0 ? "Loss" : "Profit"} before tax for the whole period of account`, bracket(poa.profitPerAccounts, grouped(Math.abs(poa.profitPerAccounts))))}
+  ${tr(`This period's share: ${daysHere} of ${daysAll} days`, bracket(r.accountingProfit, grouped(Math.abs(r.accountingProfit))), true)}
+</table>` : ""}
 
 <h2>Adjustment of trading profit</h2>
 <table>
-  ${tr(`${r.accountingProfit < 0 ? "Loss" : "Profit"} before tax per the accounts`, bracket(r.accountingProfit, fact("ctcomp:ProfitLossPerAccounts", r.accountingProfit, DTr)))}
+  ${tr(`${r.accountingProfit < 0 ? "Loss" : "Profit"} before tax per the accounts${poa ? ", this period's share" : ""}`, bracket(r.accountingProfit, fact("ctcomp:ProfitLossPerAccounts", r.accountingProfit, DTr)))}
   ${less("Interest received (taxed as non-trading income below)", "ctcomp:AdjustmentsOtherDeductions", f.pl.interestReceived)}
   ${add("Depreciation", "ctcomp:AdjustmentsDepreciation", Math.round(f.pl.depreciation))}
   ${add("Entertaining", "ctcomp:AdjustmentsEntertaining", Math.round(d.entertainment))}

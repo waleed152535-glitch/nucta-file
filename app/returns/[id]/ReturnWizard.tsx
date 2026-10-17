@@ -2,14 +2,16 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { saveReturn, previewReturn, sendReturnToTest, type ReturnPreview, type SendResult } from "@/lib/return-actions";
+import { useRouter } from "next/navigation";
+import { saveReturn, previewReturn, sendReturnToTest, startAmendment, type ReturnPreview, type SendResult } from "@/lib/return-actions";
 import type { ReturnData } from "@/lib/return-model";
 import { SCOPE_QUESTIONS } from "@/lib/tax/scope";
-import { compute, figureProblems } from "@/lib/tax/computation";
 import { checkMicroAccounts } from "@/lib/accounts/micro";
-import { directorsLoans, type ParticipatorAccount } from "@/lib/tax/directors-loans";
+import type { FirstPartLoans, ParticipatorAccount } from "@/lib/tax/directors-loans";
 import type { AssetKind, DisposalPool } from "@/lib/tax/capital-allowances";
-import { toFigures } from "@/lib/return-model";
+import { accountingPeriodsOf, computePeriodOfAccount } from "@/lib/tax/long-period";
+import { monthsIn } from "@/lib/tax/dates";
+import { toPeriodOfAccountInput } from "@/lib/return-model";
 import { Money, Whole, Text, DateField, YesNo, gbp } from "./fields";
 
 const STEPS = [
@@ -36,34 +38,42 @@ export default function ReturnWizard(props: {
   id: string; periodStart: string; periodEnd: string; status: string;
   company: { id: string; name: string; companyNo: string | null; utr: string | null };
   initial: ReturnData;
-  submissions: { at: string; outcome: string; correlationId: string | null; test: boolean; receipt: boolean }[];
+  submissions: { at: string; outcome: string; correlationId: string | null; test: boolean; receipt: boolean; period: string | null }[];
 }) {
+  const router = useRouter();
   const [d, setD] = useState<ReturnData>(props.initial);
   const [step, setStep] = useState(0);
   const [saved, setSaved] = useState<string | null>(null);
   const [preview, setPreview] = useState<ReturnPreview | null>(null);
-  const [sent, setSent] = useState<SendResult | null>(null);
-  const [doc, setDoc] = useState<"computation" | "accounts">("computation");
+  const [sent, setSent] = useState<Record<number, SendResult>>({});
+  const [sending, setSending] = useState<number | null>(null);
+  const [doc, setDoc] = useState<"accounts" | number>(0);
+  const [amendProblems, setAmendProblems] = useState<string[]>([]);
   const [pending, start] = useTransition();
+  // Accounts longer than 12 months make two returns: these are their dates.
+  const periods = accountingPeriodsOf(props.periodStart, props.periodEnd);
+  const long = periods.length > 1;
+  const [ap1, ap2] = periods;
 
   const set = <K extends keyof ReturnData>(k: K, v: ReturnData[K]) => { setD((p) => ({ ...p, [k]: v })); setSaved(null); };
   const setIn = <K extends "pl" | "disallowable" | "balanceSheet">(k: K, f: keyof ReturnData[K], v: number) =>
     { setD((p) => ({ ...p, [k]: { ...p[k], [f]: v } })); setSaved(null); };
 
-  // Live figures, worked out in the browser with the same engine the server uses.
+  // Live figures, worked out in the browser with the same engine the server
+  // uses — for both returns when the accounts pass 12 months.
   const live = useMemo(() => {
-    const figures = toFigures(props.periodStart, props.periodEnd, d);
-    const problems = figureProblems(figures);
-    const r = problems.length ? null : compute(figures);
-    const people = d.participators.filter((p) => p.name.trim() || p.openingOwed || p.advances || p.repaid);
-    const loans = people.length ? directorsLoans(props.periodStart, props.periodEnd, people) : null;
-    const acc = r ? checkMicroAccounts({
+    const poa = computePeriodOfAccount(toPeriodOfAccountInput(props.periodStart, props.periodEnd, d));
+    const computed = poa.parts.length > 0;
+    const problems = computed ? [] : poa.problems;
+    const loanProblems = computed ? poa.problems : [];
+    const hasLoans = poa.parts.some((x) => x.loans);
+    const acc = computed ? checkMicroAccounts({
       companyName: props.company.name, companyNo: props.company.companyNo ?? "", periodFrom: props.periodStart, periodTo: props.periodEnd,
-      principalActivities: d.activity, pl: d.pl, taxCharge: r.taxChargeable,
-      balanceSheet: { ...d.balanceSheet, owedByParticipators: loans?.a75 ?? 0 }, director: d.director || "x",
+      principalActivities: d.activity, pl: d.pl, taxCharge: poa.corporationTax,
+      balanceSheet: { ...d.balanceSheet, owedByParticipators: poa.closingLoans?.a75 ?? 0 }, director: d.director || "x",
       approvedOn: d.approvedOn || "9999-12-31",
     }) : null;
-    return { problems, r, acc, loans };
+    return { poa, computed, problems, loanProblems, hasLoans, acc };
   }, [d, props.periodStart, props.periodEnd, props.company]);
 
   const save = (next?: number) => start(async () => {
@@ -74,9 +84,18 @@ export default function ReturnWizard(props: {
   const check = () => start(async () => {
     const res = await saveReturn(props.id, d);
     if (!res.ok) { setSaved(res.error ?? "Couldn't save."); return; }
-    setPreview(await previewReturn(props.id)); setSent(null);
+    setPreview(await previewReturn(props.id)); if (res.changed) setSent({});
   });
-  const send = () => start(async () => { setSent(await sendReturnToTest(props.id)); });
+  const send = (n: number) => start(async () => {
+    setSending(n);
+    const r = await sendReturnToTest(props.id, n);
+    setSent((x) => ({ ...x, [n]: r })); setSending(null);
+  });
+  const amend = () => start(async () => {
+    const r = await startAmendment(props.id);
+    if (r.ok && r.id) router.push(`/returns/${r.id}`); else setAmendProblems(r.problems);
+  });
+  const canAmend = (props.status === "accepted" || props.status === "accepted-test") && !d.amends;
 
   const pbt = d.pl.turnover + d.pl.otherIncome + d.pl.interestReceived - d.pl.costOfSales - d.pl.staffCosts - d.pl.depreciation - d.pl.otherCharges;
 
@@ -86,14 +105,16 @@ export default function ReturnWizard(props: {
         <div>
           <h2>{props.company.name}</h2>
           <div className="sub">
-            Company Tax Return for {longDate(props.periodStart)} to {longDate(props.periodEnd)} ·{" "}
+            {long
+              ? <>{d.amends ? "Amended returns · " : ""}Accounts for {longDate(props.periodStart)} to {longDate(props.periodEnd)} ({monthsIn(props.periodStart, props.periodEnd)} months) — two Company Tax Returns</>
+              : <>{d.amends ? "Amended " : ""}Company Tax Return for {longDate(props.periodStart)} to {longDate(props.periodEnd)}</>} ·{" "}
             <Link href={`/companies/${props.company.id}`}>back to the company</Link>
           </div>
         </div>
-        {live.r && (
+        {live.computed && (
           <div style={{ textAlign: "right" }}>
-            <div className="note">Corporation Tax so far{(live.loans?.a80 ?? 0) > 0 ? " (with tax on loans)" : ""}</div>
-            <div style={{ fontSize: 22, fontWeight: 600 }}>{gbp(live.r.taxChargeable + (live.loans?.problems.length ? 0 : live.loans?.a80 ?? 0), true)}</div>
+            <div className="note">Corporation Tax so far{live.poa.loansTax > 0 ? " (with tax on loans)" : ""}{long ? ", both returns" : ""}</div>
+            <div style={{ fontSize: 22, fontWeight: 600 }}>{gbp(live.poa.corporationTax + (live.loanProblems.length ? 0 : live.poa.loansTax), true)}</div>
           </div>
         )}
       </div>
@@ -107,6 +128,27 @@ export default function ReturnWizard(props: {
           ))}
         </div>
 
+        {d.amends && (
+          <div className="banner info">
+            <span>✎</span>
+            <span>
+              <b>Amended return.</b> It replaces the return {d.amends.test ? "HMRC's test service" : "HMRC"} accepted
+              {d.amends.acceptedAt ? ` on ${longDate(d.amends.acceptedAt.slice(0, 10))}` : ""}. Change what needs changing, then send it again — HMRC
+              replace the original with it. If the change affects the accounts, the accounts filed at Companies House need amending too.
+            </span>
+          </div>
+        )}
+        {long && step < 8 && (
+          <div className="banner info">
+            <span>ℹ</span>
+            <span>
+              These accounts cover {monthsIn(props.periodStart, props.periodEnd)} months. Enter the figures for the <b>whole period</b>, as in the accounts.
+              A Corporation Tax return can&apos;t cover more than 12 months, so Nucta File splits them into two returns —
+              {" "}{longDate(ap1.from)} to {longDate(ap1.to)}, and {longDate(ap2.from)} to {longDate(ap2.to)} — the profit by days, and
+              purchases, sales, donations and director&apos;s loans by their dates.
+            </span>
+          </div>
+        )}
         {d.carriedFrom && step < 8 && (
           <div className="banner info">
             <span>ℹ</span>
@@ -177,6 +219,9 @@ export default function ReturnWizard(props: {
               {d.disallowable.charitableDonations > 0 && (
                 <Money label="Charity donations paid to UK charities" hint="these reduce the taxable profit" value={d.qualifyingDonations} onChange={(v) => set("qualifyingDonations", v)} />
               )}
+              {long && d.qualifyingDonations > 0 && (
+                <Money label={`Of those, paid by ${longDate(ap1.to)}`} hint="donations count in the return for the period they were paid" value={d.donationsInFirstPart} onChange={(v) => set("donationsInFirstPart", v)} />
+              )}
               <Money label="Trading losses brought forward" hint="unused losses from earlier years" value={d.tradingLossesBroughtForward} onChange={(v) => set("tradingLossesBroughtForward", v)} />
             </div>
           </div>
@@ -223,8 +268,9 @@ export default function ReturnWizard(props: {
                       </select>
                     </div>
                   </div>
-                  <div className="row2">
+                  <div className="row3">
                     <Money label="Sold for" hint="no more than it cost" value={x.proceeds} onChange={(v) => set("disposals", d.disposals.map((y, i) => i === n ? { ...y, proceeds: v } : y))} />
+                    <DateField label="Date sold" hint={long ? "needed: it decides which return" : "optional"} value={x.date ?? ""} onChange={(v) => set("disposals", d.disposals.map((y, i) => i === n ? { ...y, date: v || undefined } : y))} />
                     <div className="field" style={{ display: "flex", alignItems: "flex-end" }}>
                       <button type="button" className="btn ghost sm" onClick={() => set("disposals", d.disposals.filter((_, i) => i !== n))}>Remove</button>
                     </div>
@@ -236,16 +282,19 @@ export default function ReturnWizard(props: {
               <div style={{ marginTop: 18 }}>
                 <YesNo question="Does the company share the £1 million Annual Investment Allowance with related companies?" value={d.aiaAvailable !== null}
                   onChange={(v) => set("aiaAvailable", v ? (d.aiaAvailable ?? 0) : null)} why="Companies in a group, or under common control in similar businesses, share one allowance." />
-                {d.aiaAvailable !== null && <Money label="Allowance this company is using" value={d.aiaAvailable} onChange={(v) => set("aiaAvailable", v)} />}
+                {d.aiaAvailable !== null && <Money label="Allowance this company is using" hint={long ? "for the first 12 months; the short period gets its share by days" : undefined} value={d.aiaAvailable} onChange={(v) => set("aiaAvailable", v)} />}
               </div>
-              {live.r && (
-                <div className="banner info" style={{ marginTop: 14 }}>
-                  <span>ℹ</span>
-                  <span><b>Capital allowances: {gbp(live.r.capitalAllowances.totalAllowances)}</b>{live.r.capitalAllowances.totalCharges ? ` · balancing charges ${gbp(live.r.capitalAllowances.totalCharges)}` : ""}
-                    {live.r.capitalAllowances.notes.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{live.r.capitalAllowances.notes.map((t, i) => <li key={i}>{t}</li>)}</ul>}
-                  </span>
-                </div>
-              )}
+              {live.computed && live.poa.parts.map((part, k) => {
+                const ca = part.result.capitalAllowances;
+                return (
+                  <div key={k} className="banner info" style={{ marginTop: 14 }}>
+                    <span>ℹ</span>
+                    <span>{long && <>{k === 0 ? "First" : "Second"} return, {longDate(part.from)} to {longDate(part.to)}: </>}<b>Capital allowances: {gbp(ca.totalAllowances)}</b>{ca.totalCharges ? ` · balancing charges ${gbp(ca.totalCharges)}` : ""}
+                      {ca.notes.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{ca.notes.map((t, i) => <li key={i}>{t}</li>)}</ul>}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -255,8 +304,12 @@ export default function ReturnWizard(props: {
             set("participators", d.participators.map((x, i) => (i === n ? { ...x, ...patch } : x)));
           const blankPerson = (): ParticipatorAccount => ({ name: "", isDirector: true, openingOwed: 0, openingCredit: 0, advances: 0,
             advancesFrom6April2026: 0, repaid: 0, later: [], interestCharged: false, terms: "" });
-          // Only a year that straddles 6 April 2026 needs the split; after it, every loan is at 35.75%.
-          const spansHigher = props.periodStart < "2026-04-06" && props.periodEnd >= "2026-04-06";
+          // Only a period that straddles 6 April 2026 needs the split; after it, every loan is at 35.75%.
+          const straddles = (a: string, b: string) => a < "2026-04-06" && b >= "2026-04-06";
+          const spansHigher = long ? straddles(ap2.from, ap2.to) : straddles(props.periodStart, props.periodEnd);
+          const firstSpansHigher = long && straddles(ap1.from, ap1.to);
+          const fpOf = (x: ParticipatorAccount): FirstPartLoans => x.firstPart ?? { advances: 0, repaid: 0, advancesFrom6April2026: 0, lastRepaidDate: "" };
+          const setFp = (n: number, x: ParticipatorAccount, patch: Partial<FirstPartLoans>) => setP(n, { firstPart: { ...fpOf(x), ...patch } });
           return (
             <div className="card">
               <div className="hd"><h3>Director&apos;s loans</h3><span className="note">Money directors or shareholders borrowed from the company</span></div>
@@ -278,15 +331,34 @@ export default function ReturnWizard(props: {
                       </div>
                     </div>
                     <div className="row3">
-                      <Money label="Owed at the start of the year" hint="from earlier years" value={x.openingOwed} onChange={(v) => setP(n, { openingOwed: v })} />
-                      <Money label="Lent to them this year" hint="incl. personal costs the company paid" value={x.advances} onChange={(v) => setP(n, { advances: v })} />
-                      <Money label="Repaid during the year" hint="incl. salary or dividends credited" value={x.repaid} onChange={(v) => setP(n, { repaid: v })} />
+                      <Money label={long ? "Owed at the start of the period" : "Owed at the start of the year"} hint="from earlier years" value={x.openingOwed} onChange={(v) => setP(n, { openingOwed: v })} />
+                      <Money label={long ? "Lent to them in the whole period" : "Lent to them this year"} hint="incl. personal costs the company paid" value={x.advances} onChange={(v) => setP(n, { advances: v })} />
+                      <Money label={long ? "Repaid during the whole period" : "Repaid during the year"} hint="incl. salary or dividends credited" value={x.repaid} onChange={(v) => setP(n, { repaid: v })} />
                     </div>
+                    {long && (() => {
+                      const fp = fpOf(x);
+                      const repaidAfter = Math.max(0, Math.round(x.repaid) - Math.round(fp.repaid));
+                      return (
+                        <div style={{ borderLeft: "3px solid #ddd", paddingLeft: 10, margin: "4px 0 8px" }}>
+                          <div className="note" style={{ marginBottom: 4 }}>Of those, in the first 12 months — {longDate(ap1.from)} to {longDate(ap1.to)}:</div>
+                          <div className="row3">
+                            <Money label="Lent in the first 12 months" value={fp.advances} onChange={(v) => setFp(n, x, { advances: v })} />
+                            <Money label="Repaid in the first 12 months" value={fp.repaid} onChange={(v) => setFp(n, x, { repaid: v })} />
+                            {repaidAfter > 0 && (
+                              <DateField label={`Date of the last repayment after ${shortDate(ap1.to)}`} hint={`the other ${gbp(repaidAfter)}`} value={fp.lastRepaidDate} onChange={(v) => setFp(n, x, { lastRepaidDate: v })} />
+                            )}
+                          </div>
+                          {firstSpansHigher && (
+                            <Money label="Of the amount lent in the first 12 months, how much was on or after 6 April 2026?" hint="taxed at 35.75%" value={fp.advancesFrom6April2026} onChange={(v) => setFp(n, x, { advancesFrom6April2026: v })} />
+                          )}
+                        </div>
+                      );
+                    })()}
                     {spansHigher && (
-                      <Money label="Of the amount lent, how much was on or after 6 April 2026?" hint="taxed at 35.75%" value={x.advancesFrom6April2026} onChange={(v) => setP(n, { advancesFrom6April2026: v })} />
+                      <Money label={long ? `Of the amount lent after ${shortDate(ap1.to)}, how much was on or after 6 April 2026?` : "Of the amount lent, how much was on or after 6 April 2026?"} hint="taxed at 35.75%" value={x.advancesFrom6April2026} onChange={(v) => setP(n, { advancesFrom6April2026: v })} />
                     )}
                     <Money label="If their account was in credit at the start instead" hint="the company owed them" value={x.openingCredit} onChange={(v) => setP(n, { openingCredit: v })} />
-                    <h4 style={{ margin: "10px 0 6px", fontSize: 13 }}>Repaid after the year end (already happened)</h4>
+                    <h4 style={{ margin: "10px 0 6px", fontSize: 13 }}>Repaid after {long ? "the period" : "the year"} end (already happened)</h4>
                     {x.later.map((r, k) => (
                       <div className="row3" key={k}>
                         <Money label="Amount" value={r.amount} onChange={(v) => setP(n, { later: x.later.map((y, j) => (j === k ? { ...y, amount: v } : y)) })} />
@@ -308,14 +380,16 @@ export default function ReturnWizard(props: {
                   </div>
                 ))}
                 <button type="button" className="btn ghost sm" onClick={() => set("participators", [...d.participators, blankPerson()])}>+ Add a director or shareholder</button>
-                {live.loans && (
-                  <div className={`banner ${live.loans.problems.length ? "bad" : "info"}`} style={{ marginTop: 14 }}>
-                    <span>{live.loans.problems.length ? "✕" : "ℹ"}</span>
+                {(live.hasLoans || live.loanProblems.length > 0) && (
+                  <div className={`banner ${live.loanProblems.length ? "bad" : "info"}`} style={{ marginTop: 14 }}>
+                    <span>{live.loanProblems.length ? "✕" : "ℹ"}</span>
                     <span>
-                      {live.loans.problems.length
-                        ? <ul style={{ margin: 0, paddingLeft: 18 }}>{live.loans.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
-                        : <><b>Tax on director&apos;s loans: {gbp(live.loans.a80, true)}</b> · owed to the company at the year end {gbp(live.loans.a75)}
-                          {live.loans.warnings.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{live.loans.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}</>}
+                      {live.loanProblems.length
+                        ? <ul style={{ margin: 0, paddingLeft: 18 }}>{live.loanProblems.map((p, i) => <li key={i}>{p}</li>)}</ul>
+                        : <><b>Tax on director&apos;s loans: {gbp(live.poa.loansTax, true)}</b>
+                          {long && <> ({live.poa.parts.map((x, k) => `${k === 0 ? "first" : "second"} return ${gbp(x.loans?.a80 ?? 0, true)}`).join(", ")})</>}
+                          {" "}· owed to the company at the {long ? "period" : "year"} end {gbp(live.poa.closingLoans?.a75 ?? 0)}
+                          {live.poa.warnings.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{live.poa.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}</>}
                     </span>
                   </div>
                 )}
@@ -375,7 +449,7 @@ export default function ReturnWizard(props: {
 
         {step === 6 && (
           <div className="card">
-            <div className="hd"><h3>Balance sheet</h3><span className="note">At {longDate(props.periodEnd)}</span></div>
+            <div className="hd"><h3>Balance sheet</h3><span className="note">At {longDate(props.periodEnd)}{long ? ", the end of the accounts" : ""}</span></div>
             <div className="bd">
               <div className="row3">
                 <Money label="Equipment and vehicles" hint="value in the books" value={d.balanceSheet.fixedAssets} onChange={(v) => setIn("balanceSheet", "fixedAssets", v)} />
@@ -398,8 +472,8 @@ export default function ReturnWizard(props: {
                 <Money label="Dividends paid this year" value={d.balanceSheet.dividendsPaid} onChange={(v) => setIn("balanceSheet", "dividendsPaid", v)} />
               </div>
               <Whole label="Average number of employees" hint="including paid directors" value={d.balanceSheet.employees} onChange={(v) => setIn("balanceSheet", "employees", v)} />
-              {(live.loans?.a75 ?? 0) > 0 && <p className="note">Also counted as owed to the company: {gbp(live.loans!.a75)} from director&apos;s loans (the director&apos;s loans step).</p>}
-              {live.r && live.acc && (() => {
+              {(live.poa.closingLoans?.a75 ?? 0) > 0 && <p className="note">Also counted as owed to the company: {gbp(live.poa.closingLoans!.a75)} from director&apos;s loans (the director&apos;s loans step).</p>}
+              {live.computed && live.acc && (() => {
                 const diff = live.acc.netAssets - live.acc.capitalAndReserves;
                 return (
                   <div className={`banner ${Math.abs(diff) < 1 ? "good" : "warn"}`} style={{ marginTop: 12 }}>
@@ -407,7 +481,7 @@ export default function ReturnWizard(props: {
                     <span>
                       {Math.abs(diff) < 1
                         ? <b>The balance sheet balances: net assets {gbp(live.acc.netAssets)}.</b>
-                        : <><b>Out by {gbp(Math.abs(diff))}.</b> Net assets come to {gbp(live.acc.netAssets)}, share capital and reserves to {gbp(live.acc.capitalAndReserves)}. Corporation Tax of {gbp(Math.round(live.r.taxChargeable))} is included as owed.</>}
+                        : <><b>Out by {gbp(Math.abs(diff))}.</b> Net assets come to {gbp(live.acc.netAssets)}, share capital and reserves to {gbp(live.acc.capitalAndReserves)}. Corporation Tax of {gbp(Math.round(live.poa.corporationTax))}{long ? " (both returns)" : ""} is included as owed.</>}
                     </span>
                   </div>
                 );
@@ -438,7 +512,7 @@ export default function ReturnWizard(props: {
 
         {step === 8 && (
           <div className="card">
-            <div className="hd"><h3>Check and send</h3></div>
+            <div className="hd"><h3>Check and send</h3>{long && <span className="note">Two returns, one after the other</span>}</div>
             <div className="bd">
               {!preview && <p className="note">{pending ? "Checking…" : "Press Check to build the return."}</p>}
               {preview && preview.problems.length > 0 && (
@@ -448,58 +522,93 @@ export default function ReturnWizard(props: {
               {preview && preview.warnings.length > 0 && (
                 <div className="banner warn"><span>⚠</span><span><ul style={{ margin: 0, paddingLeft: 18 }}>{preview.warnings.map((p, i) => <li key={i}>{p}</li>)}</ul></span></div>
               )}
-              {preview?.summary && (
-                <div className="grid2" style={{ marginBottom: 12 }}>
-                  <div>
-                    <div className="kv"><span className="k">Profit before tax (accounts)</span><span className="v">{gbp(preview.summary.accountingProfit)}</span></div>
-                    <div className="kv"><span className="k">{preview.summary.tradingLoss ? "Trading loss" : "Trading profit"}</span><span className="v">{gbp(preview.summary.tradingLoss || preview.summary.tradingProfit)}</span></div>
-                    <div className="kv"><span className="k">Profits chargeable</span><span className="v">{gbp(preview.summary.chargeableProfits)}</span></div>
-                  </div>
-                  <div>
-                    <div className="kv"><span className="k">Corporation Tax</span><span className="v">{gbp(preview.summary.corporationTax, true)}</span></div>
-                    {preview.summary.marginalRelief > 0 && <div className="kv"><span className="k">Marginal relief</span><span className="v">−{gbp(preview.summary.marginalRelief, true)}</span></div>}
-                    <div className="kv"><span className="k"><b>{preview.loans ? "Corporation Tax payable" : "Tax payable"}</b></span><span className="v"><b>{gbp(preview.summary.taxChargeable, true)}</b></span></div>
-                    {preview.loans && <>
-                      <div className="kv"><span className="k">Tax on director&apos;s loans</span><span className="v">{gbp(preview.loans.a80, true)}</span></div>
-                      <div className="kv"><span className="k"><b>Total payable by {preview.loans.dueDate}</b></span><span className="v"><b>{gbp(preview.summary.taxChargeable + preview.loans.a80, true)}</b></span></div>
-                    </>}
-                  </div>
-                </div>
+              {preview && preview.parts.length > 0 && preview.filingDue && (
+                <p className="note" style={{ marginTop: 0 }}>
+                  {preview.long ? "Both returns are" : "The return is"} due at HMRC by <b>{longDate(preview.filingDue)}</b>
+                  {preview.amended ? <>; amendments can be made until <b>{longDate(preview.amendBy)}</b></> : null}.
+                  {preview.ok && <> For now every return goes to <b>HMRC&apos;s test service</b>, which checks it exactly as a live filing would but files nothing.
+                  Live filing opens once HMRC recognise Nucta File; the company&apos;s own Government Gateway sign-in will be asked for at that moment, never stored.</>}
+                </p>
               )}
+              {preview?.parts.map((pt, n) => {
+                const r = sent[n];
+                const before = pt.sent && !r ? pt.sent : null;
+                return (
+                  <div key={n} className="card" style={{ padding: 12, marginBottom: 12 }}>
+                    {preview.long && (
+                      <h4 style={{ margin: "0 0 8px" }}>
+                        {n === 0 ? "First" : "Second"} return: {longDate(pt.periodFrom)} to {longDate(pt.periodTo)} <span className="note">({pt.days} days)</span>
+                      </h4>
+                    )}
+                    <div className="grid2" style={{ marginBottom: 8 }}>
+                      <div>
+                        <div className="kv"><span className="k">Profit before tax{preview.long ? ", this period's share" : " (accounts)"}</span><span className="v">{gbp(pt.summary.accountingProfit)}</span></div>
+                        <div className="kv"><span className="k">{pt.summary.tradingLoss ? "Trading loss" : "Trading profit"}</span><span className="v">{gbp(pt.summary.tradingLoss || pt.summary.tradingProfit)}</span></div>
+                        <div className="kv"><span className="k">Profits chargeable</span><span className="v">{gbp(pt.summary.chargeableProfits)}</span></div>
+                      </div>
+                      <div>
+                        <div className="kv"><span className="k">Corporation Tax</span><span className="v">{gbp(pt.summary.corporationTax, true)}</span></div>
+                        {pt.summary.marginalRelief > 0 && <div className="kv"><span className="k">Marginal relief</span><span className="v">−{gbp(pt.summary.marginalRelief, true)}</span></div>}
+                        <div className="kv"><span className="k"><b>{pt.loans ? "Corporation Tax payable" : "Tax payable"}</b></span><span className="v"><b>{gbp(pt.summary.taxChargeable, true)}</b></span></div>
+                        {pt.loans && <>
+                          <div className="kv"><span className="k">Tax on director&apos;s loans</span><span className="v">{gbp(pt.loans.a80, true)}</span></div>
+                          <div className="kv"><span className="k"><b>Total payable</b></span><span className="v"><b>{gbp(pt.summary.taxChargeable + pt.loans.a80, true)}</b></span></div>
+                        </>}
+                        <div className="kv"><span className="k">Due by</span><span className="v">{longDate(pt.taxDue)}</span></div>
+                      </div>
+                    </div>
+                    {preview.amended && pt.changed === false && (
+                      <p className="note">This return is the same as the one HMRC already have, so it doesn&apos;t need sending again.</p>
+                    )}
+                    {preview.ok && (
+                      <div className="acts" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                        <button type="button" className="btn" disabled={pending} onClick={() => send(n)}>
+                          {sending === n ? "Talking to HMRC…" : `Send ${preview.long ? `return ${n + 1} ` : ""}${preview.amended ? "as an amendment " : ""}to HMRC test service`}
+                        </button>
+                        {before && <span className="note">Sent {new Date(before.at).toLocaleString("en-GB")}: {SENT_TEXT[before.status] ?? before.status}</span>}
+                      </div>
+                    )}
+                    {r && (
+                      <div className={`banner ${r.ok ? "good" : r.outcome === "timeout" ? "info" : "bad"}`} style={{ marginTop: 12 }}>
+                        <span>{r.ok ? "✓" : r.outcome === "timeout" ? "…" : "✕"}</span>
+                        <span><b>{r.headline}</b>
+                          {r.detail.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{r.detail.map((t, i) => <li key={i}>{t}</li>)}</ul>}
+                          {r.correlationId && <div className="note mono">Correlation ID {r.correlationId}{r.irmark ? ` · IRmark ${r.irmark}` : ""}</div>}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {preview?.ok && (
                 <>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                    <button type="button" className={`btn sm ${doc === "computation" ? "" : "ghost"}`} onClick={() => setDoc("computation")}>The computation</button>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                    {preview.parts.map((pt, n) => (
+                      <button key={n} type="button" className={`btn sm ${doc === n ? "" : "ghost"}`} onClick={() => setDoc(n)}>
+                        {preview.long ? `Computation ${n + 1} (to ${shortDate(pt.periodTo)})` : "The computation"}
+                      </button>
+                    ))}
                     <button type="button" className={`btn sm ${doc === "accounts" ? "" : "ghost"}`} onClick={() => setDoc("accounts")}>The accounts</button>
                   </div>
-                  <iframe title={doc} srcDoc={(doc === "computation" ? preview.computationHtml : preview.accountsHtml) ?? ""} style={{ width: "100%", height: 760, border: "1px solid #ddd", background: "#fff" }} />
-                  <div className="hero" style={{ marginTop: 14 }}>
-                    <h3>Send to HMRC</h3>
-                    <p>
-                      For now every return goes to <b>HMRC&apos;s test service</b>, which checks it exactly as a live
-                      filing would but files nothing. Live filing opens once HMRC recognise Nucta File; the company&apos;s
-                      own Government Gateway sign-in will be asked for at that moment, never stored.
-                    </p>
-                    <div className="acts">
-                      <button type="button" className="btn" disabled={pending} onClick={send}>{pending ? "Talking to HMRC…" : "Send to HMRC test service"}</button>
-                    </div>
-                  </div>
+                  <iframe title={String(doc)} srcDoc={(doc === "accounts" ? preview.accountsHtml : preview.parts[doc]?.computationHtml) ?? ""} style={{ width: "100%", height: 760, border: "1px solid #ddd", background: "#fff" }} />
                 </>
               )}
-              {sent && (
-                <div className={`banner ${sent.ok ? "good" : sent.outcome === "timeout" ? "info" : "bad"}`} style={{ marginTop: 12 }}>
-                  <span>{sent.ok ? "✓" : sent.outcome === "timeout" ? "…" : "✕"}</span>
-                  <span><b>{sent.headline}</b>
-                    {sent.detail.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{sent.detail.map((t, i) => <li key={i}>{t}</li>)}</ul>}
-                    {sent.correlationId && <div className="note mono">Correlation ID {sent.correlationId}{sent.irmark ? ` · IRmark ${sent.irmark}` : ""}</div>}
-                  </span>
+              {canAmend && (
+                <div className="hero" style={{ marginTop: 14 }}>
+                  <h3>Need to change it?</h3>
+                  <p>
+                    This return has been accepted{props.status === "accepted-test" ? " by HMRC's test service" : ""}. To correct it, start an amended
+                    return: it begins as a copy of this one, and is sent marked as an amendment, which HMRC put in place of the original.
+                  </p>
+                  {amendProblems.length > 0 && <div className="banner bad"><span>✕</span><span>{amendProblems.join(" ")}</span></div>}
+                  <div className="acts"><button type="button" className="btn ghost" disabled={pending} onClick={amend}>Amend this return</button></div>
                 </div>
               )}
               {props.submissions.length > 0 && (
                 <div style={{ marginTop: 16 }}>
                   <div className="note">Earlier sends of this return</div>
                   {props.submissions.map((s, i) => (
-                    <div className="kv" key={i}><span className="k mono">{new Date(s.at).toLocaleString("en-GB")}{s.test ? " · test" : " · LIVE"}</span><span className="v">{s.outcome}</span></div>
+                    <div className="kv" key={i}><span className="k mono">{new Date(s.at).toLocaleString("en-GB")}{s.test ? " · test" : " · LIVE"}{s.period ? ` · ${s.period}` : ""}</span><span className="v">{s.outcome}</span></div>
                   ))}
                 </div>
               )}
@@ -521,6 +630,16 @@ export default function ReturnWizard(props: {
       </div>
     </>
   );
+}
+
+const SENT_TEXT: Record<string, string> = {
+  "accepted-test": "accepted by HMRC's test service", "rejected-test": "rejected by the test service",
+  "submitted-test": "awaiting HMRC's answer", accepted: "filed with HMRC",
+};
+
+function shortDate(iso: string): string {
+  const d = new Date(iso + "T12:00:00Z");
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
 function longDate(iso: string): string {

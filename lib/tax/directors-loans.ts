@@ -37,6 +37,25 @@ export interface LaterRepayment {
   /** When it was repaid, released or written off — after the period end. */
   date: string;
   how: "repaid" | "released";
+  /**
+   * Set by the long-period split: a repayment made in the next Corporation
+   * Tax period of the same accounts, counted here for Part 2 relief.
+   */
+  inNextPeriod?: boolean;
+}
+
+/**
+ * For accounts longer than 12 months: the part of the period's lending and
+ * repayments that fell in the first 12 months. The rest fell in the second
+ * Corporation Tax period.
+ */
+export interface FirstPartLoans {
+  advances: number;
+  repaid: number;
+  /** Of `advances`, made on or after 6 April 2026 — asked only when the first 12 months include that date. */
+  advancesFrom6April2026: number;
+  /** The date of the last repayment after the first 12 months, when there were any. */
+  lastRepaidDate: string;
 }
 
 export interface ParticipatorAccount {
@@ -58,6 +77,18 @@ export interface ParticipatorAccount {
   interestCharged: boolean;
   /** The loan's terms, for the accounts note. */
   terms: string;
+  /** Only for accounts longer than 12 months: the first 12 months' share. */
+  firstPart?: FirstPartLoans;
+  /**
+   * Set by the long-period split: repayments in this period already given
+   * relief on the previous period's return, so no reclaim is suggested.
+   */
+  reliefAlreadyGiven?: number;
+  /**
+   * Set by the long-period split: repayments after the year end that went
+   * against the first period's loans on that period's own return.
+   */
+  laterUsedByEarlierPeriod?: number;
 }
 
 export interface ParticipatorResult {
@@ -179,19 +210,23 @@ export function directorsLoans(periodFrom: string, periodTo: string, people: Par
         continue;
       }
       const used = Math.min(amount, reliefLeft);
-      if (used > 0) relief.push({ amount: used, date: r.date, how: r.how });
+      if (used > 0) relief.push({ amount: used, date: r.date, how: r.how, ...(r.inNextPeriod ? { inNextPeriod: true } : {}) });
       reliefLeft -= used;
-      appliedToEarlier += amount - used;
+      // A repayment in the next period that this period's loans don't need
+      // is that period's business, not a relief for earlier years.
+      if (!r.inNextPeriod) appliedToEarlier += amount - used;
     }
     const taxable = reliefLeft;
     // The higher rate falls on the latest advances, which are the last to be repaid.
     const higher = whollyAtHigherRate ? taxable : straddlesHigherRate ? Math.min(taxable, pounds(p.advancesFrom6April2026)) : 0;
     if (pounds(p.advancesFrom6April2026) > advanced) problems.push(`${p.name}: lending from 6 April 2026 can't be more than the total lent in the period.`);
-    if (appliedToEarlier > 0) {
-      warnings.push(`${p.name}: £${appliedToEarlier.toLocaleString("en-GB")} repaid after the year end goes against loans from earlier years. Relief for it belongs to those years' returns, not this one.`);
+    const leftForEarlier = appliedToEarlier - Math.min(appliedToEarlier, pounds(p.laterUsedByEarlierPeriod ?? 0));
+    if (leftForEarlier > 0) {
+      warnings.push(`${p.name}: £${leftForEarlier.toLocaleString("en-GB")} repaid after the year end goes against loans from earlier years. Relief for it belongs to those years' returns, not this one.`);
     }
-    if (repaidOld > 0) {
-      warnings.push(`${p.name}: £${repaidOld.toLocaleString("en-GB")} of an earlier year's loan was repaid this year. The tax paid on it for that year can be reclaimed — on that year's return if repaid within 9 months of its year end, otherwise with HMRC's loans-to-participators tool.`);
+    const reclaimable = repaidOld - Math.min(repaidOld, pounds(p.reliefAlreadyGiven ?? 0));
+    if (reclaimable > 0) {
+      warnings.push(`${p.name}: £${reclaimable.toLocaleString("en-GB")} of an earlier year's loan was repaid this year. The tax paid on it for that year can be reclaimed — on that year's return if repaid within 9 months of its year end, otherwise with HMRC's loans-to-participators tool.`);
     }
     const peak = Math.max(opening + advanced, opening + netNew);
     if (!p.interestCharged && peak > BENEFIT_IN_KIND_THRESHOLD && p.isDirector) {

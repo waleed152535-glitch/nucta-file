@@ -24,6 +24,15 @@ export interface ReturnParty {
   turnover: number;
   declarantName: string;
   declarantStatus: string;
+  /** "amended" replaces a return HMRC already hold for this period (box N003). */
+  returnType?: "new" | "amended";
+  /**
+   * The accounts attached cover a different period from the return — they
+   * run past 12 months and are split into two returns (box 85, instead of 80).
+   */
+  accountsForDifferentPeriod?: boolean;
+  /** More than one return is being made for the company now (box 50). */
+  multipleReturns?: boolean;
 }
 
 export interface ReturnDocuments {
@@ -45,7 +54,7 @@ export function buildCt600FromComputation(p: ReturnParty, r: ComputationResult, 
   const o = (s: string) => L.push(s);
   const ca = r.capitalAllowances;
 
-  o(`<CompanyTaxReturn ReturnType="new">`);
+  o(`<CompanyTaxReturn ReturnType="${p.returnType === "amended" ? "amended" : "new"}">`);
   o(`  <CompanyInformation>`);
   o(`    <CompanyName>${esc(p.companyName)}</CompanyName>`);
   o(`    <RegistrationNumber>${esc(p.companyNo.trim().toUpperCase())}</RegistrationNumber>`);
@@ -57,8 +66,12 @@ export function buildCt600FromComputation(p: ReturnParty, r: ComputationResult, 
   o(`    </PeriodCovered>`);
   o(`  </CompanyInformation>`);
   o(`  <ReturnInfoSummary>`);
+  // Box 50: both returns for a long period of account are made together.
+  if (p.multipleReturns) o(`    <MultipleReturns>yes</MultipleReturns>`);
+  // Exactly one of box 80 or 85 (rule 9114). The same full-period accounts
+  // go with each return of a long period, declared as "for a different period".
   o(`    <Accounts>`);
-  o(`      <ThisPeriodAccounts>yes</ThisPeriodAccounts>`);
+  o(p.accountsForDifferentPeriod ? `      <DifferentPeriod>yes</DifferentPeriod>` : `      <ThisPeriodAccounts>yes</ThisPeriodAccounts>`);
   o(`    </Accounts>`);
   o(`    <Computations>`);
   o(`      <ThisPeriodComputations>yes</ThisPeriodComputations>`);

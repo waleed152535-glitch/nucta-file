@@ -38,6 +38,25 @@ export const isTwelveMonths = (from: string, to: string): boolean => toDay(addYe
 /** A Corporation Tax accounting period can never exceed twelve months. */
 export const exceedsTwelveMonths = (from: string, to: string): boolean => toDay(to) > toDay(addYear(from)) - 1;
 
+/** A date some months on, clamped to the end of the month (31 August + 6 months = 28 or 29 February). */
+export function addMonths(iso: string, months: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const total = (m - 1) + months;
+  const ny = y + Math.floor(total / 12), nm = ((total % 12) + 12) % 12;
+  const last = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+  return `${ny}-${String(nm + 1).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+}
+
+/**
+ * Accounts can't be made up for more than 18 months (Companies Act 2006
+ * s391 and s392), so a period of account longer than that is a mistake in
+ * the dates.
+ */
+export const exceedsEighteenMonths = (from: string, to: string): boolean => toDay(to) > toDay(addMonths(from, 18)) - 1;
+
+/** Months in a period, to the nearest whole month, for messages ("13 months"). */
+export const monthsIn = (from: string, to: string): number => Math.round(daysInclusive(from, to) / 30.44);
+
 /**
  * The fraction of a year a period represents, for limits and allowances that
  * are "proportionately reduced" in a period shorter than a year. A full

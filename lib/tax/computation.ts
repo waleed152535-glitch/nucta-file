@@ -22,7 +22,7 @@
  */
 
 import {
-  daysInclusive, exceedsTwelveMonths, financialYearOf, isIsoDate, splitByFinancialYear, toDay, yearFraction,
+  daysInclusive, exceedsEighteenMonths, exceedsTwelveMonths, financialYearOf, isIsoDate, splitByFinancialYear, toDay, yearFraction,
 } from "./dates";
 import { capitalAllowances, type CapitalAllowanceInput, type CapitalAllowanceResult } from "./capital-allowances";
 import { CT_FROM_FY2023, LAST_CHECKED_FY } from "./rules";
@@ -152,12 +152,19 @@ const pence = (v: number): number => Math.round(v * 100) / 100;
  * What the figures fail, in plain words. An empty list means the engine can
  * compute this return. Run before `compute`.
  */
-export function figureProblems(f: ReturnFigures): string[] {
+export function figureProblems(f: ReturnFigures, opts: { periodOfAccount?: boolean } = {}): string[] {
   const out: string[] = [];
   if (!isIsoDate(f.periodFrom) || !isIsoDate(f.periodTo)) return ["Both period dates are needed."];
   if (toDay(f.periodTo) < toDay(f.periodFrom)) out.push("The period must end after it starts.");
-  if (exceedsTwelveMonths(f.periodFrom, f.periodTo)) {
+  // The figures of a whole period of account may run up to 18 months: they
+  // are split into two Corporation Tax periods before any tax is worked out
+  // (see long-period.ts). A single Corporation Tax period can't pass 12.
+  const long = exceedsTwelveMonths(f.periodFrom, f.periodTo);
+  if (long && !opts.periodOfAccount) {
     out.push("A Corporation Tax period can't be longer than 12 months. Accounts for a longer period need two returns: the first 12 months, then the rest.");
+  }
+  if (long && opts.periodOfAccount && exceedsEighteenMonths(f.periodFrom, f.periodTo)) {
+    out.push("Accounts can't cover more than 18 months, so these dates look wrong. Check the start date and the accounts year end.");
   }
   if (toDay(f.periodFrom) < toDay(`${CT_FROM_FY2023.firstYear}-04-01`)) {
     out.push("Periods starting before 1 April 2023 used different tax rules and aren't supported.");
@@ -184,6 +191,14 @@ export function figureProblems(f: ReturnFigures): string[] {
       out.push(`"${a.description}" must be dated within the period to be claimed this year.`);
     }
     if (!(a.cost > 0)) out.push(`"${a.description}" needs its cost.`);
+  }
+  for (const x of f.capitalAllowances.disposals) {
+    const name = x.description.trim() || "An item sold";
+    if (x.date && (!isIsoDate(x.date) || toDay(x.date) < toDay(f.periodFrom) || toDay(x.date) > toDay(f.periodTo))) {
+      out.push(`"${name}" must be dated within the period, as it was sold this year.`);
+    } else if (!x.date && long && opts.periodOfAccount) {
+      out.push(`"${name}": the accounts cover more than 12 months, so give the date it was sold — it decides which of the two returns it belongs to.`);
+    }
   }
   return out;
 }

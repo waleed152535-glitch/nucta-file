@@ -54,7 +54,7 @@ export const SCOPE_QUESTIONS: { key: keyof ScopeAnswers; ask: string; expect: bo
 export function scopeProblems(a: Partial<ScopeAnswers>): string[] {
   return SCOPE_QUESTIONS.flatMap((q) => {
     const v = a[q.key];
-    if (v === undefined) return [`Please answer: ${q.ask}`];
+    if (v === undefined) return [`Step 1 (The company) has a question still to answer: ${q.ask}`];
     return v === q.expect ? [] : [`${q.why}`];
   });
 }

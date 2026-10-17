@@ -11,6 +11,7 @@ import type { BalanceSheet } from "./accounts/micro";
 import type { PriorYear } from "./ixbrl";
 import type { CompanyReturnInput } from "./filing";
 import type { ParticipatorAccount } from "./tax/directors-loans";
+import type { PeriodOfAccountInput } from "./tax/long-period";
 
 export interface ReturnData {
   activity: string;
@@ -38,7 +39,41 @@ export interface ReturnData {
   declarantStatus: string;
   /** Which values were filled in from last year's return, so the screen can say so. */
   carriedFrom?: string | null;
+  /** For accounts longer than 12 months: qualifying donations paid in the first 12 months. */
+  donationsInFirstPart: number;
+  /** Set on an amended return: the return it replaces. */
+  amends?: AmendsLink | null;
+  /**
+   * What happened to each return when sent, by its number (0, or 0 and 1 for
+   * accounts longer than 12 months). Kept by the server; cleared when the
+   * figures change.
+   */
+  sent?: Record<string, SentRecord>;
 }
+
+export interface AmendsLink {
+  returnId: string;
+  /** HMRC's correlation IDs of the returns being replaced. */
+  correlationIds: string[];
+  /** When the return being replaced was accepted. */
+  acceptedAt: string | null;
+  /** Whether the original was only accepted by HMRC's test service. */
+  test: boolean;
+}
+
+export interface SentRecord {
+  outcome: string;
+  /** accepted-test, rejected-test, submitted-test or accepted. */
+  status: string;
+  correlationId: string | null;
+  irmark: string | null;
+  at: string;
+  periodFrom: string;
+  periodTo: string;
+}
+
+/** Keys the server keeps for itself; what the screen sends back for them is ignored. */
+export const SERVER_KEYS = ["sent", "amends"] as const;
 
 export const blankPL = (): ProfitAndLoss => ({
   turnover: 0, otherIncome: 0, interestReceived: 0, costOfSales: 0, staffCosts: 0, depreciation: 0, otherCharges: 0,
@@ -63,6 +98,7 @@ export function blankReturnData(): ReturnData {
     tradingLossesBroughtForward: 0, qualifyingDonations: 0, participators: [],
     balanceSheet: blankBalanceSheet(), prior: null,
     director: "", approvedOn: "", declarantName: "", declarantStatus: "Director",
+    donationsInFirstPart: 0,
   };
 }
 
@@ -96,6 +132,14 @@ export function toFigures(periodFrom: string, periodTo: string, d: ReturnData): 
   };
 }
 
+/** The tax for the whole period, worked out the same way on the screen and on the server. */
+export function toPeriodOfAccountInput(periodFrom: string, periodTo: string, d: ReturnData, today?: string): PeriodOfAccountInput {
+  return {
+    figures: toFigures(periodFrom, periodTo, d), participators: d.participators,
+    donationsInFirstPart: d.donationsInFirstPart, ...(today ? { today } : {}),
+  };
+}
+
 export function toCompanyReturnInput(
   company: { name: string; companyNo: string | null; utr: string | null },
   periodFrom: string, periodTo: string, d: ReturnData,
@@ -110,5 +154,7 @@ export function toCompanyReturnInput(
     declarant: { name: d.declarantName, status: d.declarantStatus },
     scope: d.scope,
     participators: d.participators,
+    donationsInFirstPart: d.donationsInFirstPart,
+    returnType: d.amends ? "amended" : "new",
   };
 }

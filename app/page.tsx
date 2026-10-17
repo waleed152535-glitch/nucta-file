@@ -24,7 +24,7 @@ const STAGES = [
   {
     title: "The tax engine and step-by-step returns",
     done: true,
-    body: "Returns are worked out from the accounts: disallowed expenses, capital allowances, losses, interest and donations, then the 19%/25% rates with marginal relief. Accounts are built from real balance-sheet figures. Each year's closing figures carry into the next.",
+    body: "Returns are worked out from the accounts: disallowed expenses, capital allowances, losses, interest and donations, then the 19%/25% rates with marginal relief. Accounts are built from real balance-sheet figures. Each year's closing figures carry into the next. Accounts longer than 12 months are split into two returns automatically, and an accepted return can be amended.",
   },
   {
     title: "HMRC recognition",

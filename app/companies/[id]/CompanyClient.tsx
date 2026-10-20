@@ -11,6 +11,8 @@ const STATUS: Record<string, string> = {
   draft: "Draft", "accepted-test": "Passed HMRC's test service", "rejected-test": "Rejected by the test service — open to see why",
   "submitted-test": "Sent to the test service, awaiting the answer", accepted: "Filed with HMRC",
   "partly-sent-test": "One of the two returns has passed HMRC's test service — send the other",
+  "partly-filed": "One of the two returns has been filed with HMRC — file the other",
+  "submitted-live": "Filed — waiting for HMRC's answer",
 };
 
 const day = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });

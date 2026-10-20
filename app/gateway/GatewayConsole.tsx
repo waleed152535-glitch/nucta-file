@@ -12,7 +12,7 @@ import { markForPeople } from "@/lib/ct600-xml";
  * Bumped by hand with every package. It is on the screen so that an identical
  * rejection twice over can be told apart from a deploy that never landed.
  */
-const BUILD = "35.1 — amend button at the top";
+const BUILD = "36 — live filing built (off until HMRC recognise Nucta File)";
 
 /**
  * The gateway console.

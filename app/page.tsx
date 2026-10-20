@@ -29,7 +29,7 @@ const STAGES = [
   {
     title: "HMRC recognition",
     done: false,
-    body: "The applicant's pack has been requested from sdsteam@hmrc.gov.uk. Recognition is what allows live filing for customers and a listing on GOV.UK, and it is renewed every year.",
+    body: "The applicant's pack has been requested from sdsteam@hmrc.gov.uk. Recognition is what allows live filing for customers and a listing on GOV.UK, and it is renewed every year. Live filing is already built — sign-in typed at filing time, never stored, HMRC's receipt kept — and is switched on with NUCTA_LIVE_FILING once HMRC say yes.",
   },
   {
     title: "Accounts to Companies House",

@@ -3,7 +3,10 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { saveReturn, previewReturn, sendReturnToTest, startAmendment, type ReturnPreview, type SendResult } from "@/lib/return-actions";
+import {
+  saveReturn, previewReturn, sendReturnToTest, startAmendment, fileReturnLive, checkLiveFiling,
+  type ReturnPreview, type SendResult, type LiveResult,
+} from "@/lib/return-actions";
 import type { ReturnData } from "@/lib/return-model";
 import { SCOPE_QUESTIONS } from "@/lib/tax/scope";
 import { checkMicroAccounts } from "@/lib/accounts/micro";
@@ -49,6 +52,11 @@ export default function ReturnWizard(props: {
   const [sending, setSending] = useState<number | null>(null);
   const [doc, setDoc] = useState<"accounts" | number>(0);
   const [amendProblems, setAmendProblems] = useState<string[]>([]);
+  // The HMRC sign-in for a live filing lives only here, in the page, until it's sent.
+  const [signIn, setSignIn] = useState({ userId: "", password: "" });
+  const [approved, setApproved] = useState(false);
+  const [declared, setDeclared] = useState(false);
+  const [liveRes, setLiveRes] = useState<Record<number, LiveResult>>({});
   const [pending, start] = useTransition();
   // Accounts longer than 12 months make two returns: these are their dates.
   const periods = accountingPeriodsOf(props.periodStart, props.periodEnd);
@@ -92,6 +100,21 @@ export default function ReturnWizard(props: {
     setSent((x) => ({ ...x, [n]: r })); setSending(null);
     // Reload the return's status from the server, so "Amend this return"
     // appears as soon as HMRC accept it, without reloading the page.
+    router.refresh();
+  });
+  const fileLive = (n: number, testInLive: boolean) => {
+    if (!testInLive && !window.confirm(`This files ${long ? `return ${n + 1}` : "the return"} with HMRC for real. It can't be undone — only amended. File it now?`)) return;
+    start(async () => {
+      setSending(n);
+      const r = await fileReturnLive(props.id, n, signIn, { testInLive, approved, declared });
+      setLiveRes((x) => ({ ...x, [n]: r })); setSending(null);
+      router.refresh();
+    });
+  };
+  const askLive = (n: number) => start(async () => {
+    setSending(n);
+    const r = await checkLiveFiling(props.id, n, signIn);
+    setLiveRes((x) => ({ ...x, [n]: r })); setSending(null);
     router.refresh();
   });
   const amend = () => start(async () => {
@@ -574,7 +597,10 @@ export default function ReturnWizard(props: {
                     {preview.amended && pt.changed === false && (
                       <p className="note">This return is the same as the one HMRC already have, so it doesn&apos;t need sending again.</p>
                     )}
-                    {preview.ok && (
+                    {preview.ok && pt.sent && (pt.sent.status === "accepted" || pt.sent.status === "submitted-live") && (
+                      <p className="note"><b>{pt.sent.status === "accepted" ? "Filed with HMRC" : "Sent to HMRC, waiting for their answer"}</b> on {new Date(pt.sent.at).toLocaleString("en-GB")}{pt.sent.correlationId ? ` · correlation ID ${pt.sent.correlationId}` : ""}.</p>
+                    )}
+                    {preview.ok && !(pt.sent && (pt.sent.status === "accepted" || pt.sent.status === "submitted-live")) && (
                       <div className="acts" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                         <button type="button" className="btn" disabled={pending} onClick={() => send(n)}>
                           {sending === n ? "Talking to HMRC…" : `Send ${preview.long ? `return ${n + 1} ` : ""}${preview.amended ? "as an amendment " : ""}to HMRC test service`}
@@ -594,6 +620,73 @@ export default function ReturnWizard(props: {
                   </div>
                 );
               })}
+              {preview?.ok && (
+                <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+                  <h4 style={{ margin: "0 0 6px" }}>File with HMRC</h4>
+                  {preview.liveFiling === "off" ? (
+                    <p className="note" style={{ margin: 0 }}>
+                      Live filing opens once HMRC recognise Nucta File. This is where it will happen: the company&apos;s Government Gateway sign-in — or
+                      your agent account&apos;s, filing as its agent — is typed in here at that moment and never stored, and HMRC&apos;s receipt is kept with the return.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="note" style={{ marginTop: 0 }}>
+                        {preview.liveFiling === "til"
+                          ? <>HMRC&apos;s <b>Test in Live</b> check is switched on: HMRC&apos;s live service checks the return with the real sign-in, and files nothing. Real filing is switched on once HMRC recognise Nucta File.</>
+                          : <>This files the return with HMRC <b>for real</b>. You can first run HMRC&apos;s Test in Live check, which uses the same sign-in and files nothing.</>}
+                        {" "}Each return must have passed the test service first. The sign-in is used once and never stored; several wrong passwords can lock a Government Gateway account.
+                      </p>
+                      <div className="row2">
+                        <Text label="Government Gateway user ID" hint="the company's, or your agent account's" value={signIn.userId} onChange={(v) => setSignIn({ ...signIn, userId: v })} />
+                        <div className="field"><label>Password<span className="hint">used once, never stored</span></label>
+                          <input type="password" autoComplete="new-password" value={signIn.password} onChange={(e) => setSignIn({ ...signIn, password: e.target.value })} />
+                        </div>
+                      </div>
+                      <label className="check" style={{ cursor: "pointer" }}>
+                        <input type="checkbox" checked={approved} onChange={(e) => setApproved(e.target.checked)} style={{ marginTop: 3 }} />
+                        <span>{preview.director || "The director"} has seen the accounts, the computation and the return, and approved them.</span>
+                      </label>
+                      <label className="check" style={{ cursor: "pointer" }}>
+                        <input type="checkbox" checked={declared} onChange={(e) => setDeclared(e.target.checked)} style={{ marginTop: 3 }} />
+                        <span>
+                          Declaration, made by {preview.declarant.name || "the person named in step 8"} ({preview.declarant.status}): the information I have given in this
+                          company tax return, and any accounts and computations attached, is correct and complete to the best of my knowledge and belief.
+                        </span>
+                      </label>
+                      {preview.parts.map((pt, n) => {
+                        const passed = sent[n]?.ok || pt.sent?.status === "accepted-test";
+                        const filedRec = pt.sent && (pt.sent.status === "accepted" || pt.sent.status === "submitted-live") ? pt.sent : null;
+                        const lr = liveRes[n];
+                        const ready = Boolean(signIn.userId.trim() && signIn.password && approved && declared);
+                        return (
+                          <div key={n} style={{ marginTop: 10 }}>
+                            <div className="acts" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                              {preview.long && <b style={{ fontSize: 13 }}>Return {n + 1}, to {shortDate(pt.periodTo)}:</b>}
+                              {filedRec?.status === "accepted" && !lr ? <span className="note">Filed {new Date(filedRec.at).toLocaleString("en-GB")}{filedRec.filedBy ? ` with user ID ${filedRec.filedBy}` : ""}. {filedRec.receiptText}</span>
+                                : filedRec?.status === "submitted-live" && !lr?.filed ? <button type="button" className="btn" disabled={pending || !signIn.userId || !signIn.password} onClick={() => askLive(n)}>{sending === n ? "Asking HMRC…" : "Ask HMRC again"}</button>
+                                  : !passed ? <span className="note">Send it to the test service first.</span>
+                                    : lr?.filed ? null : <>
+                                      <button type="button" className="btn ghost" disabled={pending || !ready} onClick={() => fileLive(n, true)}>{sending === n ? "Talking to HMRC…" : "Check with HMRC's live service (files nothing)"}</button>
+                                      {preview.liveFiling === "on" && <button type="button" className="btn" disabled={pending || !ready} onClick={() => fileLive(n, false)}>{preview.long ? `File return ${n + 1} with HMRC` : "File with HMRC"}</button>}
+                                    </>}
+                              {pt.til && !lr && <span className="note">Last live check {new Date(pt.til.at).toLocaleString("en-GB")}: {pt.til.outcome}</span>}
+                            </div>
+                            {lr && (
+                              <div className={`banner ${lr.ok ? "good" : lr.outcome === "timeout" ? "info" : "bad"}`} style={{ marginTop: 8 }}>
+                                <span>{lr.ok ? "✓" : lr.outcome === "timeout" ? "…" : "✕"}</span>
+                                <span><b>{lr.headline}</b>
+                                  {lr.detail.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{lr.detail.map((t, i) => <li key={i}>{t}</li>)}</ul>}
+                                  {lr.correlationId && <div className="note mono">Correlation ID {lr.correlationId}{lr.irmark ? ` · IRmark ${lr.irmark}` : ""}</div>}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              )}
               {preview?.ok && (
                 <>
                   <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
@@ -637,7 +730,7 @@ export default function ReturnWizard(props: {
 
 const SENT_TEXT: Record<string, string> = {
   "accepted-test": "accepted by HMRC's test service", "rejected-test": "rejected by the test service",
-  "submitted-test": "awaiting HMRC's answer", accepted: "filed with HMRC",
+  "submitted-test": "awaiting HMRC's answer", accepted: "filed with HMRC", "submitted-live": "sent to HMRC, waiting for their answer",
 };
 
 function shortDate(iso: string): string {

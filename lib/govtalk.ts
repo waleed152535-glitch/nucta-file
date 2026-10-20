@@ -297,12 +297,53 @@ export async function submitAndWait(
   return { outcome: "accepted", correlationId, receipt: r.receipt, errors: [], steps };
 }
 
+/**
+ * Asks again about a submission that was still processing when the first
+ * wait ran out: polls until HMRC answer, then deletes the message.
+ */
+export async function askAgain(config: GovTalkConfig, correlationId: string, opts: { maxWaitSeconds?: number; endpoint?: string } = {}): Promise<RunResult> {
+  const steps: RunResult["steps"] = [];
+  const record = (stage: string, r: GovTalkResult) => steps.push({ stage, at: new Date().toISOString(), qualifier: r.qualifier, httpStatus: r.httpStatus, raw: r.raw });
+  const deadline = Date.now() + (opts.maxWaitSeconds ?? 40) * 1000;
+  let endpoint = opts.endpoint ?? config.pollEndpoint ?? config.endpoint;
+  let r: GovTalkResult;
+  try {
+    r = await poll(config, correlationId, endpoint);
+  } catch (e) {
+    return { outcome: "error", correlationId, receipt: null, errors: [{ type: "fatal", number: null, text: `Polling failed: ${String(e).slice(0, 180)}`, location: null }], steps };
+  }
+  record("poll", r);
+  while (r.qualifier === "acknowledgement" && Date.now() < deadline) {
+    await new Promise((res) => setTimeout(res, Math.max(1, r.pollSeconds ?? 5) * 1000));
+    if (r.pollEndpoint) endpoint = r.pollEndpoint;
+    try { r = await poll(config, correlationId, endpoint); } catch (e) {
+      return { outcome: "error", correlationId, receipt: null, errors: [{ type: "fatal", number: null, text: `Polling failed: ${String(e).slice(0, 180)}`, location: null }], steps };
+    }
+    record("poll", r);
+  }
+  const finished = r.qualifier === "response";
+  const rejected = r.qualifier === "error" || r.errors.length > 0;
+  if (finished || rejected) {
+    try { record("delete", await remove(config, correlationId, endpoint)); } catch { /* the outcome stands */ }
+  }
+  if (rejected) return { outcome: "rejected", correlationId, receipt: null, errors: r.errors, steps };
+  if (!finished) return { outcome: "timeout", correlationId, receipt: null, errors: [], steps };
+  return { outcome: "accepted", correlationId, receipt: r.receipt, errors: [], steps };
+}
+
+/** The words of HMRC's receipt — "HMRC has received the HMRC-CT-CT600 document ref …" — from the receipt they return. */
+export function receiptText(receipt: string | null): string | null {
+  if (!receipt) return null;
+  const m = receipt.match(/<(?:\w+:)?Message\b[^>]*>([\s\S]*?)<\/(?:\w+:)?Message>/i);
+  const text = unescape((m ? m[1] : receipt).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+  return text || null;
+}
+
 /** Turns HMRC's error codes into something a person can act on. */
 export function explain(e: GovTalkError): string {
   const n = e.number ?? "";
   const known: Record<string, string> = {
-    "1046": "Authentication failed — the sender ID or password is wrong, or the account isn't enabled for this service.",
-    "1george": "",
+    "1046": "Authentication failed — the user ID or password is wrong, or the account isn't enabled for Corporation Tax. Several wrong tries can lock a Government Gateway account.",
     "3001": "The message failed schema validation. The XML doesn't match HMRC's CT600 schema.",
     "5012": "Authentication failure — check the sender ID and password against the credentials HMRC issued.",
     "1001": "The submission is a duplicate of one already received.",

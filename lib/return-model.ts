@@ -49,6 +49,10 @@ export interface ReturnData {
    * figures change.
    */
   sent?: Record<string, SentRecord>;
+  /** When a live filing of each return started, while it is under way. Kept by the server. */
+  filing?: Record<string, string>;
+  /** The last "Test in Live" check of each return. Kept by the server. */
+  til?: Record<string, { outcome: string; at: string; correlationId: string | null }>;
 }
 
 export interface AmendsLink {
@@ -63,17 +67,21 @@ export interface AmendsLink {
 
 export interface SentRecord {
   outcome: string;
-  /** accepted-test, rejected-test, submitted-test or accepted. */
+  /** accepted-test, rejected-test, submitted-test; or, filed for real, accepted or submitted-live. */
   status: string;
   correlationId: string | null;
   irmark: string | null;
   at: string;
   periodFrom: string;
   periodTo: string;
+  /** For a live filing: HMRC's receipt, in words. The full signed receipt is kept with the submission. */
+  receiptText?: string | null;
+  /** For a live filing: the Government Gateway user ID it was filed with, mostly hidden. */
+  filedBy?: string;
 }
 
 /** Keys the server keeps for itself; what the screen sends back for them is ignored. */
-export const SERVER_KEYS = ["sent", "amends"] as const;
+export const SERVER_KEYS = ["sent", "amends", "filing", "til"] as const;
 
 export const blankPL = (): ProfitAndLoss => ({
   turnover: 0, otherIncome: 0, interestReceived: 0, costOfSales: 0, staffCosts: 0, depreciation: 0, otherCharges: 0,

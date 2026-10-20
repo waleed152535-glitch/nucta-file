@@ -17,10 +17,12 @@ export const PRODUCT_VERSION = process.env.HMRC_PRODUCT_VERSION ?? "1.0";
 /**
  * HMRC runs two test routes and one live one.
  *
- * The Local Test Service validates XML on your own machine without a network
- * call. Test in Live posts to the real Transaction Engine with GatewayTest
- * set to 1, so the whole handshake happens for real but nothing is filed.
- * Live is live.
+ * The External Test Service checks a return exactly as live would, with the
+ * test credentials HMRC issued. Test in Live posts to the real Transaction
+ * Engine with the company's (or agent's) own Government Gateway sign-in, the
+ * class ending "-TIL" and GatewayTest 0: HMRC validate everything, the
+ * sign-in included, but send nothing to their back-end systems — nothing is
+ * filed (GOV.UK, Basic guide for XML software developers). Live is live.
  *
  * The exact URLs are confirmed in HMRC's technical pack; these are the
  * published ones and are overridable without a code change.
@@ -112,6 +114,47 @@ export function redact(envelope: string): string {
   );
 }
 
+/** A Government Gateway user ID shown with all but its last three characters hidden. */
+export const maskId = (id: string): string => (id.length <= 3 ? "•••" : `${"•".repeat(Math.min(9, id.length - 3))}${id.slice(-3)}`);
+
+/** For a live filing: the password removed and the sign-in's user ID masked too. */
+export function redactLive(text: string): string {
+  return redact(text).replace(/(<(?:\w+:)?SenderID>)([\s\S]*?)(<\/(?:\w+:)?SenderID>)/g, (_, a, id, b) => `${a}${maskId(String(id).trim())}${b}`);
+}
+
+/**
+ * Whether live filing is switched on, set by NUCTA_LIVE_FILING in the
+ * hosting settings:
+ *   off  (the default) — test service only
+ *   til  — also "Test in Live": checks with HMRC's live service using the
+ *          company's own sign-in, filing nothing
+ *   on   — Test in Live and real filing; set once HMRC recognise Nucta File
+ */
+export type LiveFiling = "off" | "til" | "on";
+export function liveFiling(): LiveFiling {
+  const v = (process.env.NUCTA_LIVE_FILING ?? "").trim().toLowerCase();
+  return v === "on" ? "on" : v === "til" ? "til" : "off";
+}
+
+/**
+ * The configuration for one live or Test in Live submission, from the
+ * sign-in typed in at that moment. Nothing here is stored.
+ */
+export function liveConfig(userId: string, password: string, testInLive: boolean): GovTalkConfig {
+  return {
+    endpoint: ENDPOINTS.live,
+    pollEndpoint: POLL_ENDPOINTS.live,
+    senderId: userId,
+    password,
+    vendorId: VENDOR_ID,
+    productName: PRODUCT_NAME,
+    productVersion: PRODUCT_VERSION,
+    gatewayTest: false,
+    email: process.env.HMRC_CONTACT_EMAIL,
+    messageClass: messageClass("live", testInLive),
+  };
+}
+
 /** Whether the app is configured well enough to attempt a test submission. */
 export function readiness(): { label: string; ok: boolean; detail: string }[] {
   return [
@@ -131,6 +174,15 @@ export function readiness(): { label: string; ok: boolean; detail: string }[] {
       detail: process.env.HMRC_TEST_PASSWORD
         ? "Held in the environment, never in the code."
         : "Add HMRC_TEST_PASSWORD in your hosting settings. It's in the document HMRC attached to their email.",
+    },
+    {
+      label: "Live filing",
+      ok: liveFiling() !== "off",
+      detail: liveFiling() === "on"
+        ? "On. Returns can be filed with HMRC, using the company's or agent's own sign-in, typed in at the moment of filing and never stored."
+        : liveFiling() === "til"
+          ? "Test in Live only: a return can be checked by HMRC's live service with the company's own sign-in, but nothing is filed."
+          : "Off until HMRC recognise Nucta File. Set NUCTA_LIVE_FILING to til to try HMRC's Test in Live, or to on once recognised.",
     },
     {
       label: "CT600 schema",

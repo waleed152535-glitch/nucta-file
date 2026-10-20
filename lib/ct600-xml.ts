@@ -594,6 +594,8 @@ export interface EnvelopeInput {
   productVersion?: string;
   /** Which reading of the IRmark specification to use. */
   markMethod?: MarkMethod;
+  /** Who is sending the return (IRheader Sender): the company itself, or its agent. */
+  sender?: "Company" | "Agent";
 }
 
 /** Wraps a return in the GovTalk envelope the Transaction Engine expects. */
@@ -604,7 +606,7 @@ export function buildEnvelope(i: EnvelopeInput): string {
   <PeriodEnd>${ymd(i.periodEnd)}</PeriodEnd>
   <DefaultCurrency>GBP</DefaultCurrency>
   <IRmark Type="generic">PLACEHOLDER</IRmark>
-  <Sender>Company</Sender>
+  <Sender>${i.sender === "Agent" ? "Agent" : "Company"}</Sender>
 </IRheader>
 ${i.body}
 </IRenvelope>`;

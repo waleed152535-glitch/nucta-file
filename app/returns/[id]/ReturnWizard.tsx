@@ -90,12 +90,15 @@ export default function ReturnWizard(props: {
     setSending(n);
     const r = await sendReturnToTest(props.id, n);
     setSent((x) => ({ ...x, [n]: r })); setSending(null);
+    // Reload the return's status from the server, so "Amend this return"
+    // appears as soon as HMRC accept it, without reloading the page.
+    router.refresh();
   });
   const amend = () => start(async () => {
     const r = await startAmendment(props.id);
     if (r.ok && r.id) router.push(`/returns/${r.id}`); else setAmendProblems(r.problems);
   });
-  const canAmend = (props.status === "accepted" || props.status === "accepted-test") && !d.amends;
+  const canAmend = props.status === "accepted" || props.status === "accepted-test";
 
   const pbt = d.pl.turnover + d.pl.otherIncome + d.pl.interestReceived - d.pl.costOfSales - d.pl.staffCosts - d.pl.depreciation - d.pl.otherCharges;
 
@@ -128,6 +131,17 @@ export default function ReturnWizard(props: {
           ))}
         </div>
 
+        {canAmend && (
+          <div className="banner good" style={{ alignItems: "center" }}>
+            <span>✓</span>
+            <span style={{ flex: 1 }}>
+              <b>{long ? "Both returns have" : "This return has"} been accepted{props.status === "accepted-test" ? " by HMRC's test service" : " by HMRC"}.</b>{" "}
+              To correct {long ? "them" : "it"}, amend: you get a copy to change, which is sent marked as an amendment, and HMRC put it in place of the original.
+              {amendProblems.length > 0 && <div style={{ marginTop: 4 }}>{amendProblems.join(" ")}</div>}
+            </span>
+            <button type="button" className="btn sm" disabled={pending} onClick={amend}>Amend this return</button>
+          </div>
+        )}
         {d.amends && (
           <div className="banner info">
             <span>✎</span>
@@ -144,7 +158,7 @@ export default function ReturnWizard(props: {
             <span>
               These accounts cover {monthsIn(props.periodStart, props.periodEnd)} months. Enter the figures for the <b>whole period</b>, as in the accounts.
               A Corporation Tax return can&apos;t cover more than 12 months, so Nucta File splits them into two returns —
-              {" "}{longDate(ap1.from)} to {longDate(ap1.to)}, and {longDate(ap2.from)} to {longDate(ap2.to)} — the profit by days, and
+              {" "}{longDate(ap1.from)} to {longDate(ap1.to)}, and {longDate(ap2.from)} to {longDate(ap2.to)}{" "}— the profit by days, and
               purchases, sales, donations and director&apos;s loans by their dates.
             </span>
           </div>
@@ -592,17 +606,6 @@ export default function ReturnWizard(props: {
                   </div>
                   <iframe title={String(doc)} srcDoc={(doc === "accounts" ? preview.accountsHtml : preview.parts[doc]?.computationHtml) ?? ""} style={{ width: "100%", height: 760, border: "1px solid #ddd", background: "#fff" }} />
                 </>
-              )}
-              {canAmend && (
-                <div className="hero" style={{ marginTop: 14 }}>
-                  <h3>Need to change it?</h3>
-                  <p>
-                    This return has been accepted{props.status === "accepted-test" ? " by HMRC's test service" : ""}. To correct it, start an amended
-                    return: it begins as a copy of this one, and is sent marked as an amendment, which HMRC put in place of the original.
-                  </p>
-                  {amendProblems.length > 0 && <div className="banner bad"><span>✕</span><span>{amendProblems.join(" ")}</span></div>}
-                  <div className="acts"><button type="button" className="btn ghost" disabled={pending} onClick={amend}>Amend this return</button></div>
-                </div>
               )}
               {props.submissions.length > 0 && (
                 <div style={{ marginTop: 16 }}>

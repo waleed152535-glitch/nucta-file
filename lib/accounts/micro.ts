@@ -78,6 +78,10 @@ export interface MicroAccountsFigures {
   prior?: { from: string; to: string; figures: PriorYear };
   /** Directors' loan accounts, for the note the Companies Act requires. */
   directorsLoans?: DirectorLoanNote[];
+  /** Marked dormant by the person preparing it; otherwise dormant means a profit and loss account of nothing. */
+  dormant?: boolean;
+  /** For a dormant company: whether it traded before — "no longer trading" rather than "never traded". */
+  everTraded?: boolean;
 }
 
 const r = (v: number): number => Math.round(v);
@@ -132,7 +136,7 @@ export function checkMicroAccounts(f: MicroAccountsFigures): MicroAccountsCheck 
 export function microAccounts(f: MicroAccountsFigures): AccountsInput {
   const pl = f.pl, b = f.balanceSheet;
   const c = checkMicroAccounts(f);
-  const dormant = [pl.turnover, pl.otherIncome, pl.interestReceived, pl.costOfSales, pl.staffCosts, pl.depreciation, pl.otherCharges].every((v) => !v);
+  const dormant = f.dormant ?? [pl.turnover, pl.otherIncome, pl.interestReceived, pl.costOfSales, pl.staffCosts, pl.depreciation, pl.otherCharges].every((v) => !v);
   const otherIncome = r(pl.otherIncome + pl.interestReceived);
   return {
     companyName: f.companyName,
@@ -143,7 +147,7 @@ export function microAccounts(f: MicroAccountsFigures): AccountsInput {
     priorFrom: f.prior?.from,
     priorTo: f.prior?.to,
     dormant,
-    tradingStatus: dormant ? "neverTraded" : "trading",
+    tradingStatus: dormant ? (f.everTraded ? "ceased" : "neverTraded") : "trading",
 
     // The older layout's fields, kept consistent for anything that reads them.
     turnover: r(pl.turnover),

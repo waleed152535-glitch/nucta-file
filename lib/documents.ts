@@ -145,7 +145,21 @@ export function receiptBlocks(r: { company: string; period: string; at: string; 
 export function approvalBlocks(a: {
   company: string; companyNo: string; periodFrom: string; periodTo: string; director: string;
   parts: { from: string; to: string; tax: number; loansTax: number; due: string }[]; filingDue: string; preparedBy: string;
+  /** Dormant: dormant accounts and a nil return; `returnNeeded` false when HMRC haven't asked for one. */
+  dormant?: { returnNeeded: boolean };
 }): Block[] {
+  if (a.dormant) {
+    const ret = a.dormant.returnNeeded;
+    return [
+      { t: "title", text: `${a.company} — dormant accounts for approval` },
+      { t: "sub", lines: [`Company registration number ${a.companyNo}`, `Accounts for ${longDate(a.periodFrom)} to ${longDate(a.periodTo)}`, `Prepared by ${a.preparedBy}`] },
+      { t: "p", text: `Attached are the company's dormant accounts${ret ? ` and its nil Company Tax Return${a.parts.length > 1 ? "s" : ""} (CT600)` : ""}. The company was dormant throughout the period, so there is no profit or loss and no tax to pay. Please read them and, if they are right, sign below. Once approved, the accounts are filed with Companies House${ret ? " and the return with HMRC" : ""}.` },
+      ...(ret ? [] : [{ t: "p" as const, small: true, text: "HMRC haven't asked for a Company Tax Return for this period, so none is filed. If they send a notice to file one, the nil return is ready." }]),
+      { t: "h2", text: "Approval" },
+      { t: "p", text: `I approve the dormant accounts for the period ended ${longDate(a.periodTo)}${ret ? ` and the Company Tax Return${a.parts.length > 1 ? "s" : ""} attached` : ""}. To the best of my knowledge and belief the company was dormant throughout the period and the information given is correct and complete, and I authorise ${a.preparedBy} to file ${ret ? "them" : "the accounts"}.` },
+      { t: "sign", lines: [`Signed (${a.director || "director"})`, "Date"] },
+    ];
+  }
   const money = (n: number) => `£${n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const blocks: Block[] = [
     { t: "title", text: `${a.company} — accounts and Company Tax Return for approval` },

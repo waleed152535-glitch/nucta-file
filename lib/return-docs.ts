@@ -40,6 +40,8 @@ export interface ReturnDocs {
   parts: PartDocs[];
   filingDue: string;
   amended: boolean;
+  /** Dormant, and whether HMRC need a return at all (they do only once they've sent a notice). */
+  dormant: { returnNeeded: boolean } | null;
 }
 
 const pick = (env: string, tag: "Computation" | "Accounts") =>
@@ -47,7 +49,7 @@ const pick = (env: string, tag: "Computation" | "Accounts") =>
 
 export async function returnDocuments(id: string): Promise<ReturnDocs> {
   const r = await getReturn(id);
-  const blank: ReturnDocs = { ok: false, company: { name: "", companyNo: "" }, periodFrom: "", periodTo: "", director: "", preparedBy: "", accountsHtml: null, parts: [], filingDue: "", amended: false };
+  const blank: ReturnDocs = { ok: false, company: { name: "", companyNo: "" }, periodFrom: "", periodTo: "", director: "", preparedBy: "", accountsHtml: null, parts: [], filingDue: "", amended: false, dormant: null };
   if (!r.ok || !r.data || !r.company) return { ...blank, error: r.error ?? "That return isn't in Nucta File." };
   const data = r.data;
   const p = prepareReturn(toCompanyReturnInput(r.company, r.periodStart!, r.periodEnd!, data));
@@ -80,5 +82,6 @@ export async function returnDocuments(id: string): Promise<ReturnDocs> {
     periodFrom: r.periodStart!, periodTo: r.periodEnd!, director: data.director,
     preparedBy: data.declarantStatus === "Agent" ? data.declarantName || "the agent" : "the company",
     accountsHtml, parts, filingDue: p.filingDue, amended: Boolean(data.amends),
+    dormant: data.dormant ? { returnNeeded: data.ctNoticeReceived !== false } : null,
   };
 }

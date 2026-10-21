@@ -41,6 +41,8 @@ export interface DeadlineReturn {
   amendment: boolean;
   /** Corporation Tax and s455 for each accounting period, when the figures can be worked out. */
   taxByPart?: { to: string; tax: number }[];
+  /** A dormant company HMRC haven't asked for a return: only its accounts are due. */
+  ctNotRequired?: boolean;
 }
 
 export type DeadlineKind = "ct600" | "ct-payment" | "ch-accounts" | "not-started";
@@ -115,14 +117,14 @@ export function deadlinesFor(companies: DeadlineCompany[], returns: DeadlineRetu
     // One row per period: the original return, whose status says whether it was filed.
     const mine = returns.filter((r) => r.companyId === c.id && !r.amendment).sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
     for (const r of mine) {
-      if (!filed(r.status)) {
+      if (!filed(r.status) && !r.ctNotRequired) {
         push(c, { returnId: r.id, kind: "ct600", label: accountingPeriodsOf(r.periodStart, r.periodEnd).length > 1 ? "Company Tax Returns (two)" : "Company Tax Return", periodFrom: r.periodStart, periodTo: r.periodEnd, due: filingDeadline(r.periodEnd) });
       }
       for (const p of accountingPeriodsOf(r.periodStart, r.periodEnd)) {
         const tax = r.taxByPart?.find((x) => x.to === p.to)?.tax;
         const due = taxDueDate(p.to);
         // Whether a filed return's tax was paid isn't known here, so it is shown only until it falls due.
-        if (tax !== undefined && tax <= 0) continue;
+        if ((tax !== undefined && tax <= 0) || r.ctNotRequired) continue;
         if (filed(r.status) && toDay(due) < t) continue;
         push(c, { returnId: r.id, kind: "ct-payment", label: "Corporation Tax to pay", periodFrom: p.from, periodTo: p.to, due, ...(tax !== undefined ? { amount: tax } : {}) });
       }

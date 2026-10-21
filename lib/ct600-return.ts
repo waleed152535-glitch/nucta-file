@@ -33,11 +33,14 @@ export interface ReturnParty {
   accountsForDifferentPeriod?: boolean;
   /** More than one return is being made for the company now (box 50). */
   multipleReturns?: boolean;
+  /** Dormant throughout: no computation, box 90B "Company dormant". */
+  dormant?: boolean;
 }
 
 export interface ReturnDocuments {
   accountsIxbrl: string;
-  computationIxbrl: string;
+  /** Null for a dormant company, which sends none. */
+  computationIxbrl: string | null;
 }
 
 /**
@@ -74,7 +77,8 @@ export function buildCt600FromComputation(p: ReturnParty, r: ComputationResult, 
   o(p.accountsForDifferentPeriod ? `      <DifferentPeriod>yes</DifferentPeriod>` : `      <ThisPeriodAccounts>yes</ThisPeriodAccounts>`);
   o(`    </Accounts>`);
   o(`    <Computations>`);
-  o(`      <ThisPeriodComputations>yes</ThisPeriodComputations>`);
+  // Box 90B: a dormant company has no computation to attach (rules 9117, 9118).
+  o(p.dormant || !docs.computationIxbrl ? `      <NoComputationsReason>Company dormant</NoComputationsReason>` : `      <ThisPeriodComputations>yes</ThisPeriodComputations>`);
   o(`    </Computations>`);
   // Box 95: the CT600A page is included (rules N030.0, N095.0).
   if (ct600a) {
@@ -249,7 +253,10 @@ export function buildCt600FromComputation(p: ReturnParty, r: ComputationResult, 
   // the returns HMRC accepted on build 30.
   o(`  <AttachedFiles>`);
   o(`    <XBRLsubmission>`);
-  for (const [tag, doc] of [["Computation", docs.computationIxbrl], ["Accounts", docs.accountsIxbrl]] as const) {
+  const attached: [string, string][] = [];
+  if (docs.computationIxbrl) attached.push(["Computation", docs.computationIxbrl]);
+  attached.push(["Accounts", docs.accountsIxbrl]);
+  for (const [tag, doc] of attached) {
     o(`      <${tag}>`);
     o(`        <Instance>`);
     o(`          <InlineXBRLDocument>`);

@@ -6,7 +6,7 @@
 
 import type { Disallowable, ProfitAndLoss, ReturnFigures } from "./tax/computation";
 import type { Addition, Disposal } from "./tax/capital-allowances";
-import type { ScopeAnswers } from "./tax/scope";
+import { SCOPE_QUESTIONS, type ScopeAnswers } from "./tax/scope";
 import type { BalanceSheet } from "./accounts/micro";
 import type { PriorYear } from "./ixbrl";
 import type { CompanyReturnInput } from "./filing";
@@ -15,6 +15,19 @@ import type { PeriodOfAccountInput } from "./tax/long-period";
 
 export interface ReturnData {
   activity: string;
+  /**
+   * Dormant for the whole period: no income, no spending, no transactions
+   * (Companies House fees paid by a director don't count). The figures steps
+   * are skipped; the accounts are dormant accounts and the return a nil one.
+   */
+  dormant: boolean;
+  /** For a dormant company: whether it has ever traded, for the accounts' trading status. */
+  everTraded: boolean;
+  /**
+   * For a dormant company: whether HMRC have sent a notice to deliver a
+   * Company Tax Return. Without one, HMRC don't expect a return.
+   */
+  ctNoticeReceived: boolean | null;
   scope: Partial<ScopeAnswers>;
   associatedCompanies: number;
   pl: ProfitAndLoss;
@@ -100,7 +113,7 @@ export const blankBalanceSheet = (): BalanceSheet => ({
 
 export function blankReturnData(): ReturnData {
   return {
-    activity: "", scope: {}, associatedCompanies: 0,
+    activity: "", dormant: false, everTraded: false, ctNoticeReceived: null, scope: {}, associatedCompanies: 0,
     pl: blankPL(), disallowable: blankDisallowable(), profitOnDisposals: 0,
     additions: [], disposals: [], mainPoolBroughtForward: 0, specialPoolBroughtForward: 0, aiaAvailable: null,
     tradingLossesBroughtForward: 0, qualifyingDonations: 0, participators: [],
@@ -126,7 +139,21 @@ export function normaliseReturnData(d: Partial<ReturnData> | null | undefined): 
   };
 }
 
+/**
+ * What the tax engine sees. A dormant company has nothing in its profit and
+ * loss account and no trade to claim allowances for, so whatever was typed in
+ * those steps before it was marked dormant is left out; losses brought
+ * forward stay as they are, to carry on to the next year.
+ */
 export function toFigures(periodFrom: string, periodTo: string, d: ReturnData): ReturnFigures {
+  if (d.dormant) {
+    return {
+      periodFrom, periodTo, associatedCompanies: d.associatedCompanies,
+      pl: blankPL(), disallowable: blankDisallowable(), profitOnDisposals: 0,
+      capitalAllowances: { additions: [], disposals: [], mainPoolBroughtForward: 0, specialPoolBroughtForward: 0 },
+      tradingLossesBroughtForward: d.tradingLossesBroughtForward, qualifyingDonations: 0,
+    };
+  }
   return {
     periodFrom, periodTo, associatedCompanies: d.associatedCompanies,
     pl: d.pl, disallowable: d.disallowable, profitOnDisposals: d.profitOnDisposals,
@@ -143,26 +170,36 @@ export function toFigures(periodFrom: string, periodTo: string, d: ReturnData): 
 /** The tax for the whole period, worked out the same way on the screen and on the server. */
 export function toPeriodOfAccountInput(periodFrom: string, periodTo: string, d: ReturnData, today?: string): PeriodOfAccountInput {
   return {
-    figures: toFigures(periodFrom, periodTo, d), participators: d.participators,
-    donationsInFirstPart: d.donationsInFirstPart, ...(today ? { today } : {}),
+    figures: toFigures(periodFrom, periodTo, d), participators: d.dormant ? [] : d.participators,
+    donationsInFirstPart: d.dormant ? 0 : d.donationsInFirstPart, ...(today ? { today } : {}),
   };
 }
+
+/** A dormant company's balance sheet holds only what a dormant company can have. */
+export function dormantBalanceSheet(b: BalanceSheet): BalanceSheet {
+  return { ...b, fixedAssets: 0, stock: 0, prepayments: 0, creditorsAfter: 0, provisions: 0, dividendsPaid: 0 };
+}
+
+/** Every scope question answered the way that keeps a company in scope: a dormant company has no trade, gains or income to ask about. */
+export const dormantScope = (): Partial<ScopeAnswers> =>
+  Object.fromEntries(SCOPE_QUESTIONS.map((q) => [q.key, q.expect])) as Partial<ScopeAnswers>;
 
 export function toCompanyReturnInput(
   company: { name: string; companyNo: string | null; utr: string | null },
   periodFrom: string, periodTo: string, d: ReturnData,
 ): CompanyReturnInput {
   return {
-    company: { name: company.name, number: company.companyNo ?? "", utr: company.utr ?? "", activity: d.activity },
+    company: { name: company.name, number: company.companyNo ?? "", utr: company.utr ?? "", activity: d.activity.trim() || (d.dormant ? "Dormant company" : "") },
     figures: toFigures(periodFrom, periodTo, d),
-    balanceSheet: d.balanceSheet,
+    balanceSheet: d.dormant ? dormantBalanceSheet(d.balanceSheet) : d.balanceSheet,
     prior: d.prior ?? undefined,
     director: d.director,
     approvedOn: d.approvedOn,
     declarant: { name: d.declarantName, status: d.declarantStatus },
-    scope: d.scope,
-    participators: d.participators,
-    donationsInFirstPart: d.donationsInFirstPart,
+    scope: d.dormant ? dormantScope() : d.scope,
+    participators: d.dormant ? [] : d.participators,
+    donationsInFirstPart: d.dormant ? 0 : d.donationsInFirstPart,
     returnType: d.amends ? "amended" : "new",
+    ...(d.dormant ? { dormant: { everTraded: d.everTraded } } : {}),
   };
 }

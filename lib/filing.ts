@@ -43,6 +43,11 @@ export interface CompanyReturnInput {
   donationsInFirstPart?: number;
   /** "amended" replaces a return HMRC already have for the same period. */
   returnType?: "new" | "amended";
+  /**
+   * Set for a company dormant throughout the period: dormant accounts, and a
+   * nil return with no computation ("Company dormant", box 90B).
+   */
+  dormant?: { everTraded: boolean };
   /** Today's date, for checking repayment dates and deadlines; defaults to the real date. */
   today?: string;
 }
@@ -136,6 +141,7 @@ export function prepareReturn(i: CompanyReturnInput): PreparedReturn {
     // Overdrawn loan accounts are money owed to the company: current assets.
     balanceSheet: { ...i.balanceSheet, owedByParticipators: closing?.a75 ?? 0 },
     director: i.director, approvedOn: i.approvedOn, prior: i.prior,
+    ...(i.dormant ? { dormant: true, everTraded: i.dormant.everTraded } : {}),
     directorsLoans: closing?.people.map((p, n) => ({ p, src: people[n] })).filter(({ p }) => p.isDirector).map(({ p, src }) => ({
       name: p.name, opening: Math.max(0, Math.round(src?.openingOwed ?? p.opening)), advanced: Math.max(0, Math.round(src?.advances ?? p.advanced)),
       repaid: Math.max(0, Math.round(src?.repaid ?? p.repaidInPeriod)), closing: p.closingOwed, terms: src?.terms ?? "",
@@ -148,7 +154,8 @@ export function prepareReturn(i: CompanyReturnInput): PreparedReturn {
   const accountsHtml = buildAccounts(microAccounts(accountsFigures));
   const companyNo = i.company.number.trim().toUpperCase();
   const parts = partsWithoutDocs.map((p, n): PreparedPart => {
-    const computationHtml = buildFullComputation({
+    // A dormant company sends no computation: there is nothing to compute.
+    const computationHtml = i.dormant ? null : buildFullComputation({
       companyName: i.company.name, companyNo, utr: i.company.utr,
       periodFrom: p.periodFrom, periodTo: p.periodTo, tradeName: i.company.activity,
       periodOfAccount: poa.long ? {
@@ -160,7 +167,7 @@ export function prepareReturn(i: CompanyReturnInput): PreparedReturn {
       companyName: i.company.name, companyNo: i.company.number, utr: i.company.utr,
       periodFrom: p.periodFrom, periodTo: p.periodTo, associatedCompanies: i.figures.associatedCompanies,
       turnover: p.figures.pl.turnover, declarantName: i.declarant.name, declarantStatus: i.declarant.status,
-      returnType, accountsForDifferentPeriod: poa.long, multipleReturns: poa.long,
+      returnType, accountsForDifferentPeriod: poa.long, multipleReturns: poa.long, dormant: Boolean(i.dormant),
     }, p.computation, { accountsIxbrl: accountsHtml, computationIxbrl: computationHtml }, p.loans);
     return { ...p, computationHtml, ct600 };
   });

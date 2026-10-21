@@ -14,7 +14,7 @@ import type { FirstPartLoans, ParticipatorAccount } from "@/lib/tax/directors-lo
 import type { AssetKind, DisposalPool } from "@/lib/tax/capital-allowances";
 import { accountingPeriodsOf, computePeriodOfAccount } from "@/lib/tax/long-period";
 import { monthsIn } from "@/lib/tax/dates";
-import { toPeriodOfAccountInput } from "@/lib/return-model";
+import { toPeriodOfAccountInput, toFigures, dormantBalanceSheet } from "@/lib/return-model";
 import { Money, Whole, Text, DateField, YesNo, gbp } from "./fields";
 
 const STEPS = [
@@ -75,10 +75,11 @@ export default function ReturnWizard(props: {
     const problems = computed ? [] : poa.problems;
     const loanProblems = computed ? poa.problems : [];
     const hasLoans = poa.parts.some((x) => x.loans);
+    const bs = d.dormant ? dormantBalanceSheet(d.balanceSheet) : d.balanceSheet;
     const acc = computed ? checkMicroAccounts({
       companyName: props.company.name, companyNo: props.company.companyNo ?? "", periodFrom: props.periodStart, periodTo: props.periodEnd,
-      principalActivities: d.activity, pl: d.pl, taxCharge: poa.corporationTax,
-      balanceSheet: { ...d.balanceSheet, owedByParticipators: poa.closingLoans?.a75 ?? 0 }, director: d.director || "x",
+      principalActivities: d.activity, pl: toFigures(props.periodStart, props.periodEnd, d).pl, taxCharge: poa.corporationTax,
+      balanceSheet: { ...bs, owedByParticipators: poa.closingLoans?.a75 ?? 0 }, director: d.director || "x",
       approvedOn: d.approvedOn || "9999-12-31",
     }) : null;
     return { poa, computed, problems, loanProblems, hasLoans, acc };
@@ -199,16 +200,49 @@ export default function ReturnWizard(props: {
             <div className="bd">
               <Text label="What the company does" hint="appears in the accounts and the computation" value={d.activity} onChange={(v) => set("activity", v)} placeholder="e.g. Online retail of household goods" />
               <Whole label="Associated companies" hint="other companies under the same person's control — dormant ones don't count" value={d.associatedCompanies} onChange={(v) => set("associatedCompanies", v)} />
-              <p className="note" style={{ margin: "14px 0 6px" }}>Answer each question. If any answer means Nucta File can&apos;t prepare this return yet, it will say why.</p>
-              {SCOPE_QUESTIONS.map((q) => (
-                <YesNo key={q.key} question={q.ask} value={d.scope[q.key]} onChange={(v) => set("scope", { ...d.scope, [q.key]: v })}
-                  why={d.scope[q.key] !== undefined && d.scope[q.key] !== q.expect ? `Not yet: ${q.why}` : undefined} />
-              ))}
+              <div style={{ marginTop: 10 }}>
+                <YesNo question="Was the company dormant for the whole period — no income, no spending and no other transactions?" value={d.dormant}
+                  onChange={(v) => set("dormant", v)} why="Companies House fees paid by a director don't stop a company being dormant. Bank interest, a sale or any expense paid by the company does." />
+              </div>
+              {d.dormant ? (
+                <>
+                  <YesNo question="Has the company ever traded?" value={d.everTraded} onChange={(v) => set("everTraded", v)} why="The accounts say whether a dormant company has never traded or has stopped trading." />
+                  <YesNo question="Have HMRC sent the company a notice to file a Company Tax Return for this period?" value={d.ctNoticeReceived ?? undefined}
+                    onChange={(v) => set("ctNoticeReceived", v)}
+                    why={d.ctNoticeReceived === false
+                      ? "Then HMRC don't expect a return. Only the dormant accounts go to Companies House — Nucta File prepares them, and the return stays ready in case HMRC ask."
+                      : "HMRC usually tell a dormant company it doesn't need to file. If they've sent a notice (form CT603, or a letter or email asking for a return), a nil return is filed."} />
+                  <div className="banner info" style={{ marginTop: 12 }}>
+                    <span>ℹ</span>
+                    <span>A dormant company has no profit and loss account, no allowances and no director&apos;s loans, so steps 2 to 5 are skipped. Fill in last year (if it had accounts), the balance sheet and the approval.</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="note" style={{ margin: "14px 0 6px" }}>Answer each question. If any answer means Nucta File can&apos;t prepare this return yet, it will say why.</p>
+                  {SCOPE_QUESTIONS.map((q) => (
+                    <YesNo key={q.key} question={q.ask} value={d.scope[q.key]} onChange={(v) => set("scope", { ...d.scope, [q.key]: v })}
+                      why={d.scope[q.key] !== undefined && d.scope[q.key] !== q.expect ? `Not yet: ${q.why}` : undefined} />
+                  ))}
+                </>
+              )}
             </div>
           </div>
         )}
 
-        {step === 1 && (
+        {d.dormant && step >= 1 && step <= 4 && (
+          <div className="card">
+            <div className="hd"><h3>{STEPS[step]}</h3><span className="note">Not needed for a dormant company</span></div>
+            <div className="bd">
+              <p className="note" style={{ margin: 0 }}>
+                The company was dormant, so there is nothing to enter here: no income or expenses, no equipment allowances and no director&apos;s loans.
+                If that&apos;s not right, go back to step 1 and answer No to the dormant question.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {step === 1 && !d.dormant && (
           <div className="card">
             <div className="hd"><h3>Profit and loss</h3><span className="note">From the bookkeeping for the year</span></div>
             <div className="bd">
@@ -230,7 +264,7 @@ export default function ReturnWizard(props: {
           </div>
         )}
 
-        {step === 2 && (
+        {step === 2 && !d.dormant && (
           <div className="card">
             <div className="hd"><h3>Expenses tax doesn&apos;t allow</h3><span className="note">Already included in the expenses above</span></div>
             <div className="bd">
@@ -264,7 +298,7 @@ export default function ReturnWizard(props: {
           </div>
         )}
 
-        {step === 3 && (
+        {step === 3 && !d.dormant && (
           <div className="card">
             <div className="hd"><h3>Equipment and vehicles</h3><span className="note">Capital allowances</span></div>
             <div className="bd">
@@ -336,7 +370,7 @@ export default function ReturnWizard(props: {
           </div>
         )}
 
-        {step === 4 && (() => {
+        {step === 4 && !d.dormant && (() => {
           const setP = (n: number, patch: Partial<ParticipatorAccount>) =>
             set("participators", d.participators.map((x, i) => (i === n ? { ...x, ...patch } : x)));
           const blankPerson = (): ParticipatorAccount => ({ name: "", isDirector: true, openingOwed: 0, openingCredit: 0, advances: 0,
@@ -488,26 +522,53 @@ export default function ReturnWizard(props: {
           <div className="card">
             <div className="hd"><h3>Balance sheet</h3><span className="note">At {longDate(props.periodEnd)}{long ? ", the end of the accounts" : ""}</span></div>
             <div className="bd">
-              <div className="row3">
-                <Money label="Equipment and vehicles" hint="value in the books" value={d.balanceSheet.fixedAssets} onChange={(v) => setIn("balanceSheet", "fixedAssets", v)} />
-                <Money label="Stock" value={d.balanceSheet.stock} onChange={(v) => setIn("balanceSheet", "stock", v)} />
-                <Money label="Owed to the company" hint="customers, marketplace, VAT refund" value={d.balanceSheet.debtors} onChange={(v) => setIn("balanceSheet", "debtors", v)} />
-              </div>
-              <div className="row3">
-                <Money label="Cash at bank" value={d.balanceSheet.cash} onChange={(v) => setIn("balanceSheet", "cash", v)} />
-                <Money label="Prepayments" hint="paid in advance, if not above" value={d.balanceSheet.prepayments} onChange={(v) => setIn("balanceSheet", "prepayments", v)} />
-                <Money label="Owed by the company" hint="suppliers, VAT, PAYE — not tax or directors" value={d.balanceSheet.creditorsWithin} onChange={(v) => setIn("balanceSheet", "creditorsWithin", v)} />
-              </div>
-              <div className="row3">
-                <Money label="Owed to directors" hint="director's loan account in credit" value={d.balanceSheet.owedToDirectors} onChange={(v) => setIn("balanceSheet", "owedToDirectors", v)} />
-                <Money label="Loans due after a year" value={d.balanceSheet.creditorsAfter} onChange={(v) => setIn("balanceSheet", "creditorsAfter", v)} />
-                <Money label="Provisions" value={d.balanceSheet.provisions} onChange={(v) => setIn("balanceSheet", "provisions", v)} />
-              </div>
-              <div className="row3">
-                <Money label="Share capital" hint="e.g. 100 shares of £1 = 100" value={d.balanceSheet.shareCapital} onChange={(v) => setIn("balanceSheet", "shareCapital", v)} />
-                <Money label="Reserves at the start of the year" hint="retained profits; a minus number for losses" value={d.balanceSheet.reservesBroughtForward} onChange={(v) => setIn("balanceSheet", "reservesBroughtForward", v)} />
-                <Money label="Dividends paid this year" value={d.balanceSheet.dividendsPaid} onChange={(v) => setIn("balanceSheet", "dividendsPaid", v)} />
-              </div>
+              {d.dormant && (
+                <p className="note" style={{ marginTop: 0 }}>
+                  A dormant company&apos;s balance sheet is usually just its shares: for 100 shares of £1 not yet paid for, enter 100 as share capital and 100 as share capital not paid;
+                  if they were paid into the bank, enter the 100 as cash instead.
+                </p>
+              )}
+              {!d.dormant && (
+                <div className="row3">
+                  <Money label="Equipment and vehicles" hint="value in the books" value={d.balanceSheet.fixedAssets} onChange={(v) => setIn("balanceSheet", "fixedAssets", v)} />
+                  <Money label="Stock" value={d.balanceSheet.stock} onChange={(v) => setIn("balanceSheet", "stock", v)} />
+                  <Money label="Owed to the company" hint="customers, marketplace, VAT refund" value={d.balanceSheet.debtors} onChange={(v) => setIn("balanceSheet", "debtors", v)} />
+                </div>
+              )}
+              {d.dormant ? (
+                <>
+                  <div className="row3">
+                    <Money label="Share capital" hint="e.g. 100 shares of £1 = 100" value={d.balanceSheet.shareCapital} onChange={(v) => setIn("balanceSheet", "shareCapital", v)} />
+                    <Money label="Share capital not paid" hint="shares issued but not yet paid for" value={d.balanceSheet.shareCapitalNotPaid} onChange={(v) => setIn("balanceSheet", "shareCapitalNotPaid", v)} />
+                    <Money label="Cash at bank" value={d.balanceSheet.cash} onChange={(v) => setIn("balanceSheet", "cash", v)} />
+                  </div>
+                  <div className="row3">
+                    <Money label="Owed to the company" hint="e.g. by a shareholder" value={d.balanceSheet.debtors} onChange={(v) => setIn("balanceSheet", "debtors", v)} />
+                    <Money label="Owed by the company" value={d.balanceSheet.creditorsWithin} onChange={(v) => setIn("balanceSheet", "creditorsWithin", v)} />
+                    <Money label="Owed to directors" hint="e.g. Companies House fees they paid" value={d.balanceSheet.owedToDirectors} onChange={(v) => setIn("balanceSheet", "owedToDirectors", v)} />
+                  </div>
+                  <Money label="Reserves at the start of the year" hint="only if it traded before; a minus number for losses" value={d.balanceSheet.reservesBroughtForward} onChange={(v) => setIn("balanceSheet", "reservesBroughtForward", v)} />
+                </>
+              ) : (
+                <>
+                  <div className="row3">
+                    <Money label="Cash at bank" value={d.balanceSheet.cash} onChange={(v) => setIn("balanceSheet", "cash", v)} />
+                    <Money label="Prepayments" hint="paid in advance, if not above" value={d.balanceSheet.prepayments} onChange={(v) => setIn("balanceSheet", "prepayments", v)} />
+                    <Money label="Owed by the company" hint="suppliers, VAT, PAYE — not tax or directors" value={d.balanceSheet.creditorsWithin} onChange={(v) => setIn("balanceSheet", "creditorsWithin", v)} />
+                  </div>
+                  <div className="row3">
+                    <Money label="Owed to directors" hint="director's loan account in credit" value={d.balanceSheet.owedToDirectors} onChange={(v) => setIn("balanceSheet", "owedToDirectors", v)} />
+                    <Money label="Loans due after a year" value={d.balanceSheet.creditorsAfter} onChange={(v) => setIn("balanceSheet", "creditorsAfter", v)} />
+                    <Money label="Provisions" value={d.balanceSheet.provisions} onChange={(v) => setIn("balanceSheet", "provisions", v)} />
+                  </div>
+                  <div className="row3">
+                    <Money label="Share capital" hint="e.g. 100 shares of £1 = 100" value={d.balanceSheet.shareCapital} onChange={(v) => setIn("balanceSheet", "shareCapital", v)} />
+                    <Money label="Reserves at the start of the year" hint="retained profits; a minus number for losses" value={d.balanceSheet.reservesBroughtForward} onChange={(v) => setIn("balanceSheet", "reservesBroughtForward", v)} />
+                    <Money label="Dividends paid this year" value={d.balanceSheet.dividendsPaid} onChange={(v) => setIn("balanceSheet", "dividendsPaid", v)} />
+                  </div>
+                  <Money label="Share capital not paid" hint="shares issued but not yet paid for — usually nothing" value={d.balanceSheet.shareCapitalNotPaid} onChange={(v) => setIn("balanceSheet", "shareCapitalNotPaid", v)} />
+                </>
+              )}
               <Whole label="Average number of employees" hint="including paid directors" value={d.balanceSheet.employees} onChange={(v) => setIn("balanceSheet", "employees", v)} />
               {(live.poa.closingLoans?.a75 ?? 0) > 0 && <p className="note">Also counted as owed to the company: {gbp(live.poa.closingLoans!.a75)} from director&apos;s loans (the director&apos;s loans step).</p>}
               {live.computed && live.acc && (() => {
@@ -558,6 +619,12 @@ export default function ReturnWizard(props: {
               )}
               {preview && preview.warnings.length > 0 && (
                 <div className="banner warn"><span>⚠</span><span><ul style={{ margin: 0, paddingLeft: 18 }}>{preview.warnings.map((p, i) => <li key={i}>{p}</li>)}</ul></span></div>
+              )}
+              {preview && d.dormant && d.ctNoticeReceived === false && (
+                <div className="banner info"><span>ℹ</span><span>
+                  <b>HMRC don&apos;t need a return for this dormant company</b>, as they haven&apos;t sent a notice to file one. The dormant accounts below
+                  go to Companies House. The nil return is ready if HMRC ask for it later — it can be tested now, and filed then.
+                </span></div>
               )}
               {preview && preview.parts.length > 0 && preview.filingDue && (
                 <p className="note" style={{ marginTop: 0 }}>
@@ -703,10 +770,12 @@ export default function ReturnWizard(props: {
                     </div>
                     {preview.parts.map((pt, n) => (
                       <div key={n}>
-                        <div className="row">
-                          <div className="what"><div className="t">Computation{many ? ` ${n + 1}` : ""}</div><div className="d">{longDate(pt.periodFrom)} to {longDate(pt.periodTo)}</div></div>
-                          {link(`computation-${n + 1}.html`, "View")}{link(`computation-${n + 1}.pdf`, "PDF")}{link(`computation-${n + 1}.xhtml`, "iXBRL")}
-                        </div>
+                        {pt.computationHtml && (
+                          <div className="row">
+                            <div className="what"><div className="t">Computation{many ? ` ${n + 1}` : ""}</div><div className="d">{longDate(pt.periodFrom)} to {longDate(pt.periodTo)}</div></div>
+                            {link(`computation-${n + 1}.html`, "View")}{link(`computation-${n + 1}.pdf`, "PDF")}{link(`computation-${n + 1}.xhtml`, "iXBRL")}
+                          </div>
+                        )}
                         <div className="row">
                           <div className="what"><div className="t">CT600{many ? ` ${n + 1}` : ""}</div><div className="d">Every box, as {pt.sent?.status === "accepted" ? "filed" : pt.sent?.status === "accepted-test" ? "accepted by the test service" : "it would be sent"}</div></div>
                           {link(`ct600-${n + 1}.html`, "View")}{link(`ct600-${n + 1}.pdf`, "PDF")}{link(`ct600-${n + 1}.xml`, "XML")}
@@ -721,14 +790,14 @@ export default function ReturnWizard(props: {
               {preview?.ok && (
                 <>
                   <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-                    {preview.parts.map((pt, n) => (
+                    {preview.parts.map((pt, n) => pt.computationHtml && (
                       <button key={n} type="button" className={`btn sm ${doc === n ? "" : "ghost"}`} onClick={() => setDoc(n)}>
                         {preview.long ? `Computation ${n + 1} (to ${shortDate(pt.periodTo)})` : "The computation"}
                       </button>
                     ))}
                     <button type="button" className={`btn sm ${doc === "accounts" ? "" : "ghost"}`} onClick={() => setDoc("accounts")}>The accounts</button>
                   </div>
-                  <iframe title={String(doc)} srcDoc={(doc === "accounts" ? preview.accountsHtml : preview.parts[doc]?.computationHtml) ?? ""} style={{ width: "100%", height: 760, border: "1px solid #ddd", background: "#fff" }} />
+                  <iframe title={String(doc)} srcDoc={(doc === "accounts" ? preview.accountsHtml : preview.parts[doc]?.computationHtml ?? preview.accountsHtml) ?? ""} style={{ width: "100%", height: 760, border: "1px solid #ddd", background: "#fff" }} />
                 </>
               )}
               {props.submissions.length > 0 && (

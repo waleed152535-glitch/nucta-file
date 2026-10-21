@@ -10,7 +10,7 @@
  */
 
 export const CH_API_BASE = process.env.CH_API_BASE ?? "https://api.company-information.service.gov.uk";
-export const chApiReady = (): boolean => Boolean(process.env.CH_API_KEY);
+export const chApiReady = (): boolean => Boolean((process.env.CH_API_KEY ?? "").trim());
 
 export interface ChSearchHit {
   number: string;
@@ -48,8 +48,29 @@ export function chNumber(raw: string): string {
   return /^\d{1,8}$/.test(n) ? n.padStart(8, "0") : n;
 }
 
+/**
+ * The key as it should be: copying it into the hosting settings can bring a
+ * space, a line break or quotation marks along with it, and Companies House
+ * then refuse the request as malformed (400) rather than unauthorised.
+ */
+const apiKey = (): string => (process.env.CH_API_KEY ?? "").trim().replace(/^["'`](.*)["'`]$/s, "$1").trim();
+
+/** Companies House's own words about a refusal, when they give any. */
+function theySaid(body: string): string {
+  try {
+    const j = JSON.parse(body) as { errors?: { error?: string; type?: string }[]; error?: string; message?: string };
+    const m = j.errors?.[0]?.error ?? j.error ?? j.message;
+    if (m) return ` Companies House said: "${String(m).slice(0, 140)}".`;
+  } catch { /* not JSON */ }
+  const text = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return text ? ` Companies House said: "${text.slice(0, 140)}".` : "";
+}
+
+/** The key described without showing it: its length and last four characters. */
+const keyHint = (k: string) => `The key in CH_API_KEY is ${k.length} characters long, ending "${k.slice(-4)}"${/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k) ? "" : " — Companies House keys are normally 36 characters, like 1a2b3c4d-1a2b-1a2b-1a2b-1a2b3c4d5e6f"}.`;
+
 async function get(path: string): Promise<ChResult<unknown>> {
-  const key = process.env.CH_API_KEY;
+  const key = apiKey();
   if (!key) return { ok: false, error: "Companies House search isn't set up: add CH_API_KEY to the hosting settings." };
   let res: Response;
   try {
@@ -60,15 +81,21 @@ async function get(path: string): Promise<ChResult<unknown>> {
   } catch (e) {
     return { ok: false, error: `Couldn't reach Companies House: ${String((e as Error)?.message ?? e).slice(0, 120)}` };
   }
-  if (res.status === 401) return { ok: false, error: "Companies House didn't accept the API key in CH_API_KEY. Check it was copied in full." };
+  if (res.ok) {
+    try {
+      return { ok: true, value: await res.json() };
+    } catch {
+      return { ok: false, error: "Companies House sent something that wasn't readable." };
+    }
+  }
+  const said = theySaid(await res.text().catch(() => ""));
+  if (res.status === 400) {
+    return { ok: false, error: `Companies House turned the request down as malformed (400).${said} This almost always means the API key isn't one they recognise: check it is a REST key from a Live application (not a Test one) and that CH_API_KEY holds only the key. ${keyHint(key)}` };
+  }
+  if (res.status === 401) return { ok: false, error: `Companies House didn't accept the API key (401).${said} Check it was copied in full, and that it's a REST key from a Live application. ${keyHint(key)}` };
   if (res.status === 404) return { ok: false, error: "Companies House have no company with that number." };
   if (res.status === 429) return { ok: false, error: "Too many lookups at once — Companies House allow 600 every five minutes. Try again shortly." };
-  if (!res.ok) return { ok: false, error: `Companies House answered ${res.status}. Try again in a moment.` };
-  try {
-    return { ok: true, value: await res.json() };
-  } catch {
-    return { ok: false, error: "Companies House sent something that wasn't readable." };
-  }
+  return { ok: false, error: `Companies House answered ${res.status}.${said} Try again in a moment.` };
 }
 
 type Raw = Record<string, unknown>;

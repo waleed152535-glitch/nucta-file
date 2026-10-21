@@ -9,7 +9,7 @@ import { prepareReturn, type PreparedReturn } from "./filing";
 import { companyNumberProblem } from "./companies-house";
 import { checkMicroAccounts } from "./accounts/micro";
 import {
-  normaliseReturnData, toCompanyReturnInput, toPeriodOfAccountInput, blankReturnData, SERVER_KEYS,
+  normaliseReturnData, toCompanyReturnInput, toPeriodOfAccountInput, toFigures, dormantBalanceSheet, blankReturnData, SERVER_KEYS,
   type ReturnData, type SentRecord,
 } from "./return-model";
 import { exceedsEighteenMonths, fromDay, toDay } from "./tax/dates";
@@ -211,7 +211,7 @@ function toDeadlineReturn(r: ReturnRowDb) {
     const poa = computePeriodOfAccount(toPeriodOfAccountInput(r.periodStart, r.periodEnd, d));
     if (poa.parts.length) taxByPart = poa.parts.map((x) => ({ to: x.to, tax: Math.round((x.result.taxChargeable + (x.loans?.a80 ?? 0)) * 100) / 100 }));
   } catch { /* figures not complete enough yet */ }
-  return { id: r.id, companyId: r.companyId, periodStart: r.periodStart, periodEnd: r.periodEnd, status: r.status, amendment: Boolean(d.amends), taxByPart };
+  return { id: r.id, companyId: r.companyId, periodStart: r.periodStart, periodEnd: r.periodEnd, status: r.status, amendment: Boolean(d.amends), taxByPart, ctNotRequired: d.dormant && d.ctNoticeReceived === false };
 }
 
 export interface DashboardData {
@@ -291,12 +291,16 @@ export async function startReturn(companyId: string, periodStart: string, period
       // For accounts longer than 12 months, what carries forward is what the second period ends with.
       const poa = computePeriodOfAccount(toPeriodOfAccountInput(before.periodStart, before.periodEnd, prev));
       const last = poa.parts[poa.parts.length - 1];
-      const carry = last?.result.carryForward ?? { mainPool: prev.mainPoolBroughtForward, specialPool: prev.specialPoolBroughtForward, tradingLosses: prev.tradingLossesBroughtForward };
+      // A dormant year has no trade, so pools and losses pass through it unchanged.
+      const unchanged = { mainPool: prev.mainPoolBroughtForward, specialPool: prev.specialPoolBroughtForward, tradingLosses: prev.tradingLossesBroughtForward };
+      const carry = prev.dormant ? unchanged : last?.result.carryForward ?? unchanged;
+      // What last year's accounts actually showed: a dormant year's profit and loss is nothing.
+      const prevPl = toFigures(before.periodStart, before.periodEnd, prev).pl;
+      const b = prev.dormant ? dormantBalanceSheet(prev.balanceSheet) : prev.balanceSheet;
       const acc = checkMicroAccounts({
         companyName: "", companyNo: "", periodFrom: before.periodStart, periodTo: before.periodEnd, principalActivities: prev.activity,
-        pl: prev.pl, taxCharge: poa.corporationTax, balanceSheet: prev.balanceSheet, director: prev.director, approvedOn: prev.approvedOn,
+        pl: prevPl, taxCharge: poa.corporationTax, balanceSheet: b, director: prev.director, approvedOn: prev.approvedOn,
       });
-      const b = prev.balanceSheet;
       const prevLoans = poa.closingLoans;
       Object.assign(data, {
         // Each loan account opens where it closed; repayments made after last
@@ -310,6 +314,7 @@ export async function startReturn(companyId: string, periodStart: string, period
           };
         }),
         activity: prev.activity,
+        dormant: prev.dormant, everTraded: prev.everTraded || !prev.dormant,
         scope: prev.scope,
         associatedCompanies: prev.associatedCompanies,
         mainPoolBroughtForward: carry.mainPool,
@@ -318,12 +323,16 @@ export async function startReturn(companyId: string, periodStart: string, period
         director: prev.director,
         declarantName: prev.declarantName,
         declarantStatus: prev.declarantStatus,
-        balanceSheet: { ...data.balanceSheet, shareCapital: b.shareCapital, shareCapitalNotPaid: b.shareCapitalNotPaid, reservesBroughtForward: acc.reservesCarriedForward, employees: b.employees },
+        balanceSheet: {
+          ...data.balanceSheet, shareCapital: b.shareCapital, shareCapitalNotPaid: b.shareCapitalNotPaid, reservesBroughtForward: acc.reservesCarriedForward, employees: b.employees,
+          // A dormant company's balance sheet doesn't move from one year to the next.
+          ...(prev.dormant ? { cash: b.cash, debtors: b.debtors, creditorsWithin: b.creditorsWithin, owedToDirectors: b.owedToDirectors } : {}),
+        },
         prior: {
           from: before.periodStart, to: before.periodEnd,
           figures: {
-            turnover: prev.pl.turnover, otherIncome: prev.pl.otherIncome + prev.pl.interestReceived, rawMaterials: prev.pl.costOfSales,
-            staffCosts: prev.pl.staffCosts, depreciation: prev.pl.depreciation, otherCharges: prev.pl.otherCharges,
+            turnover: prevPl.turnover, otherIncome: prevPl.otherIncome + prevPl.interestReceived, rawMaterials: prevPl.costOfSales,
+            staffCosts: prevPl.staffCosts, depreciation: prevPl.depreciation, otherCharges: prevPl.otherCharges,
             profitBeforeTax: acc.profitBeforeTax, tax: Math.round(poa.corporationTax),
             shareCapitalNotPaid: b.shareCapitalNotPaid, fixedAssets: b.fixedAssets, currentAssets: b.stock + b.debtors + b.cash,
             prepayments: b.prepayments, creditorsWithin: b.creditorsWithin + b.owedToDirectors + Math.round(b.corporationTaxOwed ?? poa.corporationTax),

@@ -18,7 +18,8 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
   return (
     <article className="read">
       <div className="wrap">
-        <p className="small" style={{ marginBottom: 18 }}><Link href="/guides">Guides</Link></p>
+        <p className="crumb"><Link href="/guides">All guides</Link></p>
+        <div className="paper">
         <h1>{g.title}</h1>
         <p className="meta">Updated {updated}</p>
         <p style={{ fontSize: 19 }}>{g.summary}</p>
@@ -31,9 +32,10 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
         <div className="sources">
           <b>Sources</b>
           <ul>{g.sources.map((s) => <li key={s.url}><a href={s.url} rel="noopener" target="_blank">{s.label}</a></li>)}</ul>
-          <p className="small">This guide explains the general rules. It isn&apos;t advice about a particular company — if a situation isn&apos;t straightforward, ask an accountant.</p>
+          <p className="small">This guide explains the general rules. It isn&apos;t advice about a particular company. If a situation isn&apos;t straightforward, ask an accountant.</p>
         </div>
-        <p style={{ marginTop: 32 }}><Link href="/sign-up" className="s-btn">Prepare a return with Nucta File</Link></p>
+        </div>
+        <p className="after"><Link href="/sign-up" className="s-btn big">Prepare a return with Nucta File</Link></p>
       </div>
     </article>
   );

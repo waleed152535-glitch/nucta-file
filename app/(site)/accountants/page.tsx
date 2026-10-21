@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DashPreview from "../_parts/DashPreview";
 import { PRICES, gbp } from "@/lib/site";
 
 export const metadata = { title: "For accountants", description: "Nucta File for accountancy practices and formation agents: every client's deadlines, approval packs and filing as agent." };
@@ -6,12 +7,21 @@ export const metadata = { title: "For accountants", description: "Nucta File for
 export default function Accountants() {
   return (
     <>
-      <section className="s-sec">
+      <section className="page-top">
+        <div className="wrap practice">
+          <div>
+            <h1>Every client&apos;s return, in one list</h1>
+            <p className="intro">For accountancy practices and company formation agents looking after small companies, including directors who live outside the UK.</p>
+            <div className="ctas"><Link href="/sign-up" className="s-btn big">Create a practice account</Link><Link href="/pricing" className="s-btn quiet big">Pricing</Link></div>
+          </div>
+          <DashPreview />
+        </div>
+      </section>
+      <section className="s-sec tight">
         <div className="wrap split">
           <div>
-            <h1 style={{ fontSize: "clamp(34px,4.6vw,48px)" }}>Every client&apos;s return, in one list</h1>
-            <p className="intro">For accountancy practices and company formation agents looking after small companies — including directors who live outside the UK.</p>
-            <p style={{ marginTop: 24 }}><Link href="/sign-up" className="s-btn big">Create a practice account</Link></p>
+            <h2>What a practice gets</h2>
+            <p className="intro">The work of a year end, without the spreadsheet of deadlines beside it.</p>
           </div>
           <ul className="ticks">
             <li><b>A dashboard of deadlines.</b> Returns, Corporation Tax payments and Companies House accounts for every client, overdue first, with Companies House&apos;s own dates once a company is looked up.</li>
@@ -31,7 +41,7 @@ export default function Accountants() {
             <li><span className="n">3</span><h3>Send for approval</h3><p>Download the approval pack and send it to the director.</p></li>
             <li><span className="n">4</span><h3>File</h3><p>Once it&apos;s signed, file the return. HMRC&apos;s receipt is kept with it.</p></li>
           </ol>
-          <p className="small" style={{ marginTop: 28 }}>Practices pay {gbp(PRICES.practice.perReturn)} per return filed ({gbp(PRICES.practice.dormant)} for a dormant company). No subscription. <Link href="/pricing">Pricing</Link></p>
+          <p className="small" style={{ marginTop: 32 }}>Practices pay {gbp(PRICES.practice.perReturn)} per return filed ({gbp(PRICES.practice.dormant)} for a dormant company). No subscription. <Link href="/pricing">Pricing</Link></p>
         </div>
       </section>
     </>

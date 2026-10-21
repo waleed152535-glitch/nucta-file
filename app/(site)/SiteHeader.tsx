@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import Mark from "./_parts/Mark";
 
 const NAV = [
   { href: "/features", label: "Features" },
@@ -20,7 +21,7 @@ export default function SiteHeader() {
   return (
     <header className="s-head">
       <div className="wrap">
-        <Link href="/" className="s-brand" aria-label="Nucta File home"><span className="s-mark" aria-hidden />Nucta File</Link>
+        <Link href="/" className="s-brand" aria-label="Nucta File home"><Mark />Nucta File</Link>
         <nav className="s-nav" aria-label="Main">
           {NAV.map((n) => <Link key={n.href} href={n.href} aria-current={here(n.href)}>{n.label}</Link>)}
         </nav>

@@ -5,10 +5,10 @@ export const metadata = { title: "Pricing", description: "Pay per return when yo
 
 export default function Pricing() {
   return (
-    <section className="s-sec">
+    <section className="page-top" style={{ paddingBottom: 120 }}>
       <div className="wrap">
-        <h1 style={{ fontSize: "clamp(34px,4.6vw,48px)" }}>Pay for a return when you file it</h1>
-        <p className="intro">No subscription. Preparing a return, checking it and sending it to HMRC&apos;s test service are free — you pay only for a return filed with HMRC.</p>
+        <h1>Pay for a return when you file it</h1>
+        <p className="intro">No subscription. Preparing a return, checking it and sending it to HMRC&apos;s test service are free: you pay only for a return filed with HMRC.</p>
         <div className="plans">
           <div className="plan now">
             <h3>Now, while in testing</h3>
@@ -50,7 +50,7 @@ export default function Pricing() {
             <Link href="/sign-up" className="s-btn quiet">Create a practice account</Link>
           </div>
         </div>
-        <p className="small" style={{ marginTop: 18 }}>Accounts longer than 12 months make two returns and are charged as one. Filing with Companies House will be included when it opens.</p>
+        <p className="small" style={{ marginTop: 22 }}>Accounts longer than 12 months make two returns and are charged as one. Filing with Companies House will be included when it opens.</p>
       </div>
     </section>
   );

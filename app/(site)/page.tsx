@@ -1,135 +1,131 @@
 import Link from "next/link";
-import { PRICES, gbp } from "@/lib/site";
+import Film from "./_parts/Film";
+import TaxEngine from "./_parts/TaxEngine";
+import DashPreview from "./_parts/DashPreview";
+import { PRICES, SITE, gbp } from "@/lib/site";
 
 export const metadata = { title: { absolute: "Nucta File — Company Tax Returns and accounts for small companies" } };
 
-/** An example company's return, typeset as the form it becomes. Box numbers are HMRC's. */
-const ROWS: { box: string; label: string; amount: string; total?: boolean }[] = [
-  { box: "145", label: "Turnover", amount: "182,400" },
-  { box: "155", label: "Trading profits", amount: "26,690" },
-  { box: "170", label: "Bank interest", amount: "140" },
-  { box: "315", label: "Profits chargeable to Corporation Tax", amount: "26,830" },
-  { box: "345", label: "Tax at 19%", amount: "5,097.70" },
-  { box: "510", label: "Tax chargeable", amount: "5,097.70", total: true },
+/** What Nucta File works out, keyed by the CT600 box it ends up in where there is one. */
+const WORKS_OUT: { ref: string; box?: boolean; title: string; text: string }[] = [
+  { ref: "430", box: true, title: "Corporation Tax at 19% and 25%", text: "The small profits rate, the main rate and marginal relief, with the limits shared across associated companies, cut for a short period and split when the year crosses 1 April." },
+  { ref: "Accounts", title: "Micro-entity accounts in iXBRL", text: "Profit and loss, balance sheet and notes, tagged for HMRC and Companies House, with last year's figures alongside and the balance sheet checked to the pound." },
+  { ref: "690", box: true, title: "Capital allowances", text: "Annual Investment Allowance, full expensing, electric cars, the main and special rate pools, and the 2026 change to the writing down rate." },
+  { ref: "A80", box: true, title: "Director's loans", text: "The CT600A page and the section 455 charge, with relief for repayments within nine months and the higher rate on loans from 6 April 2026." },
+  { ref: "50", box: true, title: "First accounts over 12 months", text: "Split into two returns automatically: profit by days, purchases by date, each period with its own limits, tax and deadline." },
+  { ref: "160", box: true, title: "Losses and donations", text: "Trading losses carried forward and used against later profits, and qualifying charitable donations relieved." },
+  { ref: "Dormant", title: "Dormant companies", text: "Dormant accounts and, when HMRC send a notice, a nil return, with the figures steps skipped." },
+  { ref: "Amend", title: "Amended returns", text: "Change an accepted return and send it again as an amendment, up to 12 months after the filing deadline." },
 ];
+
+const Icon = ({ d }: { d: React.ReactNode }) => <svg viewBox="0 0 24 24" aria-hidden>{d}</svg>;
 
 export default function Home() {
   return (
     <>
-      <section className="s-hero">
+      <Film />
+
+      <section className="deadline" aria-labelledby="deadline-h">
         <div className="wrap">
+          <h2 id="deadline-h" className="date">31 March<span>2026</span></h2>
           <div>
-            <h1>Accounts in. Company Tax Return out.</h1>
-            <p className="lead">Enter a year&apos;s figures once. Nucta File prepares the accounts, works out the Corporation Tax and files the CT600 to HMRC with the accounts and computation attached.</p>
-            <div className="ctas">
-              <Link href="/sign-up" className="s-btn big">Create your account</Link>
-              <a href="#how" className="s-btn quiet big">See how it works</a>
-            </div>
-            <p className="s-status">In final testing with HMRC. You can prepare and check returns now; live filing opens as soon as HMRC recognise Nucta File.</p>
+            <p><b>HMRC&apos;s free Company Tax Return service closed that day. Every company now files through software.</b></p>
+            <p>The return still goes with the company&apos;s accounts and a tax computation, both in iXBRL. Nucta File prepares all three from one set of figures, for one company or a whole client list.</p>
+            <p><Link href="/guides/hmrc-online-filing-closed">What the change means for your company</Link></p>
           </div>
-          <div>
-            <div className="ct" role="img" aria-label="An example Company Tax Return: trading profits £26,690, tax chargeable £5,097.70, accepted by HMRC's test service.">
-              <div className="ct-top"><b>Company Tax Return — CT600</b><span>Example</span></div>
-              <div className="ct-who"><b>Brightshelf Trading Ltd</b> &nbsp;1 April 2024 to 31 March 2025</div>
-              {ROWS.map((r, i) => (
-                <div key={r.box} className={`ct-row${r.total ? " total" : ""}`}>
-                  <span className="ct-box">{r.box}</span>
-                  <span className="ct-label">{r.label}</span>
-                  <span className="ct-amt" style={{ ["--i" as string]: i }}>£{r.amount}</span>
-                </div>
-              ))}
-              <div className="ct-receipt" style={{ ["--n" as string]: ROWS.length }}>
-                <span className="ct-tick" aria-hidden>✓</span>
-                <span>Accepted by HMRC&apos;s test service<small>with the iXBRL accounts and tax computation attached</small></span>
+        </div>
+      </section>
+
+      <section className="s-sec" aria-labelledby="engine-h">
+        <div className="wrap">
+          <h2 id="engine-h">Try the tax engine</h2>
+          <p className="intro">Move the profit and watch the Corporation Tax work itself out: the small profits rate, marginal relief and the main rate, with the limits cut for a short period or shared with associated companies.</p>
+          <TaxEngine />
+        </div>
+      </section>
+
+      <section className="s-sec alt" aria-labelledby="works-h">
+        <div className="wrap">
+          <h2 id="works-h">What Nucta File works out for you</h2>
+          <p className="intro">Each rule is HMRC&apos;s, applied the way HMRC check it. Where a company is outside what Nucta File handles, it says so at the start rather than guessing.</p>
+          <div className="index">
+            {WORKS_OUT.map((w) => (
+              <div className="item" key={w.title}>
+                <span className="ref">{w.box ? <b title={`CT600 box ${w.ref}`}>{w.ref}</b> : w.ref}</span>
+                <h3>{w.title}</h3>
+                <p>{w.text}</p>
               </div>
+            ))}
+          </div>
+          <p style={{ marginTop: 36 }}><Link href="/features" className="s-btn quiet">Everything Nucta File does</Link></p>
+        </div>
+      </section>
+
+      <section className="s-sec" aria-labelledby="practice-h">
+        <div className="wrap practice">
+          <div>
+            <h2 id="practice-h">Every client&apos;s deadline, soonest first</h2>
+            <p className="intro">For accountants and formation agents looking after small companies, including directors who live outside the UK.</p>
+            <ul className="ticks">
+              <li>Returns, Corporation Tax and Companies House accounts for every client, overdue ones first.</li>
+              <li>An approval pack per client: one PDF with the accounts, computation, CT600 and a page to sign.</li>
+              <li>Last year&apos;s closing figures carried into this year by themselves.</li>
+              <li>File as the client&apos;s agent with your own HMRC sign-in.</li>
+            </ul>
+            <p style={{ marginTop: 34 }}><Link href="/accountants" className="s-btn quiet">How it works for practices</Link></p>
+          </div>
+          <DashPreview />
+        </div>
+      </section>
+
+      <section className="s-sec alt" aria-labelledby="safe-h">
+        <div className="wrap">
+          <h2 id="safe-h">Careful with what matters</h2>
+          <p className="intro">A tax return is evidence. Nucta File treats it that way.</p>
+          <div className="safe">
+            <div>
+              <Icon d={<><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>} />
+              <h3>Your HMRC password is never stored</h3>
+              <p>It&apos;s typed in at the moment of filing, used once and forgotten.</p>
             </div>
-            <p className="ct-note">The numbers in the boxes are HMRC&apos;s own box numbers on the CT600. Every figure comes from the same calculation as the computation sent with it.</p>
+            <div>
+              <Icon d={<><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.6 2.6L16 9.5" /></>} />
+              <h3>Tested before it&apos;s filed</h3>
+              <p>A return goes to HMRC for real only once the same figures have passed HMRC&apos;s test service.</p>
+            </div>
+            <div>
+              <Icon d={<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6M9 16h3" /></>} />
+              <h3>Every receipt kept</h3>
+              <p>What was sent and what HMRC sent back are stored with the return, so the documents always show exactly what was filed.</p>
+            </div>
+            <div>
+              <Icon d={<><path d="M12 4v16M7 20h10M4 8h16" /><path d="M4 8l-2.5 6a2.5 2.5 0 0 0 5 0zM20 8l-2.5 6a2.5 2.5 0 0 0 5 0z" /></>} />
+              <h3>Figures that add up</h3>
+              <p>The balance sheet has to balance and every box agrees with HMRC&apos;s rules before anything can be sent.</p>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="s-band" aria-label="HMRC's free filing service has closed">
+      <section className="s-sec" aria-labelledby="price-h">
         <div className="wrap">
-          <div className="date">31 March 2026<span>HMRC&apos;s free filing service closed</span></div>
-          <div>
-            <p><b>Companies can no longer file their Company Tax Return through HMRC&apos;s own website.</b> Since 1 April 2026 every return goes through commercial software, with the accounts and the tax computation in iXBRL.</p>
-            <p>Nucta File is built for exactly that, for one company or a whole client list. <Link href="/guides/hmrc-online-filing-closed" style={{ color: "#fff" }}>What the change means</Link></p>
+          <h2 id="price-h">Pay for a return when you file it</h2>
+          <p className="intro">No subscription. Preparing, checking and testing returns cost nothing, and nothing is charged until live filing opens.</p>
+          <div className="price-row">
+            <div><b>£0</b><p>While Nucta File is in testing: prepare, check and test as many returns as you like.</p></div>
+            <div><b>{gbp(PRICES.company.perReturn)}</b><p>Per return, for a company filing its own. {gbp(PRICES.company.dormant)} for a dormant company.</p></div>
+            <div><b>{gbp(PRICES.practice.perReturn)}</b><p>Per return, for practices filing for clients. {gbp(PRICES.practice.dormant)} for a dormant company.</p></div>
           </div>
+          <p style={{ marginTop: 28 }}><Link href="/pricing">See pricing in full</Link></p>
         </div>
       </section>
 
-      <section className="s-sec" id="how">
+      <section className="s-sec alt" aria-labelledby="faq-h">
         <div className="wrap">
-          <h2>From the bookkeeping to HMRC in four steps</h2>
-          <p className="intro">The questions are the ones an accountant would ask, in plain words. Nothing goes to HMRC until you&apos;ve seen every document.</p>
-          <ol className="steps">
-            <li><span className="n">1</span><h3>Add the company</h3><p>Search Companies House by name or number. The address, year end and deadlines fill in themselves.</p></li>
-            <li><span className="n">2</span><h3>Enter the year&apos;s figures</h3><p>Profit and loss, equipment bought and sold, director&apos;s loans and the balance sheet, checked as you type.</p></li>
-            <li><span className="n">3</span><h3>Check the documents</h3><p>The accounts, the computation and the CT600, with an approval pack for the director to sign.</p></li>
-            <li><span className="n">4</span><h3>File with HMRC</h3><p>Tested by HMRC&apos;s test service first, then filed with the company&apos;s sign-in. HMRC&apos;s receipt is kept with the return.</p></li>
-          </ol>
-        </div>
-      </section>
-
-      <section className="s-sec alt">
-        <div className="wrap">
-          <h2>What Nucta File works out for you</h2>
-          <p className="intro">Each rule is HMRC&apos;s, applied the way HMRC check it — and where a company is outside what Nucta File handles, it says so rather than guessing.</p>
-          <div className="handles">
-            <div><h3>Corporation Tax at 19% and 25%<span className="box">430</span></h3><p>The small profits rate, the main rate and marginal relief, with the limits shared across associated companies and split when the year crosses 1 April.</p></div>
-            <div><h3>Micro-entity accounts in iXBRL</h3><p>Profit and loss, balance sheet and notes, tagged for HMRC and Companies House, with last year&apos;s figures alongside.</p></div>
-            <div><h3>Capital allowances<span className="box">690</span></h3><p>Annual Investment Allowance, full expensing, electric cars, the main and special rate pools and the 2026 change to the writing down rate.</p></div>
-            <div><h3>Director&apos;s loans<span className="box">A80</span></h3><p>The CT600A page and the section 455 charge, with relief for repayments within nine months and the 2026 rate change.</p></div>
-            <div><h3>First accounts over 12 months</h3><p>Split into two returns automatically: profit by days, purchases by date, each period with its own limits and deadlines.</p></div>
-            <div><h3>Dormant companies</h3><p>Dormant accounts and, if HMRC ask for one, a nil return — with the figures steps skipped.</p></div>
-            <div><h3>Losses and donations<span className="box">160</span></h3><p>Trading losses carried forward and used, and qualifying charitable donations relieved.</p></div>
-            <div><h3>Amendments</h3><p>Change an accepted return and send it again as an amendment, up to 12 months after the filing deadline.</p></div>
-          </div>
-          <p style={{ marginTop: 28 }}><Link href="/features">Everything Nucta File does</Link></p>
-        </div>
-      </section>
-
-      <section className="s-sec">
-        <div className="wrap split">
-          <div>
-            <h2>Careful with what matters</h2>
-            <p className="intro">A tax return is evidence. Nucta File treats it that way.</p>
-          </div>
-          <ul className="ticks">
-            <li><b>Your HMRC password is never stored.</b> It&apos;s typed in at the moment of filing, used once, and forgotten.</li>
-            <li><b>Tested before it&apos;s filed.</b> A return can only go to HMRC for real once the same figures have passed HMRC&apos;s test service.</li>
-            <li><b>Every receipt kept.</b> What was sent and what HMRC sent back are stored with the return, and the documents always show exactly what was filed.</li>
-            <li><b>Figures that add up.</b> The balance sheet has to balance and every box agrees with HMRC&apos;s rules before anything can be sent.</li>
-          </ul>
-        </div>
-      </section>
-
-      <section className="s-sec alt">
-        <div className="wrap split">
-          <div>
-            <h2>For accountants and formation agents</h2>
-            <p className="intro">Every client on one dashboard, soonest deadline first.</p>
-            <p><Link href="/accountants" className="s-btn quiet">How it works for practices</Link></p>
-          </div>
-          <ul className="ticks">
-            <li>Deadlines for every client: returns, Corporation Tax and Companies House accounts, with overdue ones first.</li>
-            <li>An approval pack for each client: one PDF with the accounts, computation, CT600 and a page to sign.</li>
-            <li>Last year&apos;s closing figures carried into this year automatically.</li>
-            <li>File as the client&apos;s agent with your own HMRC agent sign-in.</li>
-          </ul>
-        </div>
-      </section>
-
-      <section className="s-sec">
-        <div className="wrap">
-          <h2>Pay for a return when you file it</h2>
-          <p className="intro">{gbp(PRICES.company.perReturn)} per return for a company filing its own, {gbp(PRICES.practice.perReturn)} per return for practices. Preparing, checking and testing are free, and nothing is charged until live filing opens.</p>
-          <p><Link href="/pricing">See pricing</Link></p>
-
-          <h2 style={{ marginTop: 56 }}>Questions</h2>
+          <h2 id="faq-h">Questions</h2>
           <div className="faq">
-            <details><summary>Is Nucta File recognised by HMRC?</summary><p>Not yet. Nucta File is registered with HMRC as a software developer (vendor 9754), and its returns pass HMRC&apos;s test service — including returns with director&apos;s loans, long periods, dormant companies and amendments. Recognition is the last step. Until then you can prepare and check returns; filing opens the day HMRC confirm.</p></details>
-            <details><summary>Which companies can use it?</summary><p>UK limited companies with one trade, filing micro-entity accounts — most small companies — and dormant companies. Groups, research and development relief, rental income and companies that sold land or shares aren&apos;t handled yet; Nucta File tells you at the start if a company is one of them.</p></details>
+            <details><summary>Is Nucta File recognised by HMRC?</summary><p>Not yet. Nucta File is registered with HMRC as a software developer (vendor {SITE.vendorId}), and its returns pass HMRC&apos;s test service, including returns with director&apos;s loans, long periods, dormant companies and amendments. Recognition is the last step. Until then you can prepare and test returns; filing opens the day HMRC confirm.</p></details>
+            <details><summary>Which companies can use it?</summary><p>UK limited companies with one trade, filing micro-entity accounts, which is most small companies, and dormant companies. Groups, research and development relief, rental income and companies that sold land or shares aren&apos;t handled yet; Nucta File tells you at the start if a company is one of them.</p></details>
             <details><summary>What does HMRC need with the return?</summary><p>The CT600, the company&apos;s accounts and a tax computation, both in iXBRL. Nucta File prepares all three from the figures you enter and sends them together.</p></details>
             <details><summary>Does it file the accounts with Companies House?</summary><p>Filing with Companies House is built and waiting for Companies House&apos;s test approval. Until then, download the accounts from Nucta File and file them as you do now.</p></details>
             <details><summary>What if a return needs correcting?</summary><p>Open it and press Amend. You get a copy to change, sent to HMRC marked as an amendment, which HMRC put in place of the original. Amendments can be made up to 12 months after the filing deadline.</p></details>
@@ -137,12 +133,13 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="s-band" aria-label="Get started">
+      <section className="closing" aria-labelledby="closing-h">
         <div className="wrap">
-          <div className="date">Start now<span>Free until live filing opens</span></div>
-          <div>
-            <p><b>Create an account and prepare your first return today.</b> When HMRC recognise Nucta File, the same return is ready to file.</p>
-            <p><Link href="/sign-up" className="s-btn">Create your account</Link></p>
+          <h2 id="closing-h">Your next return, ready before the deadline.</h2>
+          <p>Create an account and prepare a return today. When HMRC recognise Nucta File, the same return is ready to file.</p>
+          <div className="ctas">
+            <Link href="/sign-up" className="s-btn big">Create your account</Link>
+            <a href={`mailto:${SITE.email}`} className="s-btn quiet big">Email us</a>
           </div>
         </div>
       </section>

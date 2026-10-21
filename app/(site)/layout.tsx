@@ -3,9 +3,11 @@ import "@fontsource/public-sans/500.css";
 import "@fontsource/public-sans/600.css";
 import "@fontsource/public-sans/700.css";
 import "@fontsource/public-sans/800.css";
+import "@fontsource-variable/bricolage-grotesque/opsz.css";
 import "./site.css";
 import Link from "next/link";
 import SiteHeader from "./SiteHeader";
+import Mark from "./_parts/Mark";
 import { SITE } from "@/lib/site";
 
 /** The public website: everything a visitor sees before signing in. */
@@ -17,7 +19,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <footer className="s-foot">
         <div className="wrap">
           <div>
-            <h4>{SITE.product}</h4>
+            <div className="f-brand"><Mark size={26} />{SITE.product}</div>
             <p style={{ margin: 0, maxWidth: "34ch" }}>Company Tax Returns and accounts for small UK companies, and the accountants who look after them.</p>
           </div>
           <div>

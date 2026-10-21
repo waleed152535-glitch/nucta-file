@@ -6,6 +6,7 @@ export default function Contact() {
   return (
     <section className="read">
       <div className="wrap">
+        <div className="paper">
         <h1>Contact</h1>
         <p style={{ fontSize: 19 }}>Email <a href={`mailto:${SITE.email}`}>{SITE.email}</a> and we&apos;ll reply within one working day.</p>
         <h2>When you write</h2>
@@ -14,6 +15,7 @@ export default function Contact() {
           <li>For a password reset, write from the email address you signed up with.</li>
         </ul>
         <p className="small">{SITE.company}{SITE.registeredOffice ? `, ${SITE.registeredOffice}` : ""}. <a href={SITE.parentSite}>{SITE.parentSite.replace("https://", "")}</a></p>
+        </div>
       </div>
     </section>
   );

@@ -6,6 +6,7 @@ export default function Terms() {
   return (
     <section className="read">
       <div className="wrap">
+        <div className="paper">
         <h1>Terms of use</h1>
         <p className="meta">Last updated 21 October 2026</p>
         <p>These terms are between you and {SITE.company}{SITE.companyNumber ? ` (company number ${SITE.companyNumber})` : ""}, which provides {SITE.product}. By creating an account you agree to them.</p>
@@ -37,6 +38,7 @@ export default function Terms() {
         <h2>Law</h2>
         <p>These terms are governed by the law of England and Wales, and the courts of England and Wales deal with any dispute.</p>
         <p>Questions about these terms: <a href={`mailto:${SITE.email}`}>{SITE.email}</a>.</p>
+        </div>
       </div>
     </section>
   );

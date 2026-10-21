@@ -48,28 +48,29 @@ const GROUPS: { heading: string; intro: string; items: [string, string][] }[] = 
 export default function Features() {
   return (
     <>
-      <section className="s-sec" style={{ paddingBottom: 24 }}>
+      <section className="page-top">
         <div className="wrap">
-          <h1 style={{ fontSize: "clamp(34px,4.6vw,48px)" }}>Everything a small company&apos;s return needs</h1>
-          <p className="intro">From the year&apos;s figures to the documents HMRC receive, in one place.</p>
+          <h1>Everything a small company&apos;s return needs</h1>
+          <p className="intro">From the year&apos;s figures to the documents HMRC receive, in one place, with every rule written down and checked.</p>
         </div>
       </section>
-      {GROUPS.map((g, i) => (
-        <section key={g.heading} className={`s-sec${i % 2 ? " alt" : ""}`} style={{ paddingTop: 48, paddingBottom: 48 }}>
-          <div className="wrap">
-            <h2>{g.heading}</h2>
-            <p className="intro">{g.intro}</p>
-            <div className="handles">
-              {g.items.map(([h, p]) => <div key={h}><h3>{h}</h3><p>{p}</p></div>)}
+      <section style={{ paddingBottom: 40 }}>
+        <div className="wrap groups">
+          {GROUPS.map((g) => (
+            <div className="group" key={g.heading}>
+              <div><h2>{g.heading}</h2><p className="intro">{g.intro}</p></div>
+              <dl>{g.items.map(([h, p]) => <div key={h}><dt>{h}</dt><dd>{p}</dd></div>)}</dl>
             </div>
-          </div>
-        </section>
-      ))}
-      <section className="s-sec">
+          ))}
+        </div>
+      </section>
+      <section className="s-sec tight" style={{ paddingTop: 20 }}>
         <div className="wrap">
-          <h2>Not handled yet</h2>
-          <p className="intro">Groups and group relief, research and development and creative reliefs, chargeable gains, rental and other investment income, overseas income, and FRS 102 small-company accounts. If a company has any of these, Nucta File says so at the start rather than preparing a return that would be wrong.</p>
-          <p><Link href="/sign-up" className="s-btn">Create your account</Link></p>
+          <div className="not-yet">
+            <h2>Not handled yet</h2>
+            <p>Groups and group relief, research and development and creative reliefs, chargeable gains, rental and other investment income, overseas income, and FRS 102 small-company accounts. If a company has any of these, Nucta File says so at the start rather than preparing a return that would be wrong.</p>
+            <p style={{ marginTop: 24, marginBottom: 0 }}><Link href="/sign-up" className="s-btn">Create your account</Link></p>
+          </div>
         </div>
       </section>
     </>

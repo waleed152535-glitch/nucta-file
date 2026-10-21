@@ -7,6 +7,7 @@ export default function About() {
   return (
     <section className="read">
       <div className="wrap">
+        <div className="paper">
         <h1>About Nucta File</h1>
         <p style={{ fontSize: 19 }}>Nucta File is made by {SITE.company}, a UK company formation and compliance business that looks after small companies — many of them run by directors who live outside the UK.</p>
         <h2>Why we built it</h2>
@@ -16,6 +17,7 @@ export default function About() {
         <h2>How we work</h2>
         <p>Every rule Nucta File applies is written down with where it comes from, and every return is checked against HMRC&apos;s own schema and business rules before it&apos;s sent. Where a company is outside what Nucta File handles, it says so.</p>
         <p style={{ marginTop: 28 }}><Link href="/contact">Get in touch</Link></p>
+        </div>
       </div>
     </section>
   );

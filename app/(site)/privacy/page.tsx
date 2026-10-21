@@ -6,6 +6,7 @@ export default function Privacy() {
   return (
     <section className="read">
       <div className="wrap">
+        <div className="paper">
         <h1>Privacy notice</h1>
         <p className="meta">Last updated 21 October 2026</p>
         <p>This notice explains what information {SITE.product} keeps, why, and your rights. {SITE.company} (&ldquo;we&rdquo;) is the controller of the personal information described here{SITE.companyNumber ? ` (company number ${SITE.companyNumber})` : ""}. Contact us at <a href={`mailto:${SITE.email}`}>{SITE.email}</a>.</p>
@@ -44,6 +45,7 @@ export default function Privacy() {
 
         <h2>Where it&apos;s held</h2>
         <p>Our providers may hold information outside the UK. Where they do, it&apos;s protected by the safeguards UK data protection law requires.</p>
+        </div>
       </div>
     </section>
   );

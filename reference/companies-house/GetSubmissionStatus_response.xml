@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<GovTalkMessage xsi:schemaLocation="http://www.govtalk.gov.uk/CM/envelope http://xmlgw.companieshouse.gov.uk/v2-1/schema/Egov_ch-v2-0.xsd" xmlns="http://www.govtalk.gov.uk/CM/envelope" xmlns:dsig="http://www.w3.org/2000/09/xmldsig#" xmlns:gt="http://www.govtalk.gov.uk/schemas/govtalk/core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" >
+  <EnvelopeVersion>1.0</EnvelopeVersion>
+  <Header>
+    <MessageDetails>
+      <Class>GetSubmissionStatus</Class>
+      <Qualifier>request</Qualifier>
+      <TransactionID>1</TransactionID>
+     <GatewayTest>1</GatewayTest>
+   </MessageDetails>
+    <SenderDetails>
+      <IDAuthentication>
+        <SenderID>???????????</SenderID>
+        <Authentication>
+          <Method>clear</Method>
+          <Value>????????????</Value>
+        </Authentication>
+      </IDAuthentication>
+   </SenderDetails>
+  </Header>
+  <GovTalkDetails>
+    <Keys/>
+  </GovTalkDetails>
+  <Body>
+<SubmissionStatus>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Random Test mode rejection</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>ACCEPT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>Accepted submission</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>ACCEPT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <IncorporationDetails>
+		<DocRequestKey>abcdefghijklmnopqrstuvwxyz</DocRequestKey>
+		<IncorporationDate>2010-12-21</IncorporationDate>
+		<AuthenticationCode>1234</AuthenticationCode>
+	</IncorporationDetails>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>Accepted submission</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>ACCEPT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>Accepted submission</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>2bp002</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Random Test mode rejection</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp1225</SubmissionNumber>
+    <StatusCode>ACCEPT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+   <ChangeOfNameDetails>
+		<DocRequestKey>12345678900987654321</DocRequestKey>
+	</ChangeOfNameDetails>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>Accepted submission</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>ACCEPT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>Accepted submission</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Random Test mode rejection</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>882dp1</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Random Test mode rejection</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Random Test mode rejection</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>ACCEPT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>Accepted submission</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>2bp001</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Random Test mode rejection</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>arp101</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Random Test mode rejection</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp1901</SubmissionNumber>
+    <StatusCode>ACCEPT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>Accepted submission</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>AMINCD</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Unreadable Attachment</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Random Test mode rejection</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Random Test mode rejection</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>ACCEPT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>Accepted submission</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>dp2872</SubmissionNumber>
+    <StatusCode>REJECT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+      <Reject>
+        <RejectCode>1</RejectCode>
+        <Description>Random Test mode rejection</Description>
+        <InstanceNumber>1</InstanceNumber>
+      </Reject>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>See reject reason</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>arp101</SubmissionNumber>
+    <StatusCode>ACCEPT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections>
+    </Rejections>
+    <Examiner>
+      <Telephone>Fred Blogs</Telephone>
+      <Comment>Accepted submission</Comment>
+    </Examiner>
+  </Status>
+  <Status>
+    <SubmissionNumber>crp129</SubmissionNumber>
+    <StatusCode>ACCEPT</StatusCode>
+    <CompanyNumber>05120000</CompanyNumber>
+    <Rejections></Rejections>
+    <ChargeDetails>
+      <DocRequestKey>ed8df1eJxjZRd2YnXi4ol3yU8uzU3NK/FOrXTi4ogwjAr2Nwv0cOLihcu4JJakAqWMDAyNDQwNDZ24+OKd83MLEvMq/Upzk1KLgHIGpqbGxiamxk3GEJnM1GKP/NLiVCurCF8f93ArK/fUEphxVlYwVlBqYWlqcQk5etgZGBgYgZgJiJmBmAWIWYGYDYjZAaDVPp4=</DocRequestKey>
+      <ChargeCode>051200000428</ChargeCode>
+    </ChargeDetails>
+  </Status>
+</SubmissionStatus>
+  </Body>
+</GovTalkMessage>
+

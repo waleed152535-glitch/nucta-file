@@ -1,0 +1,75 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import {
+  createAccount, signIn, signOut, changePassword, updateProfile, requestPasswordReset, resetPassword, currentUser, emailReady,
+} from "./auth";
+
+/** Only paths inside the software, so a sign-in link can't send someone elsewhere. */
+const safeNext = (v: FormDataEntryValue | null) => {
+  const n = String(v ?? "");
+  return /^\/(dashboard|companies|returns|gateway|companies-house|log|settings|status|account)(\/|\?|$)/.test(n) ? n : "/dashboard";
+};
+
+export interface FormState { problems: string[]; done?: string }
+
+export async function signUpAction(_: FormState, f: FormData): Promise<FormState> {
+  const r = await createAccount({
+    name: String(f.get("name") ?? ""), email: String(f.get("email") ?? ""), password: String(f.get("password") ?? ""),
+    firm: String(f.get("firm") ?? ""), kind: f.get("kind") === "company" ? "company" : "practice", agreed: f.get("agreed") === "yes",
+  });
+  if (!r.ok) return { problems: r.problems };
+  redirect("/dashboard");
+}
+
+export async function signInAction(_: FormState, f: FormData): Promise<FormState> {
+  const r = await signIn(String(f.get("email") ?? ""), String(f.get("password") ?? ""));
+  if (!r.ok) return { problems: [r.problem ?? "Couldn't sign in."] };
+  redirect(safeNext(f.get("next")));
+}
+
+export async function signOutAction(): Promise<void> {
+  await signOut();
+  redirect("/");
+}
+
+export async function signOutEverywhereAction(): Promise<void> {
+  await signOut(true);
+  redirect("/sign-in");
+}
+
+export async function forgotPasswordAction(_: FormState, f: FormData): Promise<FormState> {
+  if (!emailReady()) return { problems: ["Password reset by email isn't switched on yet. Email us from the contact page and we'll reset it for you."] };
+  // The link's address comes from the settings, never from the request: a
+  // forged Host header could otherwise send the reset link somewhere else.
+  const h = await headers();
+  const fallback = process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : `http://${h.get("host")}`;
+  const origin = (process.env.NUCTA_SITE_URL ?? fallback).replace(/\/+$/, "");
+  await requestPasswordReset(String(f.get("email") ?? ""), origin);
+  return { problems: [], done: "If that email has an account, a link to choose a new password is on its way. It works for one hour." };
+}
+
+export async function resetPasswordAction(_: FormState, f: FormData): Promise<FormState> {
+  const pw = String(f.get("password") ?? ""), again = String(f.get("again") ?? "");
+  if (pw !== again) return { problems: ["The two passwords don't match."] };
+  const r = await resetPassword(String(f.get("token") ?? ""), pw);
+  if (!r.ok) return { problems: [r.problem ?? "Couldn't reset the password."] };
+  redirect("/dashboard");
+}
+
+export async function updateProfileAction(_: FormState, f: FormData): Promise<FormState> {
+  const u = await currentUser();
+  if (!u) return { problems: ["You're signed out."] };
+  const r = await updateProfile(u, String(f.get("name") ?? ""), String(f.get("firm") ?? ""));
+  return r.ok ? { problems: [], done: "Saved." } : { problems: [r.problem ?? "Couldn't save."] };
+}
+
+export async function changePasswordAction(_: FormState, f: FormData): Promise<FormState> {
+  const u = await currentUser();
+  if (!u) return { problems: ["You're signed out."] };
+  const next = String(f.get("next") ?? ""), again = String(f.get("again") ?? "");
+  if (next !== again) return { problems: ["The two new passwords don't match."] };
+  const r = await changePassword(u, String(f.get("current") ?? ""), next);
+  return r.ok ? { problems: [], done: "Password changed. Other browsers signed in to this account have been signed out." } : { problems: [r.problem ?? "Couldn't change it."] };
+}

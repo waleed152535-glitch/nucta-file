@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2009 sp1 (http://www.altova.com) by Suzanne Wadden (Companies House) -->
+<xs:schema xmlns="http://xmlgw.companieshouse.gov.uk" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://xmlgw.companieshouse.gov.uk" elementFormDefault="qualified" attributeFormDefault="unqualified" version="2.8" id="GetSubmissionStatus">
+	<xs:include schemaLocation="../baseTypes-v3-4.xsd"/>
+	<xs:element name="GetSubmissionStatus">
+		<xs:annotation>
+			<xs:documentation>Request status of previous submissions</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:choice minOccurs="0">
+					<xs:element name="CompanyNumber" type="CompanyNumberString" minOccurs="0"/>
+					<xs:element ref="SubmissionNumber" minOccurs="0"/>
+				</xs:choice>
+				<xs:element name="PresenterID" type="xs:string"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="SubmissionStatus">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="Status" minOccurs="0" maxOccurs="unbounded">
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element ref="SubmissionNumber"/>
+							<xs:element name="StatusCode">
+								<xs:simpleType>
+									<xs:restriction base="xs:string">
+										<xs:enumeration value="ACCEPT"/>
+										<xs:enumeration value="REJECT"/>
+										<xs:enumeration value="PENDING"/>
+										<xs:enumeration value="PARKED"/>
+										<xs:enumeration value="INTERNAL_FAILURE"/>
+									</xs:restriction>
+								</xs:simpleType>
+							</xs:element>
+							<xs:element name="CompanyNumber" type="CompanyNumberString" minOccurs="0"/>
+							<xs:element name="CustomerReference" minOccurs="0"/>
+							<xs:element name="Rejections" minOccurs="0">
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="Reject" minOccurs="0" maxOccurs="unbounded">
+											<xs:complexType>
+												<xs:sequence>
+													<xs:element name="RejectCode" type="xs:string"/>
+													<xs:element name="Description">
+														<xs:simpleType>
+															<xs:restriction base="xs:string">
+																<xs:minLength value="1"/>
+																<xs:maxLength value="4000"/>
+															</xs:restriction>
+														</xs:simpleType>
+													</xs:element>
+													<xs:element name="InstanceNumber" minOccurs="0"/>
+												</xs:sequence>
+											</xs:complexType>
+										</xs:element>
+										<xs:element name="RejectReference" type="xs:string" minOccurs="0">
+											<xs:annotation>
+												<xs:documentation>Only applicable for incorporation rejections</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+							<xs:choice minOccurs="0">
+								<xs:element name="IncorporationDetails">
+									<xs:complexType>
+										<xs:sequence>
+											<xs:element ref="DocRequestKey"/>
+											<xs:element ref="IncorporationDate"/>
+											<xs:element name="AuthenticationCode" type="xs:string"/>
+										</xs:sequence>
+									</xs:complexType>
+								</xs:element>
+								<xs:element name="ChangeOfNameDetails">
+									<xs:complexType>
+										<xs:sequence>
+											<xs:element ref="DocRequestKey"/>
+										</xs:sequence>
+									</xs:complexType>
+								</xs:element>
+								<xs:element name="ChargeDetails">
+									<xs:complexType>
+										<xs:sequence>
+											<xs:element ref="DocRequestKey"/>
+											<xs:element ref="ChargeCode"/>
+										</xs:sequence>
+									</xs:complexType>
+								</xs:element>
+							</xs:choice>
+							<xs:element name="Examiner" minOccurs="0">
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="Telephone" type="xs:string"/>
+										<xs:element name="Comment" type="xs:string" minOccurs="0"/>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>

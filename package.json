@@ -1,0 +1,43 @@
+{
+  "name": "nucta-file",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fontsource/public-sans": "^5.2.5",
+    "@vercel/blob": "^2.6.1",
+    "@xmldom/xmldom": "^0.9.8",
+    "drizzle-orm": "^0.45.2",
+    "googleapis": "^174.0.0",
+    "next": "^16.2.12",
+    "next-auth": "^5.0.0-beta.32",
+    "papaparse": "^5.5.4",
+    "pdf-lib": "^1.17.1",
+    "postgres": "^3.4.9",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "web-push": "^3.6.7",
+    "xlsx": "^0.18.5",
+    "xml-crypto": "^6.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/web-push": "^3.6.4",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.9.3"
+  }
+}

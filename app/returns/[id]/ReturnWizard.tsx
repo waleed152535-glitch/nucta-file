@@ -687,6 +687,37 @@ export default function ReturnWizard(props: {
                   )}
                 </div>
               )}
+              {preview?.ok && (() => {
+                const base = `/returns/${props.id}/documents`;
+                const many = preview.parts.length > 1;
+                const link = (href: string, text: string) => <a className="btn ghost sm" href={`${base}/${href}`} target="_blank" rel="noreferrer">{text}</a>;
+                return (
+                  <div className="card doclist" style={{ padding: "4px 12px", marginBottom: 12 }}>
+                    <div className="row">
+                      <div className="what"><div className="t">Approval pack for {preview.director || "the director"}</div><div className="d">One PDF: a page to sign, the accounts, the computation{many ? "s" : ""} and the CT600{many ? "s" : ""}</div></div>
+                      <a className="btn sm" href={`${base}/approval-pack.pdf`} target="_blank" rel="noreferrer">Download PDF</a>
+                    </div>
+                    <div className="row">
+                      <div className="what"><div className="t">Accounts</div><div className="d">Micro-entity accounts, {longDate(props.periodStart)} to {longDate(props.periodEnd)}</div></div>
+                      {link("accounts.html", "View")}{link("accounts.pdf", "PDF")}{link("accounts.xhtml", "iXBRL")}
+                    </div>
+                    {preview.parts.map((pt, n) => (
+                      <div key={n}>
+                        <div className="row">
+                          <div className="what"><div className="t">Computation{many ? ` ${n + 1}` : ""}</div><div className="d">{longDate(pt.periodFrom)} to {longDate(pt.periodTo)}</div></div>
+                          {link(`computation-${n + 1}.html`, "View")}{link(`computation-${n + 1}.pdf`, "PDF")}{link(`computation-${n + 1}.xhtml`, "iXBRL")}
+                        </div>
+                        <div className="row">
+                          <div className="what"><div className="t">CT600{many ? ` ${n + 1}` : ""}</div><div className="d">Every box, as {pt.sent?.status === "accepted" ? "filed" : pt.sent?.status === "accepted-test" ? "accepted by the test service" : "it would be sent"}</div></div>
+                          {link(`ct600-${n + 1}.html`, "View")}{link(`ct600-${n + 1}.pdf`, "PDF")}{link(`ct600-${n + 1}.xml`, "XML")}
+                          {pt.sent && link(`submission-${n + 1}.xml`, "Submission sent")}
+                          {pt.sent?.status === "accepted" && link(`receipt-${n + 1}.pdf`, "HMRC receipt")}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               {preview?.ok && (
                 <>
                   <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>

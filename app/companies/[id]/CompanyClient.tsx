@@ -3,7 +3,10 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startReturn, type ReturnRow } from "@/lib/return-actions";
+import { startReturn, refreshFromCompaniesHouse, type ReturnRow, type CompanyDetail } from "@/lib/return-actions";
+import type { Deadline } from "@/lib/deadlines";
+import { firstPeriodEnd } from "@/lib/deadlines";
+import DeadlineList from "../../dashboard/DeadlineList";
 import { accountingPeriodsOf } from "@/lib/tax/long-period";
 import { exceedsEighteenMonths, isIsoDate, monthsIn } from "@/lib/tax/dates";
 
@@ -15,23 +18,42 @@ const STATUS: Record<string, string> = {
   "submitted-live": "Filed — waiting for HMRC's answer",
 };
 
-const day = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+const day = (iso: string | null | undefined) => (iso ? new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "—");
 
 /** The day after a date, and a year on less a day: the usual next period. */
-const nextPeriod = (lastEnd: string | undefined): { from: string; to: string } => {
-  if (!lastEnd) return { from: "", to: "" };
+const nextPeriod = (lastEnd: string | undefined, c?: CompanyDetail): { from: string; to: string } => {
+  if (!lastEnd) {
+    // No return yet: Companies House's next accounts dates, or the first accounts from incorporation.
+    const ch = c?.chProfile;
+    if (ch?.nextAccountsMadeUpTo) {
+      const from = ch.lastAccountsMadeUpTo ? new Date(Date.parse(ch.lastAccountsMadeUpTo + "T00:00:00Z") + 86_400_000).toISOString().slice(0, 10) : (ch.incorporatedOn ?? c?.incorporatedOn ?? "");
+      return { from, to: ch.nextAccountsMadeUpTo };
+    }
+    if (c?.incorporatedOn) return { from: c.incorporatedOn, to: firstPeriodEnd(c.incorporatedOn) };
+    return { from: "", to: "" };
+  }
   const d = new Date(lastEnd + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1);
   const from = d.toISOString().slice(0, 10);
   const e = new Date(d); e.setUTCFullYear(e.getUTCFullYear() + 1); e.setUTCDate(e.getUTCDate() - 1);
   return { from, to: e.toISOString().slice(0, 10) };
 };
 
-export default function CompanyClient({ company, returns }: {
-  company: { id: string; name: string; companyNo: string | null; utr: string | null; incorporatedOn: string | null };
+export default function CompanyClient({ company, returns, deadlines, chReady, suggest }: {
+  company: CompanyDetail;
   returns: ReturnRow[];
+  deadlines: Deadline[];
+  chReady: boolean;
+  suggest?: { from: string; to: string };
 }) {
   const router = useRouter();
-  const [p, setP] = useState(nextPeriod(returns[0]?.periodEnd));
+  const [p, setP] = useState(suggest ?? nextPeriod(returns.find((r) => !r.amendment)?.periodEnd, company));
+  const [chMsg, setChMsg] = useState<string | null>(null);
+  const refresh = () => start(async () => {
+    const r = await refreshFromCompaniesHouse(company.id);
+    setChMsg(r.ok ? "Updated from Companies House." : r.error ?? "Couldn't update.");
+    if (r.ok) router.refresh();
+  });
+  const ch = company.chProfile;
   const [problems, setProblems] = useState<string[]>([]);
   const [pending, start] = useTransition();
   const begin = () => start(async () => {
@@ -48,6 +70,38 @@ export default function CompanyClient({ company, returns }: {
         </div>
       </div>
       <div className="content">
+        <div className="grid2">
+          <div className="card">
+            <div className="hd"><h3>At Companies House</h3>
+              {chReady && company.companyNo && <button type="button" className="btn ghost sm" disabled={pending} onClick={refresh}>{ch ? "Refresh" : "Look up"}</button>}
+            </div>
+            <div className="bd">
+              {ch ? (
+                <>
+                  <div className="kv"><span className="k">Status</span><span className="v">{ch.status || "—"}</span></div>
+                  <div className="kv"><span className="k">Registered office</span><span className="v" style={{ fontWeight: 400 }}>{ch.registeredOffice || "—"}</span></div>
+                  <div className="kv"><span className="k">Year end</span><span className="v">{ch.ard ? `${ch.ard.day} ${new Date(Date.UTC(2000, ch.ard.month - 1, 1)).toLocaleDateString("en-GB", { month: "long" })}` : "—"}</span></div>
+                  <div className="kv"><span className="k">Last accounts</span><span className="v">{ch.lastAccountsMadeUpTo ? `to ${day(ch.lastAccountsMadeUpTo)}` : "none yet"}</span></div>
+                  <div className="kv"><span className="k">Next accounts</span><span className="v">{ch.nextAccountsMadeUpTo ? `to ${day(ch.nextAccountsMadeUpTo)}, due ${day(ch.nextAccountsDue)}` : "—"}{ch.accountsOverdue ? " · overdue" : ""}</span></div>
+                  <div className="kv"><span className="k">Confirmation statement due</span><span className="v">{day(ch.confirmationStatementDue)}</span></div>
+                  <p className="note" style={{ marginBottom: 0 }}>Read from Companies House on {new Date(ch.fetchedAt).toLocaleDateString("en-GB")}.</p>
+                </>
+              ) : (
+                <p className="note" style={{ margin: 0 }}>
+                  {company.registeredOffice ? <>{company.registeredOffice}<br /></> : null}
+                  {chReady ? "Press “Look up” to read this company's record — accounts dates, address and status — from Companies House."
+                    : "With a Companies House API key (CH_API_KEY) set, this shows the company's record and accounts dates from Companies House."}
+                </p>
+              )}
+              {chMsg && <p className="note">{chMsg}</p>}
+            </div>
+          </div>
+          <div className="card">
+            <div className="hd"><h3>Deadlines</h3></div>
+            <div className="bd"><DeadlineList deadlines={deadlines.slice(0, 6)} showCompany={false} empty={company.incorporatedOn ? "Nothing due." : "Add the incorporation date, or look the company up at Companies House, to see its deadlines."} /></div>
+          </div>
+        </div>
+
         <div className="card">
           <div className="hd"><h3>Start a return</h3><span className="note">Enter the dates the accounts cover</span></div>
           <div className="bd">

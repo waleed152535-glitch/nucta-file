@@ -29,6 +29,8 @@ export const companies = pgTable("nf_companies", {
   registeredOffice: text("registered_office"),
   /** Which Nucta Desk client this is, when the two are linked. */
   deskClientId: text("desk_client_id"),
+  /** The company's record at Companies House when it was last looked up: accounts dates, address, status. */
+  chProfile: jsonb("ch_profile").$type<import("./ch-api").ChProfile | null>(),
   archived: boolean("archived").default(false).notNull(),
   createdAt: now(),
 }, (t) => [index("companies_name_idx").on(t.name)]);

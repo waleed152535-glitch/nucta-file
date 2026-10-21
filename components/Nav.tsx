@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: "/", label: "Overview", icon: "▣" },
   { section: "Filing" },
+  { href: "/dashboard", label: "Dashboard", icon: "▣" },
   { href: "/companies", label: "Companies and returns", icon: "▤" },
   { section: "Gateway" },
   { href: "/gateway", label: "HMRC test console", icon: "⇄" },
@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/log", label: "Submission log", icon: "☰" },
   { section: "Setup" },
   { href: "/settings", label: "Credentials", icon: "⚙" },
+  { href: "/status", label: "Project status", icon: "◷" },
 ];
 
 export default function Nav() {

@@ -14,6 +14,8 @@ import {
 } from "./return-model";
 import { exceedsEighteenMonths, fromDay, toDay } from "./tax/dates";
 import { accountingPeriodsOf, amendmentDeadline, computePeriodOfAccount } from "./tax/long-period";
+import { chApiReady, companyProfile, searchCompanies, type ChProfile, type ChSearchHit } from "./ch-api";
+import { deadlinesFor, type Deadline } from "./deadlines";
 
 /**
  * Companies and their returns, for the filing screens.
@@ -22,10 +24,16 @@ import { accountingPeriodsOf, amendmentDeadline, computePeriodOfAccount } from "
  * explain itself when DATABASE_URL isn't set, rather than failing to load.
  */
 
+let columnsChecked: Promise<void> | null = null;
+
 async function store() {
-  const { db } = await import("./db");
+  const { db, rawSql } = await import("./db");
   const schema = await import("./schema");
   const orm = await import("drizzle-orm");
+  // Columns added after the tables were first created, added once per server
+  // so an existing database keeps working without pressing "Create the tables".
+  columnsChecked ??= rawSql.unsafe('ALTER TABLE "nf_companies" ADD COLUMN IF NOT EXISTS "ch_profile" jsonb').then(() => undefined, () => { columnsChecked = null; });
+  await columnsChecked;
   return { db, ...schema, ...orm };
 }
 
@@ -58,7 +66,41 @@ export async function listCompanies(): Promise<{ ok: boolean; error?: string; co
   }
 }
 
-export interface NewCompany { name: string; companyNo: string; utr: string; incorporatedOn: string }
+export interface NewCompany { name: string; companyNo: string; utr: string; incorporatedOn: string; registeredOffice?: string; chProfile?: ChProfile | null }
+
+/** Whether companies can be looked up at Companies House (a CH_API_KEY is set). */
+export async function companiesHouseSearchReady(): Promise<boolean> {
+  return chApiReady();
+}
+
+export async function searchCompaniesHouse(q: string): Promise<{ ok: boolean; error?: string; hits: ChSearchHit[] }> {
+  const r = await searchCompanies(q);
+  return r.ok ? { ok: true, hits: r.value } : { ok: false, error: r.error, hits: [] };
+}
+
+export async function lookupCompany(number: string): Promise<{ ok: boolean; error?: string; profile?: ChProfile }> {
+  const r = await companyProfile(number);
+  return r.ok ? { ok: true, profile: r.value } : { ok: false, error: r.error };
+}
+
+/** Reads the company's record from Companies House again: new accounts dates, address or status. */
+export async function refreshFromCompaniesHouse(companyId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const s = await store();
+    const [c] = await s.db.select().from(s.companies).where(s.eq(s.companies.id, companyId));
+    if (!c?.companyNo) return { ok: false, error: "This company has no company number to look up." };
+    const r = await companyProfile(c.companyNo);
+    if (!r.ok) return { ok: false, error: r.error };
+    await s.db.update(s.companies).set({
+      chProfile: r.value, registeredOffice: r.value.registeredOffice || c.registeredOffice,
+      incorporatedOn: c.incorporatedOn ?? r.value.incorporatedOn,
+    }).where(s.eq(s.companies.id, companyId));
+    revalidatePath(`/companies/${companyId}`); revalidatePath("/dashboard");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: msg(e) };
+  }
+}
 
 export async function addCompany(c: NewCompany): Promise<{ ok: boolean; id?: string; problems: string[] }> {
   const problems: string[] = [];
@@ -73,8 +115,11 @@ export async function addCompany(c: NewCompany): Promise<{ ok: boolean; id?: str
     const dup = await s.db.select({ id: s.companies.id }).from(s.companies).where(s.eq(s.companies.companyNo, no));
     if (dup.length) return { ok: false, problems: [`Company ${no} is already in Nucta File.`] };
     const id = randomUUID();
-    await s.db.insert(s.companies).values({ id, name, companyNo: no, utr, incorporatedOn: c.incorporatedOn || null });
-    revalidatePath("/companies");
+    await s.db.insert(s.companies).values({
+      id, name, companyNo: no, utr, incorporatedOn: c.incorporatedOn || null,
+      registeredOffice: c.registeredOffice?.trim() || c.chProfile?.registeredOffice || null, chProfile: c.chProfile ?? null,
+    });
+    revalidatePath("/companies"); revalidatePath("/dashboard");
     return { ok: true, id, problems: [] };
   } catch (e) {
     return { ok: false, problems: [msg(e)] };
@@ -123,15 +168,22 @@ function editable(d: ReturnData): Record<string, unknown> {
   return c;
 }
 
-export async function getCompany(id: string): Promise<{ ok: boolean; error?: string; company?: { id: string; name: string; companyNo: string | null; utr: string | null; incorporatedOn: string | null }; returns: ReturnRow[] }> {
+export interface CompanyDetail {
+  id: string; name: string; companyNo: string | null; utr: string | null; incorporatedOn: string | null;
+  registeredOffice: string | null; chProfile: ChProfile | null;
+}
+
+export async function getCompany(id: string): Promise<{ ok: boolean; error?: string; company?: CompanyDetail; returns: ReturnRow[]; deadlines: Deadline[]; chReady: boolean }> {
   try {
     const s = await store();
     const [c] = await s.db.select().from(s.companies).where(s.eq(s.companies.id, id));
-    if (!c) return { ok: false, error: "That company isn't in Nucta File.", returns: [] };
+    if (!c) return { ok: false, error: "That company isn't in Nucta File.", returns: [], deadlines: [], chReady: chApiReady() };
     const rets = await s.db.select().from(s.returns).where(s.eq(s.returns.companyId, id)).orderBy(s.desc(s.returns.periodEnd));
+    const today = new Date().toISOString().slice(0, 10);
     return {
-      ok: true,
-      company: { id: c.id, name: c.name, companyNo: c.companyNo, utr: c.utr, incorporatedOn: c.incorporatedOn },
+      ok: true, chReady: chApiReady(),
+      deadlines: deadlinesFor([toDeadlineCompany(c)], rets.map(toDeadlineReturn), today),
+      company: { id: c.id, name: c.name, companyNo: c.companyNo, utr: c.utr, incorporatedOn: c.incorporatedOn, registeredOffice: c.registeredOffice, chProfile: c.chProfile ?? null },
       returns: rets.map((r) => ({
         id: r.id, periodStart: r.periodStart, periodEnd: r.periodEnd, status: r.status, updatedAt: r.updatedAt.toISOString(),
         parts: accountingPeriodsOf(r.periodStart, r.periodEnd).length,
@@ -139,7 +191,73 @@ export async function getCompany(id: string): Promise<{ ok: boolean; error?: str
       })),
     };
   } catch (e) {
-    return { ok: false, error: msg(e), returns: [] };
+    return { ok: false, error: msg(e), returns: [], deadlines: [], chReady: chApiReady() };
+  }
+}
+
+type CompanyRowDb = { id: string; name: string; companyNo: string | null; incorporatedOn: string | null; chProfile?: ChProfile | null };
+type ReturnRowDb = { id: string; companyId: string; periodStart: string; periodEnd: string; status: string; data: unknown };
+
+const toDeadlineCompany = (c: CompanyRowDb) => ({
+  id: c.id, name: c.name, companyNo: c.companyNo, incorporatedOn: c.incorporatedOn,
+  ch: c.chProfile ? { nextAccountsMadeUpTo: c.chProfile.nextAccountsMadeUpTo, nextAccountsDue: c.chProfile.nextAccountsDue, lastAccountsMadeUpTo: c.chProfile.lastAccountsMadeUpTo } : null,
+});
+
+/** A return for the deadline list, with the tax for each of its periods when the figures can be worked out. */
+function toDeadlineReturn(r: ReturnRowDb) {
+  const d = normaliseReturnData(r.data as Partial<ReturnData>);
+  let taxByPart: { to: string; tax: number }[] | undefined;
+  try {
+    const poa = computePeriodOfAccount(toPeriodOfAccountInput(r.periodStart, r.periodEnd, d));
+    if (poa.parts.length) taxByPart = poa.parts.map((x) => ({ to: x.to, tax: Math.round((x.result.taxChargeable + (x.loans?.a80 ?? 0)) * 100) / 100 }));
+  } catch { /* figures not complete enough yet */ }
+  return { id: r.id, companyId: r.companyId, periodStart: r.periodStart, periodEnd: r.periodEnd, status: r.status, amendment: Boolean(d.amends), taxByPart };
+}
+
+export interface DashboardData {
+  ok: boolean;
+  error?: string;
+  counts: { companies: number; filed: number; passedTest: number; overdue: number; dueSoon: number };
+  deadlines: Deadline[];
+  recent: { id: string; companyId: string; companyName: string; periodStart: string; periodEnd: string; status: string; updatedAt: string; parts: number; amendment: boolean }[];
+  companies: { id: string; name: string; companyNo: string | null; next: Deadline | null; returns: number }[];
+}
+
+/** Everything the dashboard shows: counts, every client's next deadlines, recent returns. */
+export async function getDashboard(today = new Date().toISOString().slice(0, 10)): Promise<DashboardData> {
+  const empty: DashboardData = { ok: false, counts: { companies: 0, filed: 0, passedTest: 0, overdue: 0, dueSoon: 0 }, deadlines: [], recent: [], companies: [] };
+  try {
+    const s = await store();
+    const cos = await s.db.select().from(s.companies).where(s.eq(s.companies.archived, false)).orderBy(s.asc(s.companies.name));
+    const ids = new Set(cos.map((c) => c.id));
+    const rets = (await s.db.select({
+      id: s.returns.id, companyId: s.returns.companyId, periodStart: s.returns.periodStart, periodEnd: s.returns.periodEnd,
+      status: s.returns.status, data: s.returns.data, updatedAt: s.returns.updatedAt,
+    }).from(s.returns)).filter((r) => ids.has(r.companyId));
+    const deadlines = deadlinesFor(cos.map(toDeadlineCompany), rets.map(toDeadlineReturn), today);
+    const name = new Map(cos.map((c) => [c.id, c.name]));
+    return {
+      ok: true,
+      counts: {
+        companies: cos.length,
+        filed: rets.filter((r) => r.status === "accepted").length,
+        passedTest: rets.filter((r) => r.status === "accepted-test").length,
+        overdue: deadlines.filter((d) => d.state === "overdue").length,
+        dueSoon: deadlines.filter((d) => d.state === "soon").length,
+      },
+      deadlines,
+      recent: [...rets].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, 12).map((r) => ({
+        id: r.id, companyId: r.companyId, companyName: name.get(r.companyId) ?? "", periodStart: r.periodStart, periodEnd: r.periodEnd,
+        status: r.status, updatedAt: r.updatedAt.toISOString(), parts: accountingPeriodsOf(r.periodStart, r.periodEnd).length,
+        amendment: Boolean((r.data as Partial<ReturnData> | null)?.amends),
+      })),
+      companies: cos.map((c) => ({
+        id: c.id, name: c.name, companyNo: c.companyNo, returns: rets.filter((r) => r.companyId === c.id).length,
+        next: deadlines.find((d) => d.companyId === c.id) ?? null,
+      })),
+    };
+  } catch (e) {
+    return { ...empty, error: msg(e) };
   }
 }
 

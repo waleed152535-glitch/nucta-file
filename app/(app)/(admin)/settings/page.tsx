@@ -27,7 +27,7 @@ const VARS = [
   },
   {
     key: "HMRC_CONTACT_EMAIL",
-    what: "An address HMRC can reply to if a submission needs chasing.",
+    what: "An address that goes with submissions to HMRC's test service. A real filing uses the address chosen on the filing screen — by default the email on the HMRC account that signs in.",
     required: false,
   },
   {

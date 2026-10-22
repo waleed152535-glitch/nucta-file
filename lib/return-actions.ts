@@ -831,6 +831,8 @@ export interface LiveSignIn {
   password: string;
   /** Whose HMRC account it is. Without it, the declarant's status decides. */
   as?: "company" | "agent";
+  /** Where HMRC should send their notification of this submission. Empty: the email registered on the HMRC account. */
+  notifyEmail?: string;
 }
 
 export interface LiveResult extends SendResult {
@@ -874,6 +876,8 @@ export async function fileReturnLive(
   if (mode === "off") return stop("Live filing isn't open for this account yet.", [live.why]);
   if (!til && mode !== "on") return stop("Only HMRC's Test in Live check is open.", ["Real filing hasn't been switched on yet. Test in Live checks the return with HMRC's live service and files nothing."]);
   const userId = signIn.userId.trim(), password = signIn.password;
+  const notifyEmail = (signIn.notifyEmail ?? "").trim();
+  if (notifyEmail && (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(notifyEmail) || notifyEmail.length > 129)) return stop("That email address for HMRC's confirmation doesn't look right.", ["Leave it to the HMRC account's own email, or type a full address."]);
   if (!userId || !password) return stop("Enter the Government Gateway user ID and password.", []);
   if (/\s/.test(userId) || userId.length > 64) return stop("That user ID doesn't look right.", ["It's the Government Gateway user ID used to sign in to HMRC online services, with no spaces."]);
 
@@ -901,7 +905,7 @@ export async function fileReturnLive(
     return stop("Run HMRC's Test in Live check first.", ["It uses the same sign-in, checks the return with HMRC's live service and files nothing — so a wrong password or an account without Corporation Tax shows up before the real filing."]);
   }
 
-  const config = liveConfig(userId, password, til);
+  const config = liveConfig(userId, password, til, notifyEmail || undefined);
   const cls = config.messageClass!;
   const envelope = buildEnvelope({
     messageClass: cls, senderId: userId, vendorId: config.vendorId, body: pp.ct600,
@@ -936,7 +940,7 @@ export async function fileReturnLive(
   }
   const filedAs = signIn.as ?? (data.declarantStatus === "Agent" ? "agent" : "company");
   return finishLive(id, part, sid, run, {
-    til, userId, irmark, pp, parts: p.parts.length, accountsHtml: p.accountsHtml, filedAs, approval: approvalWords,
+    til, userId, irmark, pp, parts: p.parts.length, accountsHtml: p.accountsHtml, filedAs, approval: approvalWords, notified: notifyEmail,
     mail: live.settings.emailReceipt ? { to: u.email, sender: u.accountName || u.name, company: r.company!.name, utr: r.company!.utr } : null,
   });
 }
@@ -959,7 +963,7 @@ export async function checkLiveFiling(id: string, part: number, signIn: LiveSign
   const live = await liveModeFor(u);
   return finishLive(id, part, sid, run, {
     til: false, userId: signIn.userId.trim(), irmark: rec.irmark, pp: p.parts[part], parts: p.parts.length, accountsHtml: p.accountsHtml,
-    filedAs: rec.filedAs, approval: rec.approval,
+    filedAs: rec.filedAs, approval: rec.approval, notified: rec.notified,
     mail: u && live.settings.emailReceipt ? { to: u.email, sender: u.accountName || u.name, company: r.company!.name, utr: r.company!.utr } : null,
   });
 }
@@ -969,7 +973,7 @@ async function finishLive(
   x: {
     til: boolean; userId: string; irmark: string | null; parts: number; accountsHtml: string | null;
     pp: { periodFrom: string; periodTo: string; computationHtml: string | null; taxDue: string; computation: { taxChargeable: number }; loans: { needed: boolean; a80: number } | null };
-    filedAs?: "company" | "agent"; approval?: string;
+    filedAs?: "company" | "agent"; approval?: string; notified?: string;
     mail: { to: string; sender: string; company: string; utr: string | null } | null;
   },
 ): Promise<LiveResult> {
@@ -997,7 +1001,7 @@ async function finishLive(
         sent[String(part)] = {
           outcome: run.outcome, status: run.outcome === "accepted" ? "accepted" : "submitted-live", correlationId: run.correlationId, irmark: x.irmark, at,
           periodFrom: x.pp.periodFrom, periodTo: x.pp.periodTo, receiptText: words, filedBy: maskId(x.userId),
-          ...(x.filedAs ? { filedAs: x.filedAs } : {}), ...(x.approval ? { approval: x.approval } : {}),
+          ...(x.filedAs ? { filedAs: x.filedAs } : {}), ...(x.approval ? { approval: x.approval } : {}), ...(x.notified !== undefined ? { notified: x.notified } : {}),
         } satisfies SentRecord;
       }
       await s.db.update(s.returns).set({

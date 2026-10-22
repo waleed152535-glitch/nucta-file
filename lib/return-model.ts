@@ -97,6 +97,8 @@ export interface SentRecord {
   filedAs?: "company" | "agent";
   /** For a live filing: how the director's approval was given, in words. */
   approval?: string;
+  /** For a live filing: where HMRC were asked to send their notification — an address, or "" for the HMRC account's own email. */
+  notified?: string;
 }
 
 /** A payment of the return's tax, as recorded by whoever paid it or saw it paid. */

@@ -14,7 +14,7 @@ export const SENDER_ID = process.env.HMRC_SENDER_ID ?? "CTUser100";
 export const PRODUCT_NAME = process.env.HMRC_PRODUCT_NAME ?? "Nucta File";
 export const PRODUCT_VERSION = process.env.HMRC_PRODUCT_VERSION ?? "1.0";
 /** The last build whose CT600s, accounts and computations passed HMRC's own validation tools (schema, business rules, iXBRL, IRmark). */
-export const SCHEMA_CHECKED_BUILD = "43";
+export const SCHEMA_CHECKED_BUILD = "44";
 
 /** HMRC_CONTACT_EMAIL, only when it is an email address: a malformed one would make HMRC refuse the envelope. */
 export function contactEmail(): string | undefined {
@@ -151,8 +151,15 @@ export function liveFiling(): LiveFiling {
 /**
  * The configuration for one live or Test in Live submission, from the
  * sign-in typed in at that moment. Nothing here is stored.
+ *
+ * `notifyEmail` is where HMRC send any email notification about this
+ * submission. Left out, HMRC use the email registered on the Government
+ * Gateway account that signed in (HMRC, Transaction Engine Document
+ * Submission Protocol, 3.2.3) — so the company or agent hears from HMRC
+ * directly. HMRC_CONTACT_EMAIL is deliberately not used here: it would send
+ * every client's notification to Nucta File's own inbox.
  */
-export function liveConfig(userId: string, password: string, testInLive: boolean): GovTalkConfig {
+export function liveConfig(userId: string, password: string, testInLive: boolean, notifyEmail?: string): GovTalkConfig {
   return {
     endpoint: ENDPOINTS.live,
     pollEndpoint: POLL_ENDPOINTS.live,
@@ -162,7 +169,7 @@ export function liveConfig(userId: string, password: string, testInLive: boolean
     productName: PRODUCT_NAME,
     productVersion: PRODUCT_VERSION,
     gatewayTest: false,
-    email: contactEmail(),
+    email: notifyEmail && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(notifyEmail) ? notifyEmail : undefined,
     messageClass: messageClass("live", testInLive),
   };
 }

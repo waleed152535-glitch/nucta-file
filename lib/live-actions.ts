@@ -49,10 +49,11 @@ export async function getLiveAdmin(): Promise<LiveAdminView> {
     { label: "Vendor ID", ok: Boolean(VENDOR_ID), detail: `${VENDOR_ID}, ${PRODUCT_NAME} ${PRODUCT_VERSION}.` },
     { label: "HMRC's live address", ok: /^https:\/\//.test(ENDPOINTS.live), detail: ENDPOINTS.live },
     {
-      label: "Contact email in each submission", ok: contactOk,
-      detail: contactOk ? `HMRC see ${contact} in every submission, to reach you about it.`
-        : contact ? `HMRC_CONTACT_EMAIL (${contact}) isn't an email address — HMRC would refuse the submission. Correct it in the hosting settings, then redeploy.`
-          : "Add HMRC_CONTACT_EMAIL in the hosting settings (Vercel → Settings → Environment Variables), then redeploy, so HMRC can reach you about a submission.",
+      label: "Contact email", ok: contactOk,
+      detail: (contactOk ? `${contact} goes with submissions to HMRC's test service.`
+        : contact ? `HMRC_CONTACT_EMAIL (${contact}) isn't an email address, so it's left out. Correct it in the hosting settings, then redeploy.`
+          : "Add HMRC_CONTACT_EMAIL in the hosting settings (Vercel → Settings → Environment Variables), then redeploy, for submissions to HMRC's test service.")
+        + " For a real filing, HMRC's confirmation goes to the address chosen on the filing screen — by default the email on the HMRC account that signs in, so clients hear from HMRC directly.",
     },
     {
       label: "Receipts by email", ok: !mailProblem,

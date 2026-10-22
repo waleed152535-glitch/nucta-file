@@ -37,6 +37,9 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled }: {
   const [pic, setPic] = useState<FilingPicture | null>(null);
   const [as, setAs] = useState<"company" | "agent">(preview.declarant.status === "Agent" ? "agent" : "company");
   const [signIn, setSignIn] = useState({ userId: "", password: "" });
+  // Where HMRC send their own confirmation: the HMRC account's registered email unless another is chosen.
+  const [notify, setNotify] = useState<"account" | "me" | "other">("account");
+  const [notifyOther, setNotifyOther] = useState("");
   const [approved, setApproved] = useState(false);
   const [declared, setDeclared] = useState(false);
   const [results, setResults] = useState<Record<string, LiveResult>>({});
@@ -68,12 +71,14 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled }: {
     await load(); router.refresh();
     if (r.filed || r.outcome === "timeout") onFiled();
   });
-  const til = (n: number) => run(`til-${n}`, () => fileReturnLive(returnId, n, { ...signIn, as }, { testInLive: true, approved, declared }));
-  const file = (n: number) => run(`file-${n}`, () => fileReturnLive(returnId, n, { ...signIn, as }, { testInLive: false, approved, declared }));
+  const notifyEmail = notify === "me" ? pic.userEmail : notify === "other" ? notifyOther.trim() : "";
+  const til = (n: number) => run(`til-${n}`, () => fileReturnLive(returnId, n, { ...signIn, as, notifyEmail }, { testInLive: true, approved, declared }));
+  const file = (n: number) => run(`file-${n}`, () => fileReturnLive(returnId, n, { ...signIn, as, notifyEmail }, { testInLive: false, approved, declared }));
   const ask = (n: number) => run(`file-${n}`, () => checkLiveFiling(returnId, n, { ...signIn, as }));
 
   const stage = (done: boolean, now: boolean) => `fstage${done ? " done" : now ? " now" : " wait"}`;
-  const s1 = approvalOk && declared, s2 = signedIn;
+  const notifyOk = notify !== "other" || /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(notifyOther.trim());
+  const s1 = approvalOk && declared, s2 = signedIn && notifyOk;
 
   return (
     <>
@@ -137,6 +142,24 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled }: {
                 </div>
               </div>
               <p className="note" style={{ marginTop: -6 }}>Type it here only. Several wrong passwords can lock a Government Gateway account, so Nucta File stops after two failed sign-ins in an hour.</p>
+              <div className="note" style={{ margin: "4px 0" }}>HMRC&apos;s own confirmation email goes to</div>
+              <div className="picks" role="radiogroup" aria-label="HMRC's confirmation email">
+                <button type="button" role="radio" aria-checked={notify === "account"} className="pick" onClick={() => setNotify("account")}>
+                  <span className="dot" aria-hidden /><span><b>The email on this HMRC account</b><small>{as === "agent" ? "Your agent account's email, as HMRC have it." : "The company's email, as HMRC have it — the client hears from HMRC directly."}</small></span>
+                </button>
+                <button type="button" role="radio" aria-checked={notify === "me"} className="pick" onClick={() => setNotify("me")}>
+                  <span className="dot" aria-hidden /><span><b>Me</b><small>{pic.userEmail}</small></span>
+                </button>
+                <button type="button" role="radio" aria-checked={notify === "other"} className="pick" onClick={() => setNotify("other")}>
+                  <span className="dot" aria-hidden /><span><b>Another address</b><small>Such as the director&apos;s.</small></span>
+                </button>
+              </div>
+              {notify === "other" && (
+                <div className="field" style={{ maxWidth: 420 }}><label>Email for HMRC&apos;s confirmation</label>
+                  <input type="email" value={notifyOther} onChange={(e) => setNotifyOther(e.target.value)} placeholder="name@example.co.uk" />
+                </div>
+              )}
+              <p className="note" style={{ marginTop: 0 }}>Either way, Nucta File keeps HMRC&apos;s receipt with the return{pic.emailReady ? " and emails it to you" : ""} — the receipt is the proof of filing.</p>
             </div>
 
             {pic.parts.map((x) => {
@@ -211,7 +234,7 @@ function Receipt({ returnId, pic, n, defaultTo }: { returnId: string; pic: Filin
     <div className="receipt">
       <h4>Filed with HMRC{pic.parts.length > 1 ? `: return ${n + 1}` : ""}</h4>
       <p className="note" style={{ margin: "0 0 8px" }}>
-        {new Date(rec.at).toLocaleString("en-GB")}{rec.filedBy ? ` · user ID ${rec.filedBy}` : ""}{rec.filedAs ? ` · ${rec.filedAs === "agent" ? "agent's" : "company's"} HMRC account` : ""}{rec.approval ? ` · ${rec.approval}` : ""}
+        {new Date(rec.at).toLocaleString("en-GB")}{rec.filedBy ? ` · user ID ${rec.filedBy}` : ""}{rec.filedAs ? ` · ${rec.filedAs === "agent" ? "agent's" : "company's"} HMRC account` : ""}{rec.approval ? ` · ${rec.approval}` : ""}{rec.notified !== undefined ? ` · HMRC's email to ${rec.notified || "the HMRC account's own address"}` : ""}
       </p>
       {rec.receiptText && <p style={{ margin: "0 0 8px", fontSize: 13.5 }}>{rec.receiptText}</p>}
       {rec.correlationId && <div className="note mono">Correlation ID {rec.correlationId}{rec.irmark ? ` · IRmark ${rec.irmark}` : ""}</div>}

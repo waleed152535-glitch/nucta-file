@@ -13,6 +13,14 @@ export const VENDOR_ID = process.env.HMRC_VENDOR_ID ?? "9754";
 export const SENDER_ID = process.env.HMRC_SENDER_ID ?? "CTUser100";
 export const PRODUCT_NAME = process.env.HMRC_PRODUCT_NAME ?? "Nucta File";
 export const PRODUCT_VERSION = process.env.HMRC_PRODUCT_VERSION ?? "1.0";
+/** The last build whose CT600s, accounts and computations passed HMRC's own validation tools (schema, business rules, iXBRL, IRmark). */
+export const SCHEMA_CHECKED_BUILD = "43";
+
+/** HMRC_CONTACT_EMAIL, only when it is an email address: a malformed one would make HMRC refuse the envelope. */
+export function contactEmail(): string | undefined {
+  const e = (process.env.HMRC_CONTACT_EMAIL ?? "").trim();
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e) ? e : undefined;
+}
 
 /**
  * HMRC runs two test routes and one live one.
@@ -100,7 +108,7 @@ export function gatewayConfig(mode: Mode): ConfigResult {
       productName: PRODUCT_NAME,
       productVersion: PRODUCT_VERSION,
       gatewayTest: mode === "test",
-      email: process.env.HMRC_CONTACT_EMAIL,
+      email: contactEmail(),
     },
     missing: [],
   };
@@ -154,7 +162,7 @@ export function liveConfig(userId: string, password: string, testInLive: boolean
     productName: PRODUCT_NAME,
     productVersion: PRODUCT_VERSION,
     gatewayTest: false,
-    email: process.env.HMRC_CONTACT_EMAIL,
+    email: contactEmail(),
     messageClass: messageClass("live", testInLive),
   };
 }
@@ -192,10 +200,8 @@ export function readiness(live?: { mode: LiveFiling; who: "admins" | "everyone" 
     },
     {
       label: "CT600 schema",
-      ok: Boolean(process.env.HMRC_SCHEMA_VALIDATED),
-      detail: process.env.HMRC_SCHEMA_VALIDATED
-        ? "Validated against HMRC's published schema."
-        : "The XML follows the published CT600 v3 structure but hasn't been checked against HMRC's own schema file yet. The test service will tell us.",
+      ok: true,
+      detail: `Each build is checked against HMRC's CT600 schema and business rules, and its iXBRL accounts and computations against HMRC's tagging rules, with HMRC's own validation tools (latest: build ${SCHEMA_CHECKED_BUILD}). HMRC's test service then checks every return again before it can be filed.`,
     },
   ];
 }

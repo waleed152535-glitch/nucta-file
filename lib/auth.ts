@@ -222,16 +222,25 @@ export async function updateProfile(user: SignedInUser, name: string, firm: stri
 export const emailReady = () => Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
 
 export async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {
-  if (!emailReady()) return false;
+  return (await sendEmailChecked(to, subject, text)).ok;
+}
+
+/** Sends an email and, if it fails, says why in the email service's own words. */
+export async function sendEmailChecked(to: string, subject: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  if (!emailReady()) return { ok: false, error: "RESEND_API_KEY and EMAIL_FROM aren't both set in the hosting settings." };
   try {
     const r = await fetch(`${process.env.RESEND_API_BASE ?? "https://api.resend.com"}/emails`, {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: process.env.EMAIL_FROM, to, subject, text }),
     });
-    return r.ok;
-  } catch {
-    return false;
+    if (r.ok) return { ok: true };
+    const body = await r.text().catch(() => "");
+    let said = body.slice(0, 300);
+    try { said = (JSON.parse(body) as { message?: string }).message ?? said; } catch { /* not JSON */ }
+    return { ok: false, error: `The email service said (${r.status}): ${said || "no reason given"}` };
+  } catch (e) {
+    return { ok: false, error: `The email service couldn't be reached: ${String((e as Error)?.message ?? e).slice(0, 200)}` };
   }
 }
 

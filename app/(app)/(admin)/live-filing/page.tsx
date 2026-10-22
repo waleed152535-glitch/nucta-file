@@ -1,5 +1,6 @@
 import { getLiveAdmin } from "@/lib/live-actions";
 import LiveFilingSettings from "./LiveFilingSettings";
+import TestEmail from "./TestEmail";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +26,12 @@ export default async function LiveFilingPage() {
 
             <div className="grid2" style={{ alignItems: "start" }}>
               <div className="card">
-                <div className="hd"><h3>Before the first real filing</h3></div>
+                <div className="hd"><h3>Before the first real filing</h3><span className="note">{v.checks.filter((c) => c.ok).length} of {v.checks.length} ready</span></div>
                 <div className="bd" style={{ paddingTop: 6, paddingBottom: 6 }}>
                   {v.checks.map((c) => (
                     <div className="check" key={c.label}>
                       <span className={`mark ${c.ok ? "ok" : "no"}`}>{c.ok ? "✓" : "–"}</span>
-                      <span><div className="t">{c.label}</div><div className="d">{c.detail}</div></span>
+                      <span><div className="t">{c.label}</div><div className="d">{c.detail}</div>{c.test && <TestEmail />}</span>
                     </div>
                   ))}
                 </div>

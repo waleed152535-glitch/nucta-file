@@ -6,7 +6,7 @@
  * Each action checks who is signed in and what they own before anything else.
  */
 import { revalidatePath } from "next/cache";
-import { currentUser, sendEmail, emailReady } from "./auth";
+import { currentUser, sendEmail, sendEmailChecked, emailReady } from "./auth";
 import { store, ownedReturn, signedIn, SIGNED_OUT, problem } from "./store";
 import { getLiveSettings, getLiveChanges, saveLiveSettings, type LiveSettings, type LiveChange, type LiveWho } from "./live-settings";
 import { filingPicture, paymentHome, type FilingPicture } from "./filing-checks";
@@ -22,7 +22,7 @@ export interface LiveAdminView {
   problem?: string;
   settings: LiveSettings;
   changes: LiveChange[];
-  checks: { label: string; ok: boolean; detail: string }[];
+  checks: { label: string; ok: boolean; detail: string; test?: boolean }[];
   filings: { at: string; company: string; outcome: string; kind: string; by: string | null; correlationId: string | null }[];
 }
 
@@ -30,12 +30,41 @@ export async function getLiveAdmin(): Promise<LiveAdminView> {
   const u = await currentUser();
   const settings = await getLiveSettings();
   if (!u?.admin) return { ok: false, problem: "This is for Nucta File's administrators only.", settings, changes: [], checks: [], filings: [] };
+  const contact = (process.env.HMRC_CONTACT_EMAIL ?? "").trim();
+  const contactOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
+  const from = (process.env.EMAIL_FROM ?? "").trim();
+  const fromAddress = (from.match(/<([^>]+)>/)?.[1] ?? from).trim();
+  const mailProblem = !process.env.RESEND_API_KEY && !from ? "Add RESEND_API_KEY and EMAIL_FROM in the hosting settings (Vercel → Settings → Environment Variables), then redeploy."
+    : !process.env.RESEND_API_KEY ? "EMAIL_FROM is set; add RESEND_API_KEY too, then redeploy."
+      : !from ? "RESEND_API_KEY is set; add EMAIL_FROM too, such as Nucta File <noreply@mail.nuctaformations.com>, then redeploy."
+        : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromAddress) ? `EMAIL_FROM (${from}) isn't an email address. Use something like Nucta File <noreply@mail.nuctaformations.com>.` : null;
+  let tested = { count: 0, last: null as string | null };
+  try {
+    const s = await store();
+    const rows = await s.db.select({ at: s.submissions.startedAt, cls: s.submissions.messageClass }).from(s.submissions)
+      .where(s.and(s.eq(s.submissions.gatewayTest, true), s.eq(s.submissions.outcome, "accepted"))).orderBy(s.desc(s.submissions.startedAt));
+    tested = { count: rows.length, last: rows[0]?.at.toISOString() ?? null };
+  } catch { /* shown as none */ }
   const checks = [
     { label: "Vendor ID", ok: Boolean(VENDOR_ID), detail: `${VENDOR_ID}, ${PRODUCT_NAME} ${PRODUCT_VERSION}.` },
     { label: "HMRC's live address", ok: /^https:\/\//.test(ENDPOINTS.live), detail: ENDPOINTS.live },
-    { label: "Contact email in each submission", ok: Boolean(process.env.HMRC_CONTACT_EMAIL), detail: process.env.HMRC_CONTACT_EMAIL ? `HMRC see ${process.env.HMRC_CONTACT_EMAIL}.` : "Optional. Add HMRC_CONTACT_EMAIL in the hosting settings so HMRC can reach you about a submission." },
-    { label: "Receipts by email", ok: emailReady(), detail: emailReady() ? "On: HMRC's receipt can be emailed as soon as it arrives." : "Email isn't set up (RESEND_API_KEY and EMAIL_FROM), so receipts are shown and kept, but not emailed." },
-    ...readiness(settings).filter((c) => c.label === "CT600 schema"),
+    {
+      label: "Contact email in each submission", ok: contactOk,
+      detail: contactOk ? `HMRC see ${contact} in every submission, to reach you about it.`
+        : contact ? `HMRC_CONTACT_EMAIL (${contact}) isn't an email address — HMRC would refuse the submission. Correct it in the hosting settings, then redeploy.`
+          : "Add HMRC_CONTACT_EMAIL in the hosting settings (Vercel → Settings → Environment Variables), then redeploy, so HMRC can reach you about a submission.",
+    },
+    {
+      label: "Receipts by email", ok: !mailProblem,
+      detail: mailProblem ?? `Set up to send from ${from}. Use “Send a test email” below to check the email service accepts it.`,
+      test: !mailProblem,
+    },
+    readiness(settings).find((c) => c.label === "CT600 schema")!,
+    {
+      label: "Accepted by HMRC's test service", ok: tested.count > 0,
+      detail: tested.count ? `HMRC's test service has accepted ${tested.count} submission${tested.count === 1 ? "" : "s"} sent from this Nucta File, most recently on ${new Date(tested.last!).toLocaleString("en-GB", { timeZone: "Europe/London" })}.`
+        : "No return sent from this Nucta File has been accepted by HMRC's test service yet. Send one from a return's Check and send step.",
+    },
   ];
   let filings: LiveAdminView["filings"] = [];
   try {
@@ -66,6 +95,15 @@ export async function updateLiveFiling(next: { mode: LiveFiling; who: LiveWho; r
   } catch (e) {
     return { ok: false, problem: problem(e) };
   }
+}
+
+/** Sends a test email to the administrator, to check the email service accepts Nucta File's address. */
+export async function sendTestEmail(): Promise<{ ok: boolean; problem?: string; to?: string }> {
+  const u = await currentUser();
+  if (!u?.admin) return { ok: false, problem: "This is for Nucta File's administrators only." };
+  const r = await sendEmailChecked(u.email, "Nucta File: test email",
+    `Hello ${u.name},\n\nThis is a test from Nucta File's Live filing page. If it has reached you, HMRC receipts, approval links, invitations and password resets can be emailed.\n\nNucta File`);
+  return r.ok ? { ok: true, to: u.email } : { ok: false, problem: r.error };
 }
 
 // ——— The filing screen ———

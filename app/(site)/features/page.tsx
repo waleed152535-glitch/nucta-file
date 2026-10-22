@@ -27,7 +27,12 @@ const GROUPS: { heading: string; intro: string; items: [string, string][] }[] = 
     heading: "Working with clients",
     intro: "Built for a practice with a long client list as much as for one company.",
     items: [
-      ["Dashboard of deadlines", "Every company's next return, tax payment and Companies House accounts, overdue first, with Companies House's own dates where they're known."],
+      ["Dashboard of deadlines", "Every company's next return, tax payment, Companies House accounts and confirmation statement, overdue first, with a board of every return from not started to filed and the Corporation Tax falling due each month."],
+      ["Import from your bookkeeping", "Upload the trial balance from Xero, QuickBooks, FreeAgent or Sage: each account is matched to its place in the profit and loss and balance sheet, and you check the matches before anything is filled in."],
+      ["Online approval by the director", "Send the director a link: they read the approval pack and approve from their phone, or ask a question instead. The name, time and internet address are recorded, and a change to the figures afterwards is flagged."],
+      ["Your whole team", "Invite colleagues to the account. Everyone sees the same companies, with notes and to-dos on each one."],
+      ["Bring every client across at once", "Paste a list of company numbers and UTRs: each company is looked up at Companies House and added with its deadlines."],
+      ["Deadlines in your calendar", "Every deadline as a calendar file for Outlook, Google or Apple Calendar, with reminders a week and a day before, and the company list as a spreadsheet."],
       ["Companies House search", "Add a company by name or number; its address, year end and accounts dates come from Companies House."],
       ["Approval pack", "One PDF for the director: a page to sign, the tax due and when, the accounts, the computation and the CT600 box by box."],
       ["Next year starts itself", "Pool values, losses, reserves, loan balances and last year's figures carry into the next return."],

@@ -234,7 +234,7 @@ export default function ChConsole({ checks, gateway }: { checks: Check[]; gatewa
                     <button className={`btn sm ${tab === "envelope" ? "" : "ghost"}`} onClick={() => setTab("envelope")}>Gateway envelope</button>
                   </div>
                   {tab === "accounts"
-                    ? <iframe title="Accounts" srcDoc={preview.accounts ?? ""} style={{ width: "100%", height: 720, border: "1px solid #ddd", background: "#fff" }} />
+                    ? <iframe title="Accounts" srcDoc={preview.accounts ?? ""} style={{ width: "100%", height: 720, border: "1px solid var(--border)", background: "#fff" }} />
                     : <pre className="xml">{preview.envelope}</pre>}
                   <p className="note" style={{ marginTop: 10 }}>
                     The company&apos;s authentication code and the presenter password show as dots: they

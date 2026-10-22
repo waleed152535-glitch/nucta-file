@@ -16,6 +16,8 @@ import { accountingPeriodsOf, computePeriodOfAccount } from "@/lib/tax/long-peri
 import { monthsIn } from "@/lib/tax/dates";
 import { toPeriodOfAccountInput, toFigures, dormantBalanceSheet } from "@/lib/return-model";
 import { Money, Whole, Text, DateField, YesNo, gbp } from "./fields";
+import OnlineApproval from "./OnlineApproval";
+import TrialBalanceImport from "./TrialBalanceImport";
 
 const STEPS = [
   "The company", "Profit and loss", "Expenses tax doesn't allow", "Equipment and vehicles",
@@ -63,6 +65,12 @@ export default function ReturnWizard(props: {
   const long = periods.length > 1;
   const [ap1, ap2] = periods;
 
+  const [tbOpen, setTbOpen] = useState(false);
+  const [tbDone, setTbDone] = useState(false);
+  const fromTrialBalance = (pl: Partial<ReturnData["pl"]>, bs: Partial<ReturnData["balanceSheet"]>) => {
+    setD((p) => ({ ...p, pl: { ...p.pl, ...pl }, balanceSheet: { ...p.balanceSheet, ...bs } }));
+    setSaved(null); setTbOpen(false); setTbDone(true);
+  };
   const set = <K extends keyof ReturnData>(k: K, v: ReturnData[K]) => { setD((p) => ({ ...p, [k]: v })); setSaved(null); };
   const setIn = <K extends "pl" | "disallowable" | "balanceSheet">(k: K, f: keyof ReturnData[K], v: number) =>
     { setD((p) => ({ ...p, [k]: { ...p[k], [f]: v } })); setSaved(null); };
@@ -139,21 +147,23 @@ export default function ReturnWizard(props: {
           </div>
         </div>
         {live.computed && (
-          <div style={{ textAlign: "right" }}>
+          <div className="taxsofar">
             <div className="note">Corporation Tax so far{live.poa.loansTax > 0 ? " (with tax on loans)" : ""}{long ? ", both returns" : ""}</div>
-            <div style={{ fontSize: 22, fontWeight: 600 }}>{gbp(live.poa.corporationTax + (live.loanProblems.length ? 0 : live.poa.loansTax), true)}</div>
+            <b>{gbp(live.poa.corporationTax + (live.loanProblems.length ? 0 : live.poa.loansTax), true)}</b>
           </div>
         )}
       </div>
 
       <div className="content">
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+        <ol className="wsteps" aria-label="Steps of the return">
           {STEPS.map((s, i) => (
-            <button key={s} type="button" className={`btn sm ${i === step ? "" : "ghost"}`} onClick={() => { setStep(i); if (i === 8) check(); }}>
-              {i + 1}. {s}
-            </button>
+            <li key={s}>
+              <button type="button" className={i === step ? "on" : i < step ? "done" : ""} aria-current={i === step ? "step" : undefined} onClick={() => { setStep(i); if (i === 8) check(); }}>
+                <b>{i < step ? "✓" : i + 1}</b>{s}
+              </button>
+            </li>
           ))}
-        </div>
+        </ol>
 
         {canAmend && (
           <div className="banner good" style={{ alignItems: "center" }}>
@@ -241,6 +251,15 @@ export default function ReturnWizard(props: {
             </div>
           </div>
         )}
+
+        {(step === 1 || step === 6) && !d.dormant && !tbOpen && (
+          <div className="banner info" style={{ alignItems: "center" }}>
+            <span>⇩</span>
+            <span style={{ flex: 1 }}>{tbDone ? <><b>Filled in from the trial balance.</b> Check each figure here and on the balance sheet, then save.</> : <>Keep the books in Xero, QuickBooks, FreeAgent or Sage? Import the trial balance to fill in the profit and loss and the balance sheet at once.</>}</span>
+            <button type="button" className="btn sm" onClick={() => setTbOpen(true)}>{tbDone ? "Import again" : "Import a trial balance"}</button>
+          </div>
+        )}
+        {(step === 1 || step === 6) && !d.dormant && tbOpen && <TrialBalanceImport onApply={fromTrialBalance} onClose={() => setTbOpen(false)} />}
 
         {step === 1 && !d.dormant && (
           <div className="card">
@@ -410,7 +429,7 @@ export default function ReturnWizard(props: {
                       const fp = fpOf(x);
                       const repaidAfter = Math.max(0, Math.round(x.repaid) - Math.round(fp.repaid));
                       return (
-                        <div style={{ borderLeft: "3px solid #ddd", paddingLeft: 10, margin: "4px 0 8px" }}>
+                        <div style={{ borderLeft: "3px solid var(--border)", paddingLeft: 12, margin: "4px 0 8px" }}>
                           <div className="note" style={{ marginBottom: 4 }}>Of those, in the first 12 months — {longDate(ap1.from)} to {longDate(ap1.to)}:</div>
                           <div className="row3">
                             <Money label="Lent in the first 12 months" value={fp.advances} onChange={(v) => setFp(n, x, { advances: v })} />
@@ -607,6 +626,9 @@ export default function ReturnWizard(props: {
             </div>
           </div>
         )}
+        {step === 7 && (
+          <OnlineApproval returnId={props.id} director={d.director} saveFirst={async () => { const r = await saveReturn(props.id, d); if (!r.ok) setSaved(r.error ?? "Couldn't save."); return r.ok; }} />
+        )}
 
         {step === 8 && (
           <div className="card">
@@ -797,7 +819,7 @@ export default function ReturnWizard(props: {
                     ))}
                     <button type="button" className={`btn sm ${doc === "accounts" ? "" : "ghost"}`} onClick={() => setDoc("accounts")}>The accounts</button>
                   </div>
-                  <iframe title={String(doc)} srcDoc={(doc === "accounts" ? preview.accountsHtml : preview.parts[doc]?.computationHtml ?? preview.accountsHtml) ?? ""} style={{ width: "100%", height: 760, border: "1px solid #ddd", background: "#fff" }} />
+                  <iframe title={String(doc)} srcDoc={(doc === "accounts" ? preview.accountsHtml : preview.parts[doc]?.computationHtml ?? preview.accountsHtml) ?? ""} className="doc" />
                 </>
               )}
               {props.submissions.length > 0 && (

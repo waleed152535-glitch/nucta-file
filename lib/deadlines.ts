@@ -13,6 +13,9 @@
  *                         period end, whichever is later (Companies Act 2006
  *                         s442). Companies House's own date is used when it
  *                         is known, as it allows for any changes to the year end.
+ *   Confirmation statement
+ *                         the date Companies House give, once the company
+ *                         has been looked up there
  *
  * A company's first accounts run from incorporation to the last day of the
  * month of its first anniversary (Companies Act 2006 s391(4)); later ones for
@@ -29,7 +32,7 @@ export interface DeadlineCompany {
   companyNo: string | null;
   incorporatedOn: string | null;
   /** From Companies House, when the company was looked up there. */
-  ch?: { nextAccountsMadeUpTo?: string | null; nextAccountsDue?: string | null; lastAccountsMadeUpTo?: string | null } | null;
+  ch?: { nextAccountsMadeUpTo?: string | null; nextAccountsDue?: string | null; lastAccountsMadeUpTo?: string | null; confirmationStatementDue?: string | null } | null;
 }
 
 export interface DeadlineReturn {
@@ -45,7 +48,7 @@ export interface DeadlineReturn {
   ctNotRequired?: boolean;
 }
 
-export type DeadlineKind = "ct600" | "ct-payment" | "ch-accounts" | "not-started";
+export type DeadlineKind = "ct600" | "ct-payment" | "ch-accounts" | "confirmation" | "not-started";
 
 export interface Deadline {
   companyId: string;
@@ -130,6 +133,10 @@ export function deadlinesFor(companies: DeadlineCompany[], returns: DeadlineRetu
       }
       chItem(c, r.periodStart, r.periodEnd, r.id);
     }
+
+    // The confirmation statement, when Companies House have told us its date.
+    const cs = c.ch?.confirmationStatementDue;
+    if (cs && isIsoDate(cs)) push(c, { returnId: null, kind: "confirmation", label: "Confirmation statement", periodFrom: cs, periodTo: cs, due: cs });
 
     // Periods after the last return (or from incorporation) with no return yet.
     let from: string | null = null, to: string | null = null;

@@ -73,3 +73,13 @@ export async function changePasswordAction(_: FormState, f: FormData): Promise<F
   const r = await changePassword(u, String(f.get("current") ?? ""), next);
   return r.ok ? { problems: [], done: "Password changed. Other browsers signed in to this account have been signed out." } : { problems: [r.problem ?? "Couldn't change it."] };
 }
+
+/** A colleague accepting an invitation: choose a password, join the account, signed in. */
+export async function joinAction(_: FormState, f: FormData): Promise<FormState> {
+  const { acceptInvite } = await import("./team-core");
+  const pw = String(f.get("password") ?? ""), again = String(f.get("again") ?? "");
+  if (pw !== again) return { problems: ["The two passwords don't match."] };
+  const r = await acceptInvite(String(f.get("token") ?? ""), String(f.get("name") ?? ""), pw);
+  if (!r.ok) return { problems: r.problems };
+  redirect("/dashboard");
+}

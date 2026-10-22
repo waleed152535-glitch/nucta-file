@@ -1,13 +1,7 @@
-import "@fontsource/public-sans/400.css";
-import "@fontsource/public-sans/500.css";
-import "@fontsource/public-sans/600.css";
-import "@fontsource/public-sans/700.css";
-import "@fontsource/public-sans/800.css";
-import "@fontsource-variable/bricolage-grotesque/opsz.css";
 import "./site.css";
 import Link from "next/link";
 import SiteHeader from "./SiteHeader";
-import Mark from "./_parts/Mark";
+import Mark from "@/components/Mark";
 import { SITE } from "@/lib/site";
 
 /** The public website: everything a visitor sees before signing in. */

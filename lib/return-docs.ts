@@ -7,7 +7,7 @@
  * from the figures as they stand.
  */
 
-import { getReturn } from "./return-actions";
+import { getReturn, type LoadedReturn } from "./return-actions";
 import { prepareReturn } from "./filing";
 import { toCompanyReturnInput, type SentRecord } from "./return-model";
 
@@ -48,7 +48,15 @@ const pick = (env: string, tag: "Computation" | "Accounts") =>
   (env.match(new RegExp(`<${tag}>\\s*<Instance>\\s*<InlineXBRLDocument>\\s*([\\s\\S]*?)\\s*</InlineXBRLDocument>`)) ?? [])[1] ?? null;
 
 export async function returnDocuments(id: string): Promise<ReturnDocs> {
-  const r = await getReturn(id);
+  return returnDocumentsFor(id, await getReturn(id));
+}
+
+/**
+ * The same, for a return already loaded and checked by the caller: the
+ * director's approval link loads it by the link's token rather than by a
+ * signed-in user (lib/approval-core.ts).
+ */
+export async function returnDocumentsFor(id: string, r: LoadedReturn): Promise<ReturnDocs> {
   const blank: ReturnDocs = { ok: false, company: { name: "", companyNo: "" }, periodFrom: "", periodTo: "", director: "", preparedBy: "", accountsHtml: null, parts: [], filingDue: "", amended: false, dormant: null };
   if (!r.ok || !r.data || !r.company) return { ...blank, error: r.error ?? "That return isn't in Nucta File." };
   const data = r.data;

@@ -150,6 +150,78 @@ export async function addCompany(c: NewCompany): Promise<{ ok: boolean; id?: str
   }
 }
 
+export interface ImportLine { line: string; number: string; name?: string; outcome: "added" | "exists" | "not-found" | "problem"; detail: string; id?: string }
+
+/**
+ * Adds many companies at once: one per line, the company number and,
+ * optionally, its Corporation Tax UTR ("15123456, 1234567890" or with tabs
+ * or spaces between). Each is looked up at Companies House for its name,
+ * address and accounts dates. A company without a UTR can be added and the
+ * UTR filled in later on its page.
+ */
+export async function importCompanies(text: string): Promise<{ ok: boolean; error?: string; results: ImportLine[] }> {
+  const u = await currentUser();
+  if (!u) return { ok: false, error: SIGNED_OUT, results: [] };
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 200);
+  if (!lines.length) return { ok: false, error: "Paste at least one company number.", results: [] };
+  const canLookUp = chApiReady();
+  try {
+    const s = await store();
+    const have = new Set((await s.db.select({ no: s.companies.companyNo }).from(s.companies).where(s.eq(s.companies.accountId, u.accountId))).map((r) => (r.no ?? "").toUpperCase()));
+    const results: ImportLine[] = [];
+    for (const line of lines) {
+      const cells = line.split(/[,;\t]+|\s{2,}/).map((x) => x.trim()).filter(Boolean);
+      const words = line.split(/[\s,;]+/).filter(Boolean);
+      const utr = (words.find((w) => /^\d{10}$/.test(w.replace(/\s/g, ""))) ?? "").replace(/\s/g, "");
+      const rawNo = words.find((w) => /^([A-Z]{2}\d{6}|\d{1,8})$/i.test(w) && w !== utr) ?? "";
+      const no = /^\d{1,8}$/.test(rawNo) ? rawNo.padStart(8, "0") : rawNo.toUpperCase();
+      if (!no) { results.push({ line, number: "", outcome: "problem", detail: "No company number found on this line." }); continue; }
+      if (have.has(no)) { results.push({ line, number: no, outcome: "exists", detail: "Already in your list." }); continue; }
+      let name = cells.find((c) => /[A-Za-z]{2}/.test(c) && !/^[A-Z]{2}\d{6}$/i.test(c)) ?? "";
+      let profile: ChProfile | null = null;
+      if (canLookUp) {
+        const p = await companyProfile(no);
+        if (!p.ok) { results.push({ line, number: no, outcome: p.error.includes("no company") ? "not-found" : "problem", detail: p.error }); continue; }
+        profile = p.value; name = p.value.name;
+      }
+      if (name.trim().length < 3) { results.push({ line, number: no, outcome: "problem", detail: "Companies House search isn't set up, so put the company's name on the line too." }); continue; }
+      const id = randomUUID();
+      await s.db.insert(s.companies).values({
+        id, accountId: u.accountId, name: name.trim(), companyNo: no, utr: utr || null, incorporatedOn: profile?.incorporatedOn ?? null,
+        registeredOffice: profile?.registeredOffice || null, chProfile: profile,
+      });
+      have.add(no);
+      results.push({ line, number: no, name: name.trim(), id, outcome: "added", detail: utr ? `UTR ${utr}` : "Add the UTR on the company's page before starting a return." });
+    }
+    revalidatePath("/companies"); revalidatePath("/dashboard");
+    return { ok: true, results };
+  } catch (e) {
+    return { ok: false, error: msg(e), results: [] };
+  }
+}
+
+/** Corrects a company's own details: its name, UTR, incorporation date and registered office. */
+export async function updateCompany(id: string, c: { name: string; utr: string; incorporatedOn: string; registeredOffice: string }): Promise<{ ok: boolean; problems: string[] }> {
+  const u = await currentUser();
+  if (!u) return { ok: false, problems: [SIGNED_OUT] };
+  const problems: string[] = [];
+  const name = c.name.trim(), utr = c.utr.replace(/\s/g, "");
+  if (name.length < 3) problems.push("Enter the company's name as it appears at Companies House.");
+  if (utr && !/^\d{10}$/.test(utr)) problems.push("The Unique Taxpayer Reference is 10 digits.");
+  if (c.incorporatedOn && !/^\d{4}-\d{2}-\d{2}$/.test(c.incorporatedOn)) problems.push("The incorporation date isn't a date.");
+  if (problems.length) return { ok: false, problems };
+  try {
+    const s = await store();
+    const co = await ownCompany(s, u, id);
+    if (!co) return { ok: false, problems: ["That company isn't in Nucta File."] };
+    await s.db.update(s.companies).set({ name, utr: utr || null, incorporatedOn: c.incorporatedOn || null, registeredOffice: c.registeredOffice.trim() || null }).where(s.eq(s.companies.id, id));
+    revalidatePath(`/companies/${id}`);
+    return { ok: true, problems: [] };
+  } catch (e) {
+    return { ok: false, problems: [msg(e)] };
+  }
+}
+
 export interface ReturnRow {
   id: string; periodStart: string; periodEnd: string; status: string; updatedAt: string;
   /** How many Corporation Tax returns the period makes: 2 when the accounts pass 12 months. */
@@ -226,7 +298,7 @@ type ReturnRowDb = { id: string; companyId: string; periodStart: string; periodE
 
 const toDeadlineCompany = (c: CompanyRowDb) => ({
   id: c.id, name: c.name, companyNo: c.companyNo, incorporatedOn: c.incorporatedOn,
-  ch: c.chProfile ? { nextAccountsMadeUpTo: c.chProfile.nextAccountsMadeUpTo, nextAccountsDue: c.chProfile.nextAccountsDue, lastAccountsMadeUpTo: c.chProfile.lastAccountsMadeUpTo } : null,
+  ch: c.chProfile ? { nextAccountsMadeUpTo: c.chProfile.nextAccountsMadeUpTo, nextAccountsDue: c.chProfile.nextAccountsDue, lastAccountsMadeUpTo: c.chProfile.lastAccountsMadeUpTo, confirmationStatementDue: c.chProfile.confirmationStatementDue } : null,
 });
 
 /** A return for the deadline list, with the tax for each of its periods when the figures can be worked out. */
@@ -240,18 +312,63 @@ function toDeadlineReturn(r: ReturnRowDb) {
   return { id: r.id, companyId: r.companyId, periodStart: r.periodStart, periodEnd: r.periodEnd, status: r.status, amendment: Boolean(d.amends), taxByPart, ctNotRequired: d.dormant && d.ctNoticeReceived === false };
 }
 
+export interface DashboardReturn {
+  id: string; companyId: string; companyName: string; periodStart: string; periodEnd: string; status: string; updatedAt: string;
+  parts: number; amendment: boolean;
+  /** Corporation Tax and tax on loans, all parts together; null until the figures are complete enough. */
+  tax: number | null;
+  /** The director's online approval: waiting, approved or a question asked. */
+  approval: "sent" | "approved" | "query" | null;
+}
+export interface ActivityItem { at: string; returnId: string; companyName: string; what: string; tone: "good" | "bad" | "info" }
 export interface DashboardData {
   ok: boolean;
   error?: string;
   counts: { companies: number; filed: number; passedTest: number; overdue: number; dueSoon: number };
   deadlines: Deadline[];
-  recent: { id: string; companyId: string; companyName: string; periodStart: string; periodEnd: string; status: string; updatedAt: string; parts: number; amendment: boolean }[];
+  recent: DashboardReturn[];
+  /** Every return, for the board of work in progress. */
+  returns: DashboardReturn[];
+  /** What happened lately: tests and filings with HMRC, newest first. */
+  activity: ActivityItem[];
   companies: { id: string; name: string; companyNo: string | null; next: Deadline | null; returns: number }[];
+}
+
+export interface FoundItem { kind: "company" | "return"; id: string; title: string; detail: string; href: string }
+
+/**
+ * The search box in the top bar: this account's companies by name or number,
+ * and their returns by company name or year end. With no words, the most
+ * recently worked-on returns and the first companies.
+ */
+export async function quickFind(q: string): Promise<FoundItem[]> {
+  const u = await currentUser();
+  if (!u) return [];
+  try {
+    const s = await store();
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean).slice(0, 5);
+    const cos = await s.db.select({ id: s.companies.id, name: s.companies.name, companyNo: s.companies.companyNo, utr: s.companies.utr })
+      .from(s.companies).where(s.and(s.eq(s.companies.archived, false), s.eq(s.companies.accountId, u.accountId))).orderBy(s.asc(s.companies.name));
+    const hit = (text: string) => words.every((w) => text.toLowerCase().includes(w));
+    const companyHits = cos.filter((c) => !words.length || hit(`${c.name} ${c.companyNo ?? ""} ${c.utr ?? ""}`)).slice(0, words.length ? 8 : 5);
+    const ids = cos.map((c) => c.id);
+    const rets = ids.length ? await s.db.select({ id: s.returns.id, companyId: s.returns.companyId, periodStart: s.returns.periodStart, periodEnd: s.returns.periodEnd, status: s.returns.status, updatedAt: s.returns.updatedAt })
+      .from(s.returns).where(s.inArray(s.returns.companyId, ids)).orderBy(s.desc(s.returns.updatedAt)).limit(400) : [];
+    const nameOf = new Map(cos.map((c) => [c.id, c.name]));
+    const year = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const returnHits = rets.filter((r) => !words.length || hit(`${nameOf.get(r.companyId) ?? ""} ${r.periodEnd} ${year(r.periodEnd)} return`)).slice(0, words.length ? 8 : 5);
+    return [
+      ...returnHits.map((r) => ({ kind: "return" as const, id: r.id, title: `${nameOf.get(r.companyId) ?? ""}`, detail: `Return to ${year(r.periodEnd)}`, href: `/returns/${r.id}` })),
+      ...companyHits.map((c) => ({ kind: "company" as const, id: c.id, title: c.name, detail: [c.companyNo, c.utr ? `UTR ${c.utr}` : ""].filter(Boolean).join(", "), href: `/companies/${c.id}` })),
+    ];
+  } catch {
+    return [];
+  }
 }
 
 /** Everything the dashboard shows: counts, every client's next deadlines, recent returns. */
 export async function getDashboard(today = new Date().toISOString().slice(0, 10)): Promise<DashboardData> {
-  const empty: DashboardData = { ok: false, counts: { companies: 0, filed: 0, passedTest: 0, overdue: 0, dueSoon: 0 }, deadlines: [], recent: [], companies: [] };
+  const empty: DashboardData = { ok: false, counts: { companies: 0, filed: 0, passedTest: 0, overdue: 0, dueSoon: 0 }, deadlines: [], recent: [], returns: [], activity: [], companies: [] };
   const u = await currentUser();
   if (!u) return { ...empty, error: SIGNED_OUT };
   try {
@@ -262,8 +379,40 @@ export async function getDashboard(today = new Date().toISOString().slice(0, 10)
       id: s.returns.id, companyId: s.returns.companyId, periodStart: s.returns.periodStart, periodEnd: s.returns.periodEnd,
       status: s.returns.status, data: s.returns.data, updatedAt: s.returns.updatedAt,
     }).from(s.returns).where(s.inArray(s.returns.companyId, ids)) : [];
-    const deadlines = deadlinesFor(cos.map(toDeadlineCompany), rets.map(toDeadlineReturn), today);
+    const forDeadlines = rets.map(toDeadlineReturn);
+    const deadlines = deadlinesFor(cos.map(toDeadlineCompany), forDeadlines, today);
     const name = new Map(cos.map((c) => [c.id, c.name]));
+    const taxOf = new Map(forDeadlines.map((r) => [r.id, r.taxByPart ? Math.round(r.taxByPart.reduce((t, x) => t + x.tax, 0) * 100) / 100 : null]));
+    const retIds = rets.map((r) => r.id);
+    const companyOfReturnName = (rid: string) => name.get(rets.find((r) => r.id === rid)?.companyId ?? "") ?? "";
+    // Each return's latest online approval, and what directors did lately.
+    const apps = retIds.length ? await s.db.select({ returnId: s.approvals.returnId, status: s.approvals.status, createdAt: s.approvals.createdAt, approvedAt: s.approvals.approvedAt, approvedName: s.approvals.approvedName, directorName: s.approvals.directorName })
+      .from(s.approvals).where(s.and(s.inArray(s.approvals.returnId, retIds), s.ne(s.approvals.status, "cancelled"))).orderBy(s.desc(s.approvals.createdAt)) : [];
+    const approvalOf = new Map<string, DashboardReturn["approval"]>();
+    for (const a of apps) if (!approvalOf.has(a.returnId)) approvalOf.set(a.returnId, a.status as DashboardReturn["approval"]);
+    const all: DashboardReturn[] = [...rets].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).map((r) => ({
+      id: r.id, companyId: r.companyId, companyName: name.get(r.companyId) ?? "", periodStart: r.periodStart, periodEnd: r.periodEnd,
+      status: r.status, updatedAt: r.updatedAt.toISOString(), parts: accountingPeriodsOf(r.periodStart, r.periodEnd).length,
+      amendment: Boolean((r.data as Partial<ReturnData> | null)?.amends), tax: taxOf.get(r.id) ?? null, approval: approvalOf.get(r.id) ?? null,
+    }));
+    // Tests and filings with HMRC for this account's returns, newest first.
+    const sent = retIds.length ? await s.db.select({
+      returnId: s.submissions.returnId, gatewayTest: s.submissions.gatewayTest, messageClass: s.submissions.messageClass,
+      outcome: s.submissions.outcome, startedAt: s.submissions.startedAt, finishedAt: s.submissions.finishedAt,
+    }).from(s.submissions).where(s.inArray(s.submissions.returnId, retIds)).orderBy(s.desc(s.submissions.startedAt)).limit(20) : [];
+    const companyOfReturn = new Map(rets.map((r) => [r.id, name.get(r.companyId) ?? ""]));
+    const approvalsActivity: ActivityItem[] = apps.filter((a) => a.status === "approved" || a.status === "query").map((a) => ({
+      at: (a.approvedAt ?? a.createdAt).toISOString(), returnId: a.returnId, companyName: companyOfReturnName(a.returnId),
+      what: a.status === "approved" ? `Approved by ${a.approvedName ?? a.directorName}` : `${a.directorName} asked a question`, tone: a.status === "approved" ? "good" : "info",
+    }));
+    const activity: ActivityItem[] = [...approvalsActivity, ...sent.map((x) => {
+      const test = x.gatewayTest || /-TIL$/.test(x.messageClass);
+      const what = x.outcome === "accepted" ? (test ? "Passed HMRC's test service" : "Filed with HMRC")
+        : x.outcome === "rejected" ? (test ? "Turned down by HMRC's test service" : "Turned down by HMRC")
+        : x.outcome === "running" ? (test ? "Sent to HMRC's test service" : "Sent to HMRC") : (test ? "Test didn't complete" : "Filing didn't complete");
+      return { at: (x.finishedAt ?? x.startedAt).toISOString(), returnId: x.returnId ?? "", companyName: companyOfReturn.get(x.returnId ?? "") ?? "",
+        what, tone: x.outcome === "accepted" ? "good" : x.outcome === "rejected" || x.outcome === "error" ? "bad" : "info" } as ActivityItem;
+    })].sort((a, b) => b.at.localeCompare(a.at));
     return {
       ok: true,
       counts: {
@@ -274,11 +423,9 @@ export async function getDashboard(today = new Date().toISOString().slice(0, 10)
         dueSoon: deadlines.filter((d) => d.state === "soon").length,
       },
       deadlines,
-      recent: [...rets].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, 12).map((r) => ({
-        id: r.id, companyId: r.companyId, companyName: name.get(r.companyId) ?? "", periodStart: r.periodStart, periodEnd: r.periodEnd,
-        status: r.status, updatedAt: r.updatedAt.toISOString(), parts: accountingPeriodsOf(r.periodStart, r.periodEnd).length,
-        amendment: Boolean((r.data as Partial<ReturnData> | null)?.amends),
-      })),
+      recent: all.slice(0, 12),
+      returns: all,
+      activity,
       companies: cos.map((c) => ({
         id: c.id, name: c.name, companyNo: c.companyNo, returns: rets.filter((r) => r.companyId === c.id).length,
         next: deadlines.find((d) => d.companyId === c.id) ?? null,

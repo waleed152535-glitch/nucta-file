@@ -72,9 +72,9 @@ export function YesNo({ question, value, onChange, why }: { question: string; va
         <div className="t" style={{ fontWeight: 500 }}>{question}</div>
         {why && <div className="d">{why}</div>}
       </span>
-      <span style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <button type="button" className={`btn sm ${value === true ? "" : "ghost"}`} onClick={() => onChange(true)}>Yes</button>
-        <button type="button" className={`btn sm ${value === false ? "" : "ghost"}`} onClick={() => onChange(false)}>No</button>
+      <span className="yn" role="group" aria-label={question}>
+        <button type="button" aria-pressed={value === true} onClick={() => onChange(true)}>Yes</button>
+        <button type="button" aria-pressed={value === false} onClick={() => onChange(false)}>No</button>
       </span>
     </div>
   );

@@ -1,6 +1,7 @@
 import { returnDocuments } from "@/lib/return-docs";
 import { makePdf, htmlToBlocks, blocksToHtml, type PdfDoc } from "@/lib/pdf";
-import { ct600Blocks, receiptBlocks, approvalBlocks, longDate } from "@/lib/documents";
+import { ct600Blocks, receiptBlocks, longDate } from "@/lib/documents";
+import { approvalPackPdf } from "@/lib/approval-pack";
 
 export const dynamic = "force-dynamic";
 
@@ -68,19 +69,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string; fi
     return pdf([{ footer: `${d.company.name} · HMRC receipt`, blocks: receiptBlocks({ company: d.company.name, period: period(part), at: s.at, correlationId: s.correlationId, irmark: s.irmark, receiptText: s.receiptText ?? null, filedBy: s.filedBy }), font: "sans" }], `${d.company.name} HMRC receipt`, name(`hmrc-receipt${many ? `-${n + 1}` : ""}`, "pdf"));
   }
   if (kind === "approval-pack" && ext === "pdf") {
-    const docs: PdfDoc[] = [
-      { footer: `${d.company.name} · for approval`, blocks: approvalBlocks({
-        company: d.company.name, companyNo: d.company.companyNo, periodFrom: d.periodFrom, periodTo: d.periodTo, director: d.director,
-        parts: d.parts.map((p) => ({ from: p.from, to: p.to, tax: p.tax, loansTax: p.loansTax, due: p.due })), filingDue: d.filingDue, preparedBy: d.preparedBy,
-        ...(d.dormant ? { dormant: d.dormant } : {}),
-      }), font: "sans" },
-    ];
-    if (d.accountsHtml) docs.push({ footer: `${d.company.name} · accounts to ${longDate(d.periodTo)}`, blocks: htmlToBlocks(d.accountsHtml) });
-    for (const p of d.parts) {
-      if (p.computationHtml) docs.push({ footer: `${d.company.name} · Corporation Tax computation, ${period(p)}`, blocks: htmlToBlocks(p.computationHtml) });
-      if (p.ct600Xml && (!d.dormant || d.dormant.returnNeeded)) docs.push({ footer: `${d.company.name} · CT600, ${period(p)}`, blocks: ct600Blocks(p.ct600Xml, { company: `${d.company.name} · company ${d.company.companyNo}`, period: period(p), status: label(p) }), font: "sans" });
-    }
-    return pdf(docs, `${d.company.name} — accounts and tax return for approval`, name("approval-pack", "pdf"));
+    return send(await approvalPackPdf(d), "application/pdf", name("approval-pack", "pdf"));
   }
   return new Response("Not found", { status: 404 });
 }

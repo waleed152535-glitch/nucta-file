@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
-import { signInAction, signUpAction, forgotPasswordAction, resetPasswordAction, type FormState } from "@/lib/session-actions";
+import { signInAction, signUpAction, forgotPasswordAction, resetPasswordAction, joinAction, type FormState } from "@/lib/session-actions";
 
 const start: FormState = { problems: [] };
 
@@ -82,6 +82,23 @@ export function ResetForm({ token }: { token: string }) {
       <label className="f"><span>New password</span><input name="password" type="password" autoComplete="new-password" minLength={10} required autoFocus /></label>
       <label className="f"><span>New password again</span><input name="again" type="password" autoComplete="new-password" minLength={10} required /></label>
       <button className="s-btn big" type="submit" disabled={busy} style={{ width: "100%" }}>{busy ? "Saving…" : "Save new password"}</button>
+    </form>
+  );
+}
+
+export function JoinForm({ token, name, email, accountName }: { token: string; name: string; email: string; accountName: string }) {
+  const [s, act, busy] = useActionState(joinAction, start);
+  return (
+    <form action={act} className="auth-card">
+      <h1>Join {accountName}</h1>
+      <p className="sub">on Nucta File, as {email}</p>
+      <Problems s={s} />
+      <input type="hidden" name="token" value={token} />
+      <label className="f"><span>Your name</span><input name="name" autoComplete="name" defaultValue={name} required /></label>
+      <label className="f"><span>Choose a password<em>at least 10 characters</em></span><input name="password" type="password" autoComplete="new-password" minLength={10} required /></label>
+      <label className="f"><span>The password again</span><input name="again" type="password" autoComplete="new-password" minLength={10} required /></label>
+      <button className="s-btn big" type="submit" disabled={busy} style={{ width: "100%" }}>{busy ? "Joining…" : "Join the account"}</button>
+      <p className="switch">By joining you agree to the <Link href="/terms" target="_blank">terms</Link>.</p>
     </form>
   );
 }

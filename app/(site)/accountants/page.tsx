@@ -25,7 +25,9 @@ export default function Accountants() {
           </div>
           <ul className="ticks">
             <li><b>A dashboard of deadlines.</b> Returns, Corporation Tax payments and Companies House accounts for every client, overdue first, with Companies House&apos;s own dates once a company is looked up.</li>
-            <li><b>Approval packs.</b> One PDF per client: a page to sign, the tax and when it&apos;s due, the accounts, the computation and the CT600 box by box.</li>
+            <li><b>Approval online or on paper.</b> Send the director a link to read the approval pack and approve from their phone, with the time and their name recorded; or download the PDF to sign.</li>
+            <li><b>Import from the books.</b> Upload the trial balance from Xero, QuickBooks, FreeAgent or Sage instead of typing the figures in.</li>
+            <li><b>Your team, your client list.</b> Invite colleagues, bring every client across from Companies House in one go, and keep notes and to-dos on each company.</li>
             <li><b>Last year carried forward.</b> Pools, losses, reserves, loan balances and comparatives come across when you start the next return.</li>
             <li><b>File as agent.</b> Use your HMRC agent sign-in for clients who have authorised you for Corporation Tax. The sign-in is never stored.</li>
             <li><b>Your clients stay yours.</b> A practice account sees only its own companies; nobody else can.</li>

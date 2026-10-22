@@ -4,7 +4,7 @@ import type { Deadline } from "@/lib/deadlines";
 const short = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 const gbp = (n: number) => `£${n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const ICON: Record<Deadline["kind"], string> = { ct600: "▤", "ct-payment": "£", "ch-accounts": "⌂", "not-started": "○" };
+const ICON: Record<Deadline["kind"], string> = { ct600: "▤", "ct-payment": "£", "ch-accounts": "⌂", confirmation: "✓", "not-started": "○" };
 
 function when(d: Deadline): string {
   if (d.daysLeft < 0) return `${-d.daysLeft} day${d.daysLeft === -1 ? "" : "s"} overdue`;
@@ -18,7 +18,7 @@ export default function DeadlineList({ deadlines, showCompany = true, empty = "N
   return (
     <>
       {deadlines.map((d, i) => {
-        const href = d.returnId ? `/returns/${d.returnId}` : `/companies/${d.companyId}?from=${d.periodFrom}&to=${d.periodTo}`;
+        const href = d.returnId ? `/returns/${d.returnId}` : d.kind === "confirmation" ? `/companies/${d.companyId}` : `/companies/${d.companyId}?from=${d.periodFrom}&to=${d.periodTo}#start`;
         const tone = d.state === "overdue" ? "var(--red)" : d.state === "soon" ? "var(--amber)" : "inherit";
         return (
           <Link key={i} href={href} className="check" style={{ textDecoration: "none", color: "inherit" }}>
@@ -28,7 +28,7 @@ export default function DeadlineList({ deadlines, showCompany = true, empty = "N
                 {d.label}{d.amount !== undefined ? ` · ${gbp(d.amount)}` : ""}{showCompany ? <> — {d.companyName}</> : null}
               </div>
               <div className="d">
-                Period {short(d.periodFrom)} to {short(d.periodTo)}
+                {d.kind === "confirmation" ? "Confirms the company's details at Companies House" : <>Period {short(d.periodFrom)} to {short(d.periodTo)}</>}
                 {d.kind === "not-started" ? (d.label === "Return not started" ? " · start the return" : " · the year hasn't ended") : ""}
                 {d.estimated ? " · date worked out by Nucta File" : ""}
               </div>

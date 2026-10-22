@@ -41,8 +41,23 @@ export const users = pgTable("nf_users", {
   failedLogins: integer("failed_logins").default(0).notNull(),
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  /** "owner" can invite and remove colleagues; "member" does everything else. */
+  role: text("role").notNull().default("owner"),
   createdAt: now(),
 }, (t) => [index("users_email_idx").on(t.email)]);
+
+/** An invitation for a colleague to join an account. The id is the SHA-256 of the link's token. */
+export const invites = pgTable("nf_invites", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  name: text("name").notNull(),
+  role: text("role").notNull().default("member"),
+  invitedBy: text("invited_by").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  createdAt: now(),
+}, (t) => [index("invites_account_idx").on(t.accountId)]);
 
 /** A signed-in browser. The cookie holds a random token; only its SHA-256 hash is stored. */
 export const sessions = pgTable("nf_sessions", {
@@ -186,3 +201,56 @@ export const workings = pgTable("nf_workings", {
   note: text("note"),
   createdAt: now(),
 }, (t) => [index("workings_return_idx").on(t.returnId)]);
+
+/**
+ * A request for a director to approve a return online. The director opens a
+ * link (only its token's hash is kept), reads the approval pack and approves
+ * by typing their name; when, from where and for which figures is recorded.
+ */
+export const approvals = pgTable("nf_approvals", {
+  id: id(),
+  tokenHash: text("token_hash").notNull(),
+  returnId: text("return_id").notNull().references(() => returns.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  directorName: text("director_name").notNull(),
+  directorEmail: text("director_email"),
+  /** sent | approved | query | cancelled */
+  status: text("status").notNull().default("sent"),
+  /** A fingerprint of the figures sent for approval: a change afterwards means approving again. */
+  figuresHash: text("figures_hash").notNull(),
+  createdBy: text("created_by").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+  sentCount: integer("sent_count").default(0).notNull(),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  approvedName: text("approved_name"),
+  approvedIp: text("approved_ip"),
+  approvedUa: text("approved_ua"),
+  /** A question the director sent back instead of approving. */
+  query: text("query"),
+  createdAt: now(),
+}, (t) => [index("approvals_return_idx").on(t.returnId), index("approvals_token_idx").on(t.tokenHash)]);
+
+/** Notes on a company: a running record of what was asked, sent and agreed. */
+export const notes = pgTable("nf_notes", {
+  id: id(),
+  accountId: text("account_id").notNull(),
+  companyId: text("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  authorName: text("author_name").notNull(),
+  body: text("body").notNull(),
+  createdAt: now(),
+}, (t) => [index("notes_company_idx").on(t.companyId)]);
+
+/** Things to do, for a company or for the practice as a whole. */
+export const tasks = pgTable("nf_tasks", {
+  id: id(),
+  accountId: text("account_id").notNull(),
+  companyId: text("company_id").references(() => companies.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  /** yyyy-mm-dd, or empty. */
+  due: text("due"),
+  done: boolean("done").default(false).notNull(),
+  createdBy: text("created_by").notNull(),
+  doneAt: timestamp("done_at", { withTimezone: true }),
+  createdAt: now(),
+}, (t) => [index("tasks_account_idx").on(t.accountId)]);

@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startReturn, refreshFromCompaniesHouse, type ReturnRow, type CompanyDetail } from "@/lib/return-actions";
+import { startReturn, refreshFromCompaniesHouse, updateCompany, type ReturnRow, type CompanyDetail } from "@/lib/return-actions";
+import CompanyNotes from "./CompanyNotes";
 import type { Deadline } from "@/lib/deadlines";
 import { firstPeriodEnd } from "@/lib/deadlines";
 import DeadlineList from "../../dashboard/DeadlineList";
@@ -56,6 +57,14 @@ export default function CompanyClient({ company, returns, deadlines, chReady, su
   const ch = company.chProfile;
   const [problems, setProblems] = useState<string[]>([]);
   const [pending, start] = useTransition();
+  const [editing, setEditing] = useState(!company.utr);
+  const [det, setDet] = useState({ name: company.name, utr: company.utr ?? "", incorporatedOn: company.incorporatedOn ?? "", registeredOffice: company.registeredOffice ?? "" });
+  const [detMsg, setDetMsg] = useState<{ bad: boolean; text: string } | null>(null);
+  const saveDetails = () => start(async () => {
+    const r = await updateCompany(company.id, det);
+    setDetMsg(r.ok ? { bad: false, text: "Saved." } : { bad: true, text: r.problems.join(" ") });
+    if (r.ok) { setEditing(false); router.refresh(); }
+  });
   const begin = () => start(async () => {
     const r = await startReturn(company.id, p.from, p.to);
     if (r.ok && r.id) router.push(`/returns/${r.id}`); else setProblems(r.problems);
@@ -66,10 +75,28 @@ export default function CompanyClient({ company, returns, deadlines, chReady, su
       <div className="topbar">
         <div>
           <h2>{company.name}</h2>
-          <div className="sub mono">{company.companyNo} · UTR {company.utr}{company.incorporatedOn ? ` · incorporated ${company.incorporatedOn}` : ""} · <Link href="/companies">all companies</Link></div>
+          <div className="sub">Company {company.companyNo}, {company.utr ? `UTR ${company.utr}` : "no UTR yet"}{company.incorporatedOn ? `, incorporated ${day(company.incorporatedOn)}` : ""}. <Link href="/companies">All companies</Link></div>
         </div>
+        <button type="button" className="btn ghost" onClick={() => setEditing(!editing)}>{editing ? "Close" : "Edit details"}</button>
       </div>
       <div className="content">
+        {editing && (
+          <div className="card">
+            <div className="hd"><h3>Company details</h3>{!company.utr && <span className="pill warn">The UTR is needed before a return can be filed</span>}</div>
+            <div className="bd">
+              <div className="row2">
+                <div className="field"><label>Name</label><input value={det.name} onChange={(e) => setDet({ ...det, name: e.target.value })} /></div>
+                <div className="field"><label>Corporation Tax UTR<span className="hint">10 digits, from HMRC&apos;s letters to the company</span></label><input value={det.utr} inputMode="numeric" onChange={(e) => setDet({ ...det, utr: e.target.value })} /></div>
+              </div>
+              <div className="row2">
+                <div className="field"><label>Incorporated on</label><input type="date" value={det.incorporatedOn} onChange={(e) => setDet({ ...det, incorporatedOn: e.target.value })} /></div>
+                <div className="field"><label>Registered office</label><input value={det.registeredOffice} onChange={(e) => setDet({ ...det, registeredOffice: e.target.value })} /></div>
+              </div>
+              {detMsg && <div className={`banner ${detMsg.bad ? "bad" : "good"}`}><span>{detMsg.bad ? "✕" : "✓"}</span><span>{detMsg.text}</span></div>}
+              <button type="button" className="btn" disabled={pending} onClick={saveDetails}>Save details</button>
+            </div>
+          </div>
+        )}
         <div className="grid2">
           <div className="card">
             <div className="hd"><h3>At Companies House</h3>
@@ -102,7 +129,7 @@ export default function CompanyClient({ company, returns, deadlines, chReady, su
           </div>
         </div>
 
-        <div className="card">
+        <div className="card" id="start" style={{ scrollMarginTop: 96 }}>
           <div className="hd"><h3>Start a return</h3><span className="note">Enter the dates the accounts cover</span></div>
           <div className="bd">
             <div className="row2">
@@ -124,6 +151,8 @@ export default function CompanyClient({ company, returns, deadlines, chReady, su
             <button className="btn" disabled={pending || !p.from || !p.to} onClick={begin}>{pending ? "Starting…" : "Start the return"}</button>
           </div>
         </div>
+
+        <CompanyNotes companyId={company.id} />
 
         <div className="card">
           <div className="hd"><h3>Returns</h3></div>

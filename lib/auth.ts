@@ -64,6 +64,8 @@ export interface SignedInUser {
   accountId: string;
   accountName: string;
   accountKind: string;
+  /** "owner" can invite and remove colleagues. */
+  role: string;
   admin: boolean;
 }
 
@@ -86,13 +88,13 @@ export const currentUser = cache(async (): Promise<SignedInUser | null> => {
     const s = await store();
     const [row] = await s.db.select({
       expiresAt: s.sessions.expiresAt, id: s.users.id, name: s.users.name, email: s.users.email,
-      accountId: s.accounts.id, accountName: s.accounts.name, accountKind: s.accounts.kind,
+      accountId: s.accounts.id, accountName: s.accounts.name, accountKind: s.accounts.kind, role: s.users.role,
     }).from(s.sessions)
       .innerJoin(s.users, s.eq(s.users.id, s.sessions.userId))
       .innerJoin(s.accounts, s.eq(s.accounts.id, s.users.accountId))
       .where(s.eq(s.sessions.id, sha256(token)));
     if (!row || row.expiresAt.getTime() < Date.now()) return null;
-    return { id: row.id, name: row.name, email: row.email, accountId: row.accountId, accountName: row.accountName, accountKind: row.accountKind, admin: adminEmails().includes(row.email) };
+    return { id: row.id, name: row.name, email: row.email, accountId: row.accountId, accountName: row.accountName, accountKind: row.accountKind, role: row.role, admin: adminEmails().includes(row.email) };
   } catch {
     return null;
   }
@@ -134,6 +136,26 @@ export async function createAccount(i: SignUpInput): Promise<{ ok: boolean; prob
   await s.db.insert(s.accounts).values({ id: accountId, name: i.firm.trim(), kind: i.kind });
   await s.db.insert(s.users).values({ id: userId, accountId, email, name: i.name.trim(), passwordHash: await hashPassword(i.password), lastLoginAt: new Date() });
   await claimOldCompanies(accountId, email);
+  await startSession(userId);
+  return { ok: true, problems: [] };
+}
+
+/**
+ * A colleague joining an existing account from an invitation: a new user in
+ * that account, signed in straight away. The invitation itself is checked by
+ * the caller (lib/team-core.ts).
+ */
+export async function joinAccount(i: { accountId: string; email: string; name: string; password: string; role: string }): Promise<{ ok: boolean; problems: string[] }> {
+  const problems: string[] = [];
+  const email = normaliseEmail(i.email);
+  if (i.name.trim().length < 2) problems.push("Enter your name.");
+  const pp = passwordProblem(i.password, email); if (pp) problems.push(pp);
+  if (problems.length) return { ok: false, problems };
+  const s = await store();
+  const [existing] = await s.db.select({ id: s.users.id }).from(s.users).where(s.eq(s.users.email, email));
+  if (existing) return { ok: false, problems: ["There's already a Nucta File account with this email. Ask whoever invited you to use a different email, or sign in with that account."] };
+  const userId = randomUUID();
+  await s.db.insert(s.users).values({ id: userId, accountId: i.accountId, email, name: i.name.trim(), passwordHash: await hashPassword(i.password), lastLoginAt: new Date(), role: i.role === "owner" ? "owner" : "member" });
   await startSession(userId);
   return { ok: true, problems: [] };
 }
@@ -199,7 +221,7 @@ export async function updateProfile(user: SignedInUser, name: string, firm: stri
 /** Whether reset emails can be sent: RESEND_API_KEY and EMAIL_FROM set. */
 export const emailReady = () => Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
 
-async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {
+export async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {
   if (!emailReady()) return false;
   try {
     const r = await fetch(`${process.env.RESEND_API_BASE ?? "https://api.resend.com"}/emails`, {

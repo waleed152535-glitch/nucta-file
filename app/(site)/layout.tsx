@@ -45,7 +45,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
           </div>
           <p className="legal">
             {SITE.product} is made by {SITE.company}{SITE.companyNumber ? `, a company registered in England and Wales, number ${SITE.companyNumber}` : ""}{SITE.registeredOffice ? `. Registered office: ${SITE.registeredOffice}` : ""}.
-            {" "}It is registered with HMRC as a software developer (vendor {SITE.vendorId}) and is in testing; live filing opens once HMRC recognise it.
+            {" "}It is registered with HMRC as a software developer (vendor {SITE.vendorId}), and live filing is opening in stages.
           </p>
         </div>
       </footer>

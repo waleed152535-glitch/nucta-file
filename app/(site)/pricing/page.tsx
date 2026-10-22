@@ -11,8 +11,8 @@ export default function Pricing() {
         <p className="intro">No subscription. Preparing a return, checking it and sending it to HMRC&apos;s test service are free: you pay only for a return filed with HMRC.</p>
         <div className="plans">
           <div className="plan now">
-            <h3>Now, while in testing</h3>
-            <p className="who">Until HMRC recognise Nucta File</p>
+            <h3>Now, before you file</h3>
+            <p className="who">Until live filing is open for your account</p>
             <div className="price">£0</div>
             <p className="per">for everything available today</p>
             <ul>

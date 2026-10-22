@@ -4,7 +4,11 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { buildEnvelope, markWasCanonical } from "./ct600-xml";
 import { submitAndWait, askAgain, explain, receiptText, type RunResult } from "./govtalk";
-import { gatewayConfig, messageClass, redact, redactLive, liveFiling, liveConfig, maskId, type LiveFiling } from "./hmrc";
+import { gatewayConfig, messageClass, redact, redactLive, liveConfig, maskId, type LiveFiling } from "./hmrc";
+import { liveModeFor } from "./live-settings";
+import { signInLock, onlineApproval } from "./filing-checks";
+import { receiptEmailText } from "./filing-rules";
+import { sendEmail } from "./auth";
 import { prepareReturn, type PreparedReturn } from "./filing";
 import { companyNumberProblem } from "./companies-house";
 import { checkMicroAccounts } from "./accounts/micro";
@@ -309,7 +313,9 @@ function toDeadlineReturn(r: ReturnRowDb) {
     const poa = computePeriodOfAccount(toPeriodOfAccountInput(r.periodStart, r.periodEnd, d));
     if (poa.parts.length) taxByPart = poa.parts.map((x) => ({ to: x.to, tax: Math.round((x.result.taxChargeable + (x.loans?.a80 ?? 0)) * 100) / 100 }));
   } catch { /* figures not complete enough yet */ }
-  return { id: r.id, companyId: r.companyId, periodStart: r.periodStart, periodEnd: r.periodEnd, status: r.status, amendment: Boolean(d.amends), taxByPart, ctNotRequired: d.dormant && d.ctNoticeReceived === false };
+  const parts = accountingPeriodsOf(r.periodStart, r.periodEnd);
+  const paidByPart = Object.entries(d.paid ?? {}).flatMap(([n, list]) => parts[Number(n)] ? list.map((x) => ({ to: parts[Number(n)].to, amount: x.amount })) : []);
+  return { id: r.id, companyId: r.companyId, periodStart: r.periodStart, periodEnd: r.periodEnd, status: r.status, amendment: Boolean(d.amends), taxByPart, ctNotRequired: d.dormant && d.ctNoticeReceived === false, paidByPart };
 }
 
 export interface DashboardReturn {
@@ -584,7 +590,7 @@ export async function saveReturn(id: string, data: ReturnData): Promise<{ ok: bo
     if (!changed) return { ok: true, changed: false };
     if (filedLive(old)) return { ok: false, error: "This return has been filed with HMRC, so it can't be changed. Start an amended return instead." };
     if (filingUnderWay(old)) return { ok: false, error: "This return is being filed with HMRC right now. Wait for HMRC's answer before changing it." };
-    const next = { ...incoming, amends: old.amends ?? null, sent: {} };
+    const next = { ...incoming, amends: old.amends ?? null, sent: {}, ...(old.paid ? { paid: old.paid } : {}) };
     await s.db.update(s.returns).set({ data: next as unknown as Record<string, unknown>, updatedAt: new Date(), status: "draft" }).where(s.eq(s.returns.id, id));
     return { ok: true, changed: true };
   } catch (e) {
@@ -627,7 +633,7 @@ export interface ReturnPreview {
   /** When the return(s) must reach HMRC, and the last day to amend. */
   filingDue: string;
   amendBy: string;
-  /** Whether live filing is switched on (see hmrc.ts). */
+  /** Whether live filing is open for the person looking (see live-settings.ts). */
   liveFiling: LiveFiling;
   /** Who signs the return, for the declaration on the filing screen. */
   declarant: { name: string; status: string };
@@ -654,7 +660,8 @@ async function original(r: Awaited<ReturnType<typeof getReturn>>): Promise<Prepa
 
 export async function previewReturn(id: string): Promise<ReturnPreview> {
   const { r, p } = await prepared(id);
-  if (!p) return { ok: false, problems: [r.error ?? "The return couldn't be opened."], warnings: [], long: false, amended: false, parts: [], accountsHtml: null, filingDue: "", amendBy: "", liveFiling: liveFiling(), declarant: { name: "", status: "" }, director: "" };
+  const liveFiling = (await liveModeFor(await currentUser())).mode;
+  if (!p) return { ok: false, problems: [r.error ?? "The return couldn't be opened."], warnings: [], long: false, amended: false, parts: [], accountsHtml: null, filingDue: "", amendBy: "", liveFiling, declarant: { name: "", status: "" }, director: "" };
   const was = p.ok ? await original(r) : null;
   return {
     ok: p.ok, problems: p.problems, warnings: p.warnings, long: p.long, amended: p.returnType === "amended",
@@ -676,7 +683,7 @@ export async function previewReturn(id: string): Promise<ReturnPreview> {
       };
     }),
     accountsHtml: p.accountsHtml, filingDue: p.filingDue, amendBy: p.amendBy,
-    liveFiling: liveFiling(), declarant: { name: r.data!.declarantName, status: r.data!.declarantStatus }, director: r.data!.director,
+    liveFiling, declarant: { name: r.data!.declarantName, status: r.data!.declarantStatus }, director: r.data!.director,
   };
 }
 
@@ -694,10 +701,9 @@ export interface SendResult {
  * Sends one return to HMRC's test service: the only one, or — for accounts
  * longer than 12 months — the first or second (`part` 0 or 1).
  *
- * Live filing is not offered here: it needs HMRC's recognition of Nucta
- * File, and then the company's (or agent's) own Government Gateway sign-in
- * entered at the moment of filing. Until then every send is a test, and the
- * screen says so.
+ * Live filing is separate (fileReturnLive): it needs the company's (or
+ * agent's) own Government Gateway sign-in, entered at the moment of filing,
+ * and only a return this test service has accepted can be filed.
  */
 export async function sendReturnToTest(id: string, part = 0): Promise<SendResult> {
   const blocked = (headline: string, detail: string[]): SendResult => ({ ok: false, outcome: "blocked", headline, detail, correlationId: null, irmark: null, receipt: false });
@@ -765,7 +771,7 @@ export async function sendReturnToTest(id: string, part = 0): Promise<SendResult
         : run.outcome === "timeout" ? "Still processing at HMRC." : "The submission failed before HMRC could answer.",
     detail: run.errors.length ? run.errors.map(explain)
       : run.outcome === "accepted" ? [
-        "This was a test: nothing has been filed for the company. The same return will be sent live once HMRC recognise Nucta File.",
+        "This was a test: nothing has been filed for the company. When live filing is open for your account, this same return is filed from this screen.",
         ...(other && !otherDone ? [`Now send the other return, for ${other.periodFrom} to ${other.periodTo}.`] : []),
       ]
         : run.outcome === "timeout" ? ["HMRC are still working on it. The Submission log can ask again with the correlation ID."] : [],
@@ -809,7 +815,7 @@ export async function startAmendment(returnId: string, today = new Date().toISOS
       correlationIds = subs.map((x) => x.correlationId).filter((x): x is string => Boolean(x)).slice(0, accountingPeriodsOf(r.periodStart, r.periodEnd).length);
       acceptedAt = subs[0]?.startedAt.toISOString() ?? null;
     }
-    const copy: ReturnData = { ...data, sent: {}, amends: { returnId: r.id, correlationIds, acceptedAt, test: r.status === "accepted-test" } };
+    const copy: ReturnData = { ...data, sent: {}, til: {}, filing: {}, paid: {}, amends: { returnId: r.id, correlationIds, acceptedAt, test: r.status === "accepted-test" } };
     const id = randomUUID();
     await s.db.insert(s.returns).values({ id, companyId: r.companyId, kind: r.kind, periodStart: r.periodStart, periodEnd: r.periodEnd, status: "draft", basis: r.basis, data: copy as unknown as Record<string, unknown> });
     revalidatePath(`/companies/${r.companyId}`);
@@ -823,6 +829,8 @@ export interface LiveSignIn {
   /** The Government Gateway user ID: the company's own, or the agent's when filing as its agent. */
   userId: string;
   password: string;
+  /** Whose HMRC account it is. Without it, the declarant's status decides. */
+  as?: "company" | "agent";
 }
 
 export interface LiveResult extends SendResult {
@@ -839,8 +847,12 @@ export interface LiveResult extends SendResult {
  * live service check it with the same sign-in while filing nothing.
  *
  * The rules, each checked before anything is sent:
- *   - live filing is switched on (NUCTA_LIVE_FILING), and for a real filing
- *     set to "on", which happens once HMRC recognise Nucta File;
+ *   - live filing is open for this person (the Live filing page), and for a
+ *     real filing set to "on";
+ *   - fewer than two sign-ins have failed on this return in the last hour,
+ *     so a few more wrong passwords can't lock the company's HMRC account;
+ *   - when the administrators require it, HMRC's Test in Live check has
+ *     passed with these exact figures;
  *   - this exact version of the return has passed HMRC's test service;
  *   - the director's approval and the declaration have been confirmed;
  *   - the filing can be recorded: a row is written before sending, so a
@@ -855,10 +867,12 @@ export async function fileReturnLive(
   const stop = (headline: string, detail: string[]): LiveResult =>
     ({ ok: false, outcome: "blocked", headline, detail, correlationId: null, irmark: null, receipt: false, filed: false, receiptText: null, receiptNotSaved: false });
   const til = opts.testInLive;
-  const mode = liveFiling();
-  if (mode === "off") return stop("Live filing isn't switched on yet.", ["It opens once HMRC recognise Nucta File. Until then, returns go to HMRC's test service."]);
-  if (!til && mode !== "on") return stop("Only HMRC's Test in Live check is switched on.", ["Real filing is switched on once HMRC recognise Nucta File."]);
-  if (!opts.approved || !opts.declared) return stop("Confirm the director's approval and the declaration first.", []);
+  const u = await currentUser();
+  if (!u) return stop(SIGNED_OUT, []);
+  const live = await liveModeFor(u);
+  const mode = live.mode;
+  if (mode === "off") return stop("Live filing isn't open for this account yet.", [live.why]);
+  if (!til && mode !== "on") return stop("Only HMRC's Test in Live check is open.", ["Real filing hasn't been switched on yet. Test in Live checks the return with HMRC's live service and files nothing."]);
   const userId = signIn.userId.trim(), password = signIn.password;
   if (!userId || !password) return stop("Enter the Government Gateway user ID and password.", []);
   if (/\s/.test(userId) || userId.length > 64) return stop("That user ID doesn't look right.", ["It's the Government Gateway user ID used to sign in to HMRC online services, with no spaces."]);
@@ -866,6 +880,13 @@ export async function fileReturnLive(
   const { r, p } = await prepared(id);
   if (!p) return stop("The return couldn't be opened.", [r.error ?? ""]);
   if (!p.ok) return stop("The return isn't ready to file.", p.problems);
+  const s0 = await store();
+  const lockedUntil = await signInLock(s0, id);
+  if (lockedUntil) return stop("Two sign-ins have failed on this return in the last hour, so Nucta File won't try again yet.", [`A few more wrong passwords can lock the HMRC account. Check the user ID and password by signing in on GOV.UK, then try again after ${new Date(lockedUntil).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}.`]);
+  const online = await onlineApproval(s0, id, r.periodStart!, r.periodEnd!, r.data!);
+  const approvedOnline = online?.status === "approved";
+  if (!(opts.approved || approvedOnline) || !opts.declared) return stop("Confirm the director's approval and the declaration first.", []);
+  const approvalWords = approvedOnline ? `approved online by ${online!.name}${online!.at ? ` on ${online!.at.slice(0, 10)}` : ""}` : "confirmed by the person filing";
   const pp = p.parts[part];
   if (!pp?.ct600) return stop("There's no such return for this period.", []);
   const data = r.data!;
@@ -876,6 +897,9 @@ export async function fileReturnLive(
     return stop("Send this return to HMRC's test service first.", ["Live filing is offered only for a return whose exact figures have passed the test service."]);
   }
   if (filingUnderWay(data, part)) return stop("This return is being filed right now.", ["Wait a minute for HMRC's answer."]);
+  if (!til && live.settings.requireTil && data.til?.[String(part)]?.outcome !== "accepted") {
+    return stop("Run HMRC's Test in Live check first.", ["It uses the same sign-in, checks the return with HMRC's live service and files nothing — so a wrong password or an account without Corporation Tax shows up before the real filing."]);
+  }
 
   const config = liveConfig(userId, password, til);
   const cls = config.messageClass!;
@@ -883,7 +907,7 @@ export async function fileReturnLive(
     messageClass: cls, senderId: userId, vendorId: config.vendorId, body: pp.ct600,
     utr: r.company!.utr ?? "", periodEnd: pp.periodTo, test: false,
     productName: config.productName, productVersion: config.productVersion, email: config.email, markMethod: "spec",
-    sender: data.declarantStatus === "Agent" ? "Agent" : "Company",
+    sender: signIn.as === "agent" ? "Agent" : signIn.as === "company" ? "Company" : data.declarantStatus === "Agent" ? "Agent" : "Company",
   });
   const irmark = (envelope.match(/<IRmark[^>]*>([\s\S]*?)<\/IRmark>/) ?? [])[1] ?? null;
   if (!markWasCanonical()) return stop("The return's digital mark couldn't be calculated properly, so it wasn't sent.", ["Report this — it is a software fault."]);
@@ -910,7 +934,11 @@ export async function fileReturnLive(
   } catch (e) {
     run = { outcome: "error", correlationId: null, receipt: null, errors: [{ type: "fatal", number: null, text: String((e as Error)?.message ?? e).slice(0, 300), location: null }], steps: [] };
   }
-  return finishLive(id, part, sid, run, { til, userId, irmark, pp, parts: p.parts.length, accountsHtml: p.accountsHtml });
+  const filedAs = signIn.as ?? (data.declarantStatus === "Agent" ? "agent" : "company");
+  return finishLive(id, part, sid, run, {
+    til, userId, irmark, pp, parts: p.parts.length, accountsHtml: p.accountsHtml, filedAs, approval: approvalWords,
+    mail: live.settings.emailReceipt ? { to: u.email, sender: u.accountName || u.name, company: r.company!.name, utr: r.company!.utr } : null,
+  });
 }
 
 /** Asks HMRC again about a live filing that was still processing. Needs the same sign-in. */
@@ -927,12 +955,23 @@ export async function checkLiveFiling(id: string, part: number, signIn: LiveSign
   const s = await store();
   const sid = randomUUID();
   await s.db.insert(s.submissions).values({ id: sid, returnId: id, gatewayTest: false, messageClass: config.messageClass!, outcome: "running", correlationId: rec.correlationId, irmark: rec.irmark, errors: [], startedBy: maskId(signIn.userId.trim()) });
-  return finishLive(id, part, sid, run, { til: false, userId: signIn.userId.trim(), irmark: rec.irmark, pp: p.parts[part], parts: p.parts.length, accountsHtml: p.accountsHtml });
+  const u = await currentUser();
+  const live = await liveModeFor(u);
+  return finishLive(id, part, sid, run, {
+    til: false, userId: signIn.userId.trim(), irmark: rec.irmark, pp: p.parts[part], parts: p.parts.length, accountsHtml: p.accountsHtml,
+    filedAs: rec.filedAs, approval: rec.approval,
+    mail: u && live.settings.emailReceipt ? { to: u.email, sender: u.accountName || u.name, company: r.company!.name, utr: r.company!.utr } : null,
+  });
 }
 
 async function finishLive(
   id: string, part: number, sid: string, run: RunResult,
-  x: { til: boolean; userId: string; irmark: string | null; pp: { periodFrom: string; periodTo: string; computationHtml: string | null }; parts: number; accountsHtml: string | null },
+  x: {
+    til: boolean; userId: string; irmark: string | null; parts: number; accountsHtml: string | null;
+    pp: { periodFrom: string; periodTo: string; computationHtml: string | null; taxDue: string; computation: { taxChargeable: number }; loans: { needed: boolean; a80: number } | null };
+    filedAs?: "company" | "agent"; approval?: string;
+    mail: { to: string; sender: string; company: string; utr: string | null } | null;
+  },
 ): Promise<LiveResult> {
   const words = receiptText(run.receipt);
   const filed = !x.til && run.outcome === "accepted";
@@ -958,6 +997,7 @@ async function finishLive(
         sent[String(part)] = {
           outcome: run.outcome, status: run.outcome === "accepted" ? "accepted" : "submitted-live", correlationId: run.correlationId, irmark: x.irmark, at,
           periodFrom: x.pp.periodFrom, periodTo: x.pp.periodTo, receiptText: words, filedBy: maskId(x.userId),
+          ...(x.filedAs ? { filedAs: x.filedAs } : {}), ...(x.approval ? { approval: x.approval } : {}),
         } satisfies SentRecord;
       }
       await s.db.update(s.returns).set({
@@ -973,6 +1013,14 @@ async function finishLive(
       : filed ? [words ?? "HMRC have received the return.", "Keep this receipt: it is HMRC's confirmation that the return was filed."]
         : run.outcome === "timeout" ? ["HMRC have the return and are still processing it. Press “Ask HMRC again” in a minute, with the same sign-in. Don't file it a second time."] : [];
   if (filed && !saved) detail.push("Nucta File couldn't save this receipt. Save or print this page now, and tell your administrator.");
+  if (filed && x.mail) {
+    const payable = Math.round((x.pp.computation.taxChargeable + (x.pp.loans?.needed ? x.pp.loans.a80 : 0)) * 100) / 100;
+    const m = receiptEmailText({
+      company: x.mail.company, utr: x.mail.utr, periodFrom: x.pp.periodFrom, periodTo: x.pp.periodTo, filedAt: new Date().toISOString(),
+      correlationId: run.correlationId, irmark: x.irmark, receiptText: words, payable, taxDue: x.pp.taxDue, sender: x.mail.sender,
+    });
+    if (await sendEmail(x.mail.to, m.subject, m.text).catch(() => false)) detail.push(`A copy of the receipt has been emailed to ${x.mail.to}.`);
+  }
   return {
     ok: run.outcome === "accepted",
     outcome: run.outcome,

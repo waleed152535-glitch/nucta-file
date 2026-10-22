@@ -254,3 +254,14 @@ export const tasks = pgTable("nf_tasks", {
   doneAt: timestamp("done_at", { withTimezone: true }),
   createdAt: now(),
 }, (t) => [index("tasks_account_idx").on(t.accountId)]);
+
+/**
+ * Settings Nucta File's administrators change from inside the software, such
+ * as whether live filing is open. One row per setting; the value is JSON.
+ */
+export const settings = pgTable("nf_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

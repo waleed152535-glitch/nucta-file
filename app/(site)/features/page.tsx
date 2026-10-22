@@ -45,7 +45,10 @@ const GROUPS: { heading: string; intro: string; items: [string, string][] }[] = 
     items: [
       ["Tested first", "Every return can be sent to HMRC's test service, which checks it exactly as a live filing would. Live filing is only offered for figures that have passed."],
       ["Your sign-in, never stored", "The company's or agent's Government Gateway sign-in is typed in at the moment of filing and used once."],
-      ["HMRC's receipt, kept", "The receipt, the correlation ID and the IRmark are saved with the return and can be downloaded at any time."],
+      ["Checked live before filing", "HMRC's Test in Live check runs the return through HMRC's live service with the real sign-in and files nothing, so a wrong password or a missing Corporation Tax enrolment shows up first."],
+      ["Approval on record", "A director's online approval is recorded with the filing, with the date and time — or you confirm it was approved another way."],
+      ["HMRC's receipt, kept", "The receipt, the correlation ID and the IRmark are saved with the return, can be downloaded at any time, and can be emailed to the director."],
+      ["Paying the tax", "HMRC's bank details, the payment reference explained, and payments recorded against each return so the dashboard knows what's still owed."],
     ],
   },
 ];

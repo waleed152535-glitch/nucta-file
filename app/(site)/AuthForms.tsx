@@ -33,7 +33,7 @@ export function SignUpForm() {
   return (
     <form action={act} className="auth-card">
       <h1>Create your account</h1>
-      <p className="sub">Free while Nucta File is in testing.</p>
+      <p className="sub">Free to prepare and test returns.</p>
       <Problems s={s} />
       <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
         <legend className="f" style={{ marginBottom: 6 }}><span style={{ marginBottom: 0 }}>Who is it for?</span></legend>

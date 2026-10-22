@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getLiveSettings } from "@/lib/live-settings";
 import { readiness } from "@/lib/hmrc";
 
 export const dynamic = "force-dynamic";
@@ -6,9 +7,9 @@ export const dynamic = "force-dynamic";
 /**
  * The stages a filing product has to clear, in the order they actually bind.
  *
- * Features don't matter until the wire works, and the wire doesn't matter
- * until HMRC has recognised the product. Showing the order honestly stops
- * effort going into screens that a failed handshake would make worthless.
+ * Features don't matter until the wire works. Showing the order honestly
+ * stops effort going into screens that a failed handshake would make
+ * worthless.
  */
 const STAGES = [
   {
@@ -27,9 +28,14 @@ const STAGES = [
     body: "Returns are worked out from the accounts: disallowed expenses, capital allowances, losses, interest and donations, then the 19%/25% rates with marginal relief. Accounts are built from real balance-sheet figures. Each year's closing figures carry into the next. Accounts longer than 12 months are split into two returns automatically, and an accepted return can be amended.",
   },
   {
-    title: "HMRC recognition",
+    title: "Live filing",
     done: false,
-    body: "The applicant's pack has been requested from sdsteam@hmrc.gov.uk. Recognition is what allows live filing for customers and a listing on GOV.UK, and it is renewed every year. Live filing is already built — sign-in typed at filing time, never stored, HMRC's receipt kept — and is switched on with NUCTA_LIVE_FILING once HMRC say yes.",
+    body: "Built: switched on from the Live filing page (off, Test in Live, or live; administrators first, then every account). The sign-in is typed at filing time and never stored, HMRC's Test in Live check runs first, and HMRC's receipt is kept and emailed. Next: the first real filings, kept in the submission log.",
+  },
+  {
+    title: "HMRC recognition (optional)",
+    done: false,
+    body: "HMRC say recognition is optional, and not to apply until the specifications are fully researched, testing (including the External Test Service) is extensive and the product is mature and on sale. The 2025 round has closed; HMRC are preparing the 2026 instructions. Recognition brings a listing on GOV.UK.",
   },
   {
     title: "Accounts to Companies House",
@@ -43,8 +49,8 @@ const STAGES = [
   },
 ];
 
-export default function Status() {
-  const checks = readiness();
+export default async function Status() {
+  const checks = readiness(await getLiveSettings());
   const ready = checks.filter((c) => c.ok).length;
 
   return (

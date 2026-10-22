@@ -46,6 +46,8 @@ export interface DeadlineReturn {
   taxByPart?: { to: string; tax: number }[];
   /** A dormant company HMRC haven't asked for a return: only its accounts are due. */
   ctNotRequired?: boolean;
+  /** Tax paid so far for each accounting period, as recorded in Nucta File. */
+  paidByPart?: { to: string; amount: number }[];
 }
 
 export type DeadlineKind = "ct600" | "ct-payment" | "ch-accounts" | "confirmation" | "not-started";
@@ -126,10 +128,14 @@ export function deadlinesFor(companies: DeadlineCompany[], returns: DeadlineRetu
       for (const p of accountingPeriodsOf(r.periodStart, r.periodEnd)) {
         const tax = r.taxByPart?.find((x) => x.to === p.to)?.tax;
         const due = taxDueDate(p.to);
-        // Whether a filed return's tax was paid isn't known here, so it is shown only until it falls due.
         if ((tax !== undefined && tax <= 0) || r.ctNotRequired) continue;
-        if (filed(r.status) && toDay(due) < t) continue;
-        push(c, { returnId: r.id, kind: "ct-payment", label: "Corporation Tax to pay", periodFrom: p.from, periodTo: p.to, due, ...(tax !== undefined ? { amount: tax } : {}) });
+        // Payments recorded in Nucta File take the tax off the list; without one, a filed
+        // return's tax is shown only until it falls due, as it may have been paid elsewhere.
+        const paid = Math.round((r.paidByPart ?? []).filter((x) => x.to === p.to).reduce((sum, x) => sum + x.amount, 0) * 100) / 100;
+        if (tax !== undefined && paid > 0 && paid >= tax) continue;
+        if (filed(r.status) && toDay(due) < t && !paid) continue;
+        const left = tax !== undefined ? Math.round((tax - paid) * 100) / 100 : undefined;
+        push(c, { returnId: r.id, kind: "ct-payment", label: paid > 0 ? "Corporation Tax left to pay" : "Corporation Tax to pay", periodFrom: p.from, periodTo: p.to, due, ...(left !== undefined ? { amount: left } : {}) });
       }
       chItem(c, r.periodStart, r.periodEnd, r.id);
     }

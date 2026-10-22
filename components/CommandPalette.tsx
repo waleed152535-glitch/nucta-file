@@ -24,6 +24,7 @@ const ACTIONS: Option[] = [
   { group: "Do", key: "a-csv", title: "Download the company list", detail: "A spreadsheet (CSV) of every company and its next deadline", icon: "⇩", href: "/companies/export", download: true },
 ];
 const ADMIN: Option[] = [
+  { group: "Admin", key: "x-live", title: "Live filing", detail: "Switch live filing on or off, and for whom", icon: "⚑", href: "/live-filing" },
   { group: "Admin", key: "x-gw", title: "HMRC test console", icon: "⇄", href: "/gateway" },
   { group: "Admin", key: "x-ch", title: "Companies House console", icon: "⌂", href: "/companies-house" },
   { group: "Admin", key: "x-log", title: "Submission log", icon: "☰", href: "/log" },

@@ -1,3 +1,4 @@
+import { getLiveSettings } from "@/lib/live-settings";
 import { readiness, VENDOR_ID, SENDER_ID, ENDPOINTS } from "@/lib/hmrc";
 
 export const dynamic = "force-dynamic";
@@ -36,8 +37,8 @@ const VARS = [
   },
 ];
 
-export default function Settings() {
-  const checks = readiness();
+export default async function Settings() {
+  const checks = readiness(await getLiveSettings());
 
   return (
     <>

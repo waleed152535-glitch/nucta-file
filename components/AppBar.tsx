@@ -11,7 +11,7 @@ import { signOutAction } from "@/lib/session-actions";
 import Mark from "./Mark";
 import CommandPalette, { type PaletteMode } from "./CommandPalette";
 
-export interface BarUser { name: string; email: string; accountName: string; accountKind: string; admin: boolean }
+export interface BarUser { name: string; email: string; accountName: string; accountKind: string; admin: boolean; live?: "off" | "til" | "on" }
 
 const TABS = [
   { href: "/dashboard", label: "Dashboard", also: [] as string[] },
@@ -19,6 +19,7 @@ const TABS = [
   { href: "/deadlines", label: "Deadlines", also: [] as string[] },
 ];
 const ADMIN = [
+  { href: "/live-filing", label: "Live filing" },
   { href: "/gateway", label: "HMRC test console" },
   { href: "/companies-house", label: "Companies House console" },
   { href: "/log", label: "Submission log" },
@@ -56,7 +57,7 @@ export default function AppBar({ user }: { user: BarUser }) {
     <>
       <header className="appbar">
         <div className="appbar-in">
-          <Link href="/dashboard" className="brand" aria-label="Nucta File dashboard"><Mark size={24} />Nucta File<small>In testing</small></Link>
+          <Link href="/dashboard" className="brand" aria-label="Nucta File dashboard"><Mark size={24} />Nucta File<small title={user.live === "on" ? "Returns can be filed with HMRC for real" : user.live === "til" ? "HMRC's Test in Live check is open" : "Returns go to HMRC's test service"}>{user.live === "on" ? "Live filing" : user.live === "til" ? "Test in Live" : "Test service"}</small></Link>
           <nav className="tabsnav" aria-label="Main">
             {TABS.map((t) => <Link key={t.href} href={t.href} className={active(t) ? "active" : ""} aria-current={active(t) ? "page" : undefined}>{t.label}</Link>)}
           </nav>

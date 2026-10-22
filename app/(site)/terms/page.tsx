@@ -8,12 +8,12 @@ export default function Terms() {
       <div className="wrap">
         <div className="paper">
         <h1>Terms of use</h1>
-        <p className="meta">Last updated 21 October 2026</p>
+        <p className="meta">Last updated 22 October 2026</p>
         <p>These terms are between you and {SITE.company}{SITE.companyNumber ? ` (company number ${SITE.companyNumber})` : ""}, which provides {SITE.product}. By creating an account you agree to them.</p>
 
         <h2>What Nucta File does</h2>
         <p>{SITE.product} helps you prepare a company&apos;s accounts and Corporation Tax return from figures you enter, and file them with HMRC. It applies the tax rules as they stand and tells you when a company is outside what it handles.</p>
-        <p>{SITE.product} is in testing. Until HMRC recognise it, returns can be prepared and sent to HMRC&apos;s test service, but not filed for real. We&apos;ll tell you when live filing opens.</p>
+        <p>{SITE.product} is opening live filing in stages. Until it is open for your account, returns can be prepared and sent to HMRC&apos;s test service, but not filed for real. We&apos;ll tell you when it opens for you.</p>
 
         <h2>Your responsibilities</h2>
         <ul>
@@ -27,7 +27,7 @@ export default function Terms() {
         <p>We&apos;ll take reasonable care that {SITE.product} works out returns correctly and keeps your information secure. Nucta File isn&apos;t a substitute for professional advice: if a company&apos;s position isn&apos;t straightforward, ask an accountant.</p>
 
         <h2>Fees</h2>
-        <p>Using {SITE.product} is free while it is in testing. Once live filing opens, the prices on our pricing page apply to each return filed, and we&apos;ll tell you before anything is charged.</p>
+        <p>Using {SITE.product} is free until live filing is open for your account. From then, the prices on our pricing page apply to each return filed, and we&apos;ll tell you before anything is charged.</p>
 
         <h2>Liability</h2>
         <p>Nothing in these terms limits liability that can&apos;t be limited by law. Otherwise, our total liability to you for a return is limited to the fee paid for it, and we aren&apos;t liable for penalties or interest that arise from figures entered incorrectly, from a return not approved by the company, or from a return filed late.</p>

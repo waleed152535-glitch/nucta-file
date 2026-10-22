@@ -15,7 +15,7 @@ import { prepareReturn } from "./filing";
 import type { LoadedReturn } from "./return-actions";
 
 /** Approval and filing details don't change what is being approved. */
-const NOT_FIGURES = new Set(["director", "approvedOn", "declarantName", "declarantStatus", "sent", "filing", "til", "carriedFrom"]);
+const NOT_FIGURES = new Set(["director", "approvedOn", "declarantName", "declarantStatus", "sent", "filing", "til", "paid", "carriedFrom"]);
 
 export function figuresHash(periodStart: string, periodEnd: string, data: ReturnData): string {
   const sorted = (v: unknown): unknown => Array.isArray(v) ? v.map(sorted)

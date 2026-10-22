@@ -123,12 +123,16 @@ export function redactLive(text: string): string {
 }
 
 /**
- * Whether live filing is switched on, set by NUCTA_LIVE_FILING in the
- * hosting settings:
- *   off  (the default) — test service only
- *   til  — also "Test in Live": checks with HMRC's live service using the
- *          company's own sign-in, filing nothing
- *   on   — Test in Live and real filing; set once HMRC recognise Nucta File
+ * The starting point for live filing, from NUCTA_LIVE_FILING in the hosting
+ * settings, used until an administrator saves a choice on the Live filing
+ * page (see live-settings.ts, which is what everything else asks):
+ *   off  (the default) — HMRC's test service only
+ *   til  — also "Test in Live": HMRC's live service checks the return with
+ *          the company's own sign-in, filing nothing
+ *   on   — Test in Live and real filing
+ * HMRC's recognition of the software is optional (HMRC's own words): live
+ * filing needs the vendor ID, a product that has passed HMRC's test service,
+ * and the company's or agent's own sign-in.
  */
 export type LiveFiling = "off" | "til" | "on";
 export function liveFiling(): LiveFiling {
@@ -156,7 +160,9 @@ export function liveConfig(userId: string, password: string, testInLive: boolean
 }
 
 /** Whether the app is configured well enough to attempt a test submission. */
-export function readiness(): { label: string; ok: boolean; detail: string }[] {
+export function readiness(live?: { mode: LiveFiling; who: "admins" | "everyone" }): { label: string; ok: boolean; detail: string }[] {
+  const mode = live?.mode ?? liveFiling();
+  const forWhom = live?.who === "everyone" ? " for every account" : " for administrators only";
   return [
     {
       label: "Vendor ID",
@@ -177,12 +183,12 @@ export function readiness(): { label: string; ok: boolean; detail: string }[] {
     },
     {
       label: "Live filing",
-      ok: liveFiling() !== "off",
-      detail: liveFiling() === "on"
-        ? "On. Returns can be filed with HMRC, using the company's or agent's own sign-in, typed in at the moment of filing and never stored."
-        : liveFiling() === "til"
-          ? "Test in Live only: a return can be checked by HMRC's live service with the company's own sign-in, but nothing is filed."
-          : "Off until HMRC recognise Nucta File. Set NUCTA_LIVE_FILING to til to try HMRC's Test in Live, or to on once recognised.",
+      ok: mode !== "off",
+      detail: mode === "on"
+        ? `On${forWhom}. Returns can be filed with HMRC, using the company's or agent's own sign-in, typed in at the moment of filing and never stored.`
+        : mode === "til"
+          ? `Test in Live only${forWhom}: HMRC's live service checks a return with the company's own sign-in, and files nothing.`
+          : "Off: returns go to HMRC's test service only. Switch it on from the Live filing page.",
     },
     {
       label: "CT600 schema",

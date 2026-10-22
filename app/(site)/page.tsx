@@ -110,9 +110,9 @@ export default function Home() {
       <section className="s-sec" aria-labelledby="price-h">
         <div className="wrap">
           <h2 id="price-h">Pay for a return when you file it</h2>
-          <p className="intro">No subscription. Preparing, checking and testing returns cost nothing, and nothing is charged until live filing opens.</p>
+          <p className="intro">No subscription. Preparing, checking and testing returns cost nothing, and nothing is charged until live filing is open for your account.</p>
           <div className="price-row">
-            <div><b>£0</b><p>While Nucta File is in testing: prepare, check and test as many returns as you like.</p></div>
+            <div><b>£0</b><p>Until live filing is open for your account: prepare, check and test as many returns as you like.</p></div>
             <div><b>{gbp(PRICES.company.perReturn)}</b><p>Per return, for a company filing its own. {gbp(PRICES.company.dormant)} for a dormant company.</p></div>
             <div><b>{gbp(PRICES.practice.perReturn)}</b><p>Per return, for practices filing for clients. {gbp(PRICES.practice.dormant)} for a dormant company.</p></div>
           </div>
@@ -124,7 +124,8 @@ export default function Home() {
         <div className="wrap">
           <h2 id="faq-h">Questions</h2>
           <div className="faq">
-            <details><summary>Is Nucta File recognised by HMRC?</summary><p>Not yet. Nucta File is registered with HMRC as a software developer (vendor {SITE.vendorId}), and its returns pass HMRC&apos;s test service, including returns with director&apos;s loans, long periods, dormant companies and amendments. Recognition is the last step. Until then you can prepare and test returns; filing opens the day HMRC confirm.</p></details>
+            <details><summary>Does Nucta File need HMRC&apos;s recognition to file?</summary><p>No — HMRC say recognition is optional. Nucta File is registered with HMRC as a software developer (vendor {SITE.vendorId}), builds every return to HMRC&apos;s published specifications, and checks each one with HMRC&apos;s test service before it is filed. Its returns pass that service with director&apos;s loans, long periods, dormant companies and amendments. Live filing is opening in stages: if it isn&apos;t open for your account yet, prepare and test the return now and file the same return when it opens.</p></details>
+            <details><summary>Can I still use HMRC&apos;s own free filing service?</summary><p>No. HMRC closed its free Company Accounts and Tax Online service on 31 March 2026, so a company&apos;s return now has to be filed with commercial software such as Nucta File.</p></details>
             <details><summary>Which companies can use it?</summary><p>UK limited companies with one trade, filing micro-entity accounts, which is most small companies, and dormant companies. Groups, research and development relief, rental income and companies that sold land or shares aren&apos;t handled yet; Nucta File tells you at the start if a company is one of them.</p></details>
             <details><summary>What does HMRC need with the return?</summary><p>The CT600, the company&apos;s accounts and a tax computation, both in iXBRL. Nucta File prepares all three from the figures you enter and sends them together.</p></details>
             <details><summary>Does it file the accounts with Companies House?</summary><p>Filing with Companies House is built and waiting for Companies House&apos;s test approval. Until then, download the accounts from Nucta File and file them as you do now.</p></details>
@@ -136,7 +137,7 @@ export default function Home() {
       <section className="closing" aria-labelledby="closing-h">
         <div className="wrap">
           <h2 id="closing-h">Your next return, ready before the deadline.</h2>
-          <p>Create an account and prepare a return today. When HMRC recognise Nucta File, the same return is ready to file.</p>
+          <p>Create an account and prepare a return today. Test it with HMRC&apos;s test service, then file the same return with HMRC.</p>
           <div className="ctas">
             <Link href="/sign-up" className="s-btn big">Create your account</Link>
             <a href={`mailto:${SITE.email}`} className="s-btn quiet big">Email us</a>

@@ -66,6 +66,8 @@ export interface ReturnData {
   filing?: Record<string, string>;
   /** The last "Test in Live" check of each return. Kept by the server. */
   til?: Record<string, { outcome: string; at: string; correlationId: string | null }>;
+  /** Payments of each return's tax. Kept by the server; kept when the figures change. */
+  paid?: Record<string, PaymentRecord[]>;
 }
 
 export interface AmendsLink {
@@ -91,10 +93,25 @@ export interface SentRecord {
   receiptText?: string | null;
   /** For a live filing: the Government Gateway user ID it was filed with, mostly hidden. */
   filedBy?: string;
+  /** For a live filing: whose HMRC account signed in — the company's own, or an agent's. */
+  filedAs?: "company" | "agent";
+  /** For a live filing: how the director's approval was given, in words. */
+  approval?: string;
+}
+
+/** A payment of the return's tax, as recorded by whoever paid it or saw it paid. */
+export interface PaymentRecord {
+  /** yyyy-mm-dd */
+  on: string;
+  amount: number;
+  /** HMRC's 17-character payment reference used, if known. */
+  reference: string;
+  recordedBy: string;
+  at: string;
 }
 
 /** Keys the server keeps for itself; what the screen sends back for them is ignored. */
-export const SERVER_KEYS = ["sent", "amends", "filing", "til"] as const;
+export const SERVER_KEYS = ["sent", "amends", "filing", "til", "paid"] as const;
 
 export const blankPL = (): ProfitAndLoss => ({
   turnover: 0, otherIncome: 0, interestReceived: 0, costOfSales: 0, staffCosts: 0, depreciation: 0, otherCharges: 0,

@@ -25,6 +25,7 @@ const ACTIONS: Option[] = [
 ];
 const ADMIN: Option[] = [
   { group: "Admin", key: "x-live", title: "Live filing", detail: "Switch live filing on or off, and for whom", icon: "⚑", href: "/live-filing" },
+  { group: "Admin", key: "x-pay", title: "Payments", detail: "Charging for filing, Stripe's set-up, and every payment", icon: "£", href: "/payments" },
   { group: "Admin", key: "x-gw", title: "HMRC test console", icon: "⇄", href: "/gateway" },
   { group: "Admin", key: "x-ch", title: "Companies House console", icon: "⌂", href: "/companies-house" },
   { group: "Admin", key: "x-log", title: "Submission log", icon: "☰", href: "/log" },

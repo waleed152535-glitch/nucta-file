@@ -20,6 +20,7 @@ const TABS = [
 ];
 const ADMIN = [
   { href: "/live-filing", label: "Live filing" },
+  { href: "/payments", label: "Payments" },
   { href: "/gateway", label: "HMRC test console" },
   { href: "/companies-house", label: "Companies House console" },
   { href: "/log", label: "Submission log" },

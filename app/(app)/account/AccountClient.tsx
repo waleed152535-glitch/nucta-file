@@ -11,7 +11,7 @@ function Result({ s }: { s: FormState }) {
   return null;
 }
 
-export default function AccountClient({ name, email, firm, kind, team }: { name: string; email: string; firm: string; kind: string; team?: React.ReactNode }) {
+export default function AccountClient({ name, email, firm, kind, team, payments, emailConfirmed = true }: { name: string; email: string; firm: string; kind: string; team?: React.ReactNode; payments?: React.ReactNode; emailConfirmed?: boolean }) {
   const [profile, saveProfile, savingProfile] = useActionState(updateProfileAction, start);
   const [pw, savePw, savingPw] = useActionState(changePasswordAction, start);
   return (
@@ -29,7 +29,7 @@ export default function AccountClient({ name, email, firm, kind, team }: { name:
             <div className="bd">
               <div className="field"><label>Your name</label><input name="name" defaultValue={name} autoComplete="name" /></div>
               <div className="field"><label>{kind === "company" ? "Company name" : "Firm name"}<span className="hint">shown on approval packs</span></label><input name="firm" defaultValue={firm} autoComplete="organization" /></div>
-              <div className="field"><label>Email</label><input value={email} disabled /></div>
+              <div className="field"><label>Email<span className="hint">{emailConfirmed ? "confirmed" : "not confirmed yet — see the bar at the top"}</span></label><input value={email} disabled /></div>
               <Result s={profile} />
               <button className="btn" type="submit" disabled={savingProfile}>{savingProfile ? "Saving…" : "Save details"}</button>
             </div>
@@ -46,6 +46,7 @@ export default function AccountClient({ name, email, firm, kind, team }: { name:
           </form>
         </div>
         {team}
+        {payments}
         <form className="card" action={signOutEverywhereAction}>
           <div className="hd"><h3>Signed-in browsers</h3></div>
           <div className="bd">

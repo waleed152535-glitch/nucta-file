@@ -8,7 +8,8 @@
  * screen shows. Server only; not a "use server" file.
  */
 import type { SignedInUser } from "./auth";
-import { emailReady } from "./auth";
+import { emailReady, emailCheckNeeded } from "./auth";
+import { feeState, type FeeState } from "./billing";
 import { store, ownedReturn, type Store } from "./store";
 import { normaliseReturnData, toCompanyReturnInput, type ReturnData, type SentRecord, type PaymentRecord } from "./return-model";
 import { prepareReturn } from "./filing";
@@ -61,6 +62,10 @@ export interface FilingPicture {
   emailReady: boolean;
   userEmail: string;
   amendment: boolean;
+  /** The filing fee for this return, when charging is on. */
+  fee?: FeeState;
+  /** The person filing hasn't confirmed their email address yet. */
+  emailCheckNeeded?: boolean;
 }
 
 /** HMRC's error for a user ID or password that doesn't work for Corporation Tax. */
@@ -126,6 +131,8 @@ export async function filingPicture(u: SignedInUser, returnId: string, today = n
   const approval = await onlineApproval(s, returnId, r.periodStart, r.periodEnd, data);
   const lockedUntil = await signInLock(s, returnId);
   const home = await paymentHome(s, returnId);
+  const fee = await feeState(s, u, returnId);
+  const confirmEmail = emailCheckNeeded(u);
 
   const parts: FilingPart[] = p.parts.map((pp, n) => {
     const rec = data.sent?.[String(n)] ?? null;
@@ -143,6 +150,9 @@ export async function filingPicture(u: SignedInUser, returnId: string, today = n
   const late = !allFiled && p.filingDue && !(data.dormant && data.ctNoticeReceived === false) ? lateFiling(p.filingDue, today) : null;
 
   const checks: FilingCheck[] = [];
+  if (confirmEmail && live.mode !== "off") {
+    checks.push({ key: "email", state: "bad", title: "Confirm your email address", detail: `Open the link we sent to ${u.email} — HMRC's receipt and payment confirmations go there. “Send the link again” is at the top of the page.` });
+  }
   checks.push(live.mode === "off"
     ? { key: "open", state: "info", title: "Live filing isn't open for this account yet", detail: live.why }
     : { key: "open", state: "ok", title: live.mode === "til" ? "HMRC's Test in Live check is open" : "Live filing is open", detail: live.mode === "til" ? "A return can be checked by HMRC's live service with the real sign-in. Nothing is filed until real filing is switched on." : undefined });
@@ -185,6 +195,6 @@ export async function filingPicture(u: SignedInUser, returnId: string, today = n
   return {
     ok: true, mode: live.mode, why: live.why, requireTil: live.settings.requireTil, requireTest: live.settings.requireTest, checks, approval, lockedUntil, parts,
     company: { name: c.name, utr: c.utr, companyNo: c.companyNo }, filingDue: p.filingDue, late,
-    emailReady: emailReady(), userEmail: u.email, amendment: Boolean(data.amends),
+    emailReady: emailReady(), userEmail: u.email, amendment: Boolean(data.amends), fee, emailCheckNeeded: confirmEmail,
   };
 }

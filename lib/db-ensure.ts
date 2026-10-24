@@ -24,6 +24,15 @@ export const LATER_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS "notes_company_idx" ON "nf_notes" USING btree ("company_id")',
   `CREATE TABLE IF NOT EXISTS "nf_tasks" ("id" text PRIMARY KEY NOT NULL, "account_id" text NOT NULL, "company_id" text REFERENCES "nf_companies"("id") ON DELETE cascade, "title" text NOT NULL, "due" text, "done" boolean DEFAULT false NOT NULL, "created_by" text NOT NULL, "done_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   'CREATE INDEX IF NOT EXISTS "tasks_account_idx" ON "nf_tasks" USING btree ("account_id")',
+  // Everyone who signed up before email confirmation existed counts as confirmed; new users start unconfirmed.
+  `ALTER TABLE "nf_users" ADD COLUMN IF NOT EXISTS "email_verified_at" timestamp with time zone DEFAULT now()`,
+  `ALTER TABLE "nf_users" ALTER COLUMN "email_verified_at" DROP DEFAULT`,
+  `CREATE TABLE IF NOT EXISTS "nf_email_checks" ("id" text PRIMARY KEY NOT NULL, "user_id" text NOT NULL REFERENCES "nf_users"("id") ON DELETE cascade, "email" text NOT NULL, "expires_at" timestamp with time zone NOT NULL, "used_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  'CREATE INDEX IF NOT EXISTS "email_checks_user_idx" ON "nf_email_checks" USING btree ("user_id")',
+  `CREATE TABLE IF NOT EXISTS "nf_payments" ("id" text PRIMARY KEY NOT NULL, "account_id" text NOT NULL, "return_id" text NOT NULL, "user_id" text NOT NULL, "stripe_session_id" text NOT NULL, "payment_intent" text, "amount" integer NOT NULL, "currency" text DEFAULT 'gbp' NOT NULL, "description" text NOT NULL, "status" text DEFAULT 'pending' NOT NULL, "email" text, "receipt_url" text, "confirmed_at" timestamp with time zone, "paid_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  'CREATE INDEX IF NOT EXISTS "payments_return_idx" ON "nf_payments" USING btree ("return_id")',
+  'CREATE UNIQUE INDEX IF NOT EXISTS "payments_session_unique" ON "nf_payments" ("stripe_session_id")',
+  'CREATE INDEX IF NOT EXISTS "payments_account_idx" ON "nf_payments" USING btree ("account_id")',
   `CREATE TABLE IF NOT EXISTS "nf_settings" ("key" text PRIMARY KEY NOT NULL, "value" jsonb NOT NULL, "updated_by" text, "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS "nf_password_resets" ("id" text PRIMARY KEY NOT NULL, "user_id" text NOT NULL REFERENCES "nf_users"("id") ON DELETE cascade, "expires_at" timestamp with time zone NOT NULL, "used_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
 ];

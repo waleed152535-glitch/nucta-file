@@ -1,15 +1,15 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import {
   createAccount, signIn, signOut, changePassword, updateProfile, requestPasswordReset, resetPassword, currentUser, emailReady,
+  sendEmailCheck, siteOrigin,
 } from "./auth";
 
 /** Only paths inside the software, so a sign-in link can't send someone elsewhere. */
 const safeNext = (v: FormDataEntryValue | null) => {
   const n = String(v ?? "");
-  return /^\/(dashboard|companies|returns|gateway|companies-house|log|settings|status|account)(\/|\?|$)/.test(n) ? n : "/dashboard";
+  return /^\/(dashboard|companies|returns|deadlines|gateway|live-filing|payments|companies-house|log|settings|status|account)(\/|\?|$)/.test(n) ? n : "/dashboard";
 };
 
 export interface FormState { problems: string[]; done?: string }
@@ -20,7 +20,18 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
     firm: String(f.get("firm") ?? ""), kind: f.get("kind") === "company" ? "company" : "practice", agreed: f.get("agreed") === "yes",
   });
   if (!r.ok) return { problems: r.problems };
+  // The link to confirm the email. If it can't go now, the app offers to send it again.
+  if (r.userId && emailReady()) await sendEmailCheck(r.userId, await siteOrigin()).catch(() => undefined);
   redirect("/dashboard");
+}
+
+/** "Send the link again", from the bar at the top of the software. */
+export async function resendEmailCheckAction(): Promise<FormState> {
+  const u = await currentUser();
+  if (!u) return { problems: ["You're signed out. Sign in again to carry on."] };
+  const r = await sendEmailCheck(u.id, await siteOrigin());
+  if (!r.ok) return { problems: [r.problem ?? "Couldn't send the link."] };
+  return { problems: [], done: r.already ? "Your email is already confirmed." : `Sent to ${u.email}. Open the link in that email.` };
 }
 
 export async function signInAction(_: FormState, f: FormData): Promise<FormState> {
@@ -43,10 +54,7 @@ export async function forgotPasswordAction(_: FormState, f: FormData): Promise<F
   if (!emailReady()) return { problems: ["Password reset by email isn't switched on yet. Email us from the contact page and we'll reset it for you."] };
   // The link's address comes from the settings, never from the request: a
   // forged Host header could otherwise send the reset link somewhere else.
-  const h = await headers();
-  const fallback = process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : `http://${h.get("host")}`;
-  const origin = (process.env.NUCTA_SITE_URL ?? fallback).replace(/\/+$/, "");
-  await requestPasswordReset(String(f.get("email") ?? ""), origin);
+  await requestPasswordReset(String(f.get("email") ?? ""), await siteOrigin());
   return { problems: [], done: "If that email has an account, a link to choose a new password is on its way. It works for one hour." };
 }
 

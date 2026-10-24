@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import AppBar from "@/components/AppBar";
-import { currentUser } from "@/lib/auth";
+import EmailCheckBar from "@/components/EmailCheckBar";
+import { currentUser, emailCheckNeeded } from "@/lib/auth";
 import { liveModeFor } from "@/lib/live-settings";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="app">
       <AppBar user={{ name: u.name, email: u.email, accountName: u.accountName, accountKind: u.accountKind, admin: u.admin, live }} />
-      <main className="main">{children}</main>
+      <main className="main">
+        {emailCheckNeeded(u) && <EmailCheckBar email={u.email} />}
+        {children}
+      </main>
     </div>
   );
 }

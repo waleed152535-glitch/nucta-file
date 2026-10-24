@@ -41,6 +41,16 @@ const VARS = [
     required: false,
   },
   {
+    key: "STRIPE_SECRET_KEY",
+    what: "Stripe's secret key (Stripe → Developers → API keys), for card payments of the filing fee: sk_test_… to try it, sk_live_… for real. Secret: paste it only here, in the hosting settings. Charging stays off until it's switched on on the Payments page.",
+    required: false,
+  },
+  {
+    key: "STRIPE_WEBHOOK_SECRET",
+    what: "The signing secret (whsec_…) of the webhook endpoint added in Stripe for this site's /api/stripe/webhook — the Payments page shows the address. Secret.",
+    required: false,
+  },
+  {
     key: "DATABASE_URL",
     what: "Where submissions are recorded. Filing works without it, but nothing is kept.",
     required: false,

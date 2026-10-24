@@ -43,6 +43,8 @@ export const users = pgTable("nf_users", {
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   /** "owner" can invite and remove colleagues; "member" does everything else. */
   role: text("role").notNull().default("owner"),
+  /** When the email address was confirmed by its link; empty until then. */
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   createdAt: now(),
 }, (t) => [index("users_email_idx").on(t.email)]);
 
@@ -265,3 +267,38 @@ export const settings = pgTable("nf_settings", {
   updatedBy: text("updated_by"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+/** A link to confirm an email address. The id is the SHA-256 of the link's token. */
+export const emailChecks = pgTable("nf_email_checks", {
+  id: id(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: now(),
+}, (t) => [index("email_checks_user_idx").on(t.userId)]);
+
+/**
+ * A payment for filing a return, taken by Stripe Checkout. Amounts are in
+ * pence. A payment is "paid" only once Stripe confirm it — by the webhook,
+ * or by asking Stripe when the customer comes back.
+ */
+export const payments = pgTable("nf_payments", {
+  id: id(),
+  accountId: text("account_id").notNull(),
+  returnId: text("return_id").notNull(),
+  userId: text("user_id").notNull(),
+  stripeSessionId: text("stripe_session_id").notNull(),
+  paymentIntent: text("payment_intent"),
+  amount: integer("amount").notNull(),
+  currency: text("currency").notNull().default("gbp"),
+  description: text("description").notNull(),
+  /** pending | paid | expired | refunded */
+  status: text("status").notNull().default("pending"),
+  email: text("email"),
+  receiptUrl: text("receipt_url"),
+  /** Set once the confirmation email has gone, so it goes once. */
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  createdAt: now(),
+}, (t) => [index("payments_return_idx").on(t.returnId), index("payments_session_idx").on(t.stripeSessionId), index("payments_account_idx").on(t.accountId)]);

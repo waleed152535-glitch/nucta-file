@@ -22,7 +22,8 @@ import { accountingPeriodsOf, amendmentDeadline, computePeriodOfAccount } from "
 import { chApiReady, companyProfile, searchCompanies, type ChProfile, type ChSearchHit } from "./ch-api";
 import { deadlinesFor, type Deadline } from "./deadlines";
 import { ensureSchema } from "./db-ensure";
-import { currentUser, type SignedInUser } from "./auth";
+import { feeState } from "./billing";
+import { currentUser, emailCheckNeeded, type SignedInUser } from "./auth";
 
 /**
  * Companies and their returns, for the filing screens.
@@ -896,6 +897,7 @@ export async function fileReturnLive(
   const live = await liveModeFor(u);
   const mode = live.mode;
   if (mode === "off") return stop("Live filing isn't open for this account yet.", [live.why]);
+  if (emailCheckNeeded(u)) return stop("Confirm your email address first.", [`Open the link we sent to ${u.email}, or press “Send the link again” at the top of the page. HMRC's receipt is emailed there.`]);
   if (!til && mode !== "on") return stop("Only HMRC's Test in Live check is open.", ["Real filing hasn't been switched on yet. Test in Live checks the return with HMRC's live service and files nothing."]);
   const userId = signIn.userId.trim(), password = signIn.password;
   const notifyEmail = (signIn.notifyEmail ?? "").trim();
@@ -919,6 +921,10 @@ export async function fileReturnLive(
   const rec = data.sent?.[String(part)];
   if (rec?.status === "accepted") return stop("This return has already been filed with HMRC.", [rec.receiptText ?? "", "To change it, start an amended return."].filter(Boolean));
   if (rec?.status === "submitted-live") return stop("This return has been sent to HMRC and is waiting for their answer.", ["Use “Ask HMRC again” rather than filing it twice."]);
+  if (!til) {
+    const fee = await feeState(s0, u, id);
+    if (fee.status === "due") return stop(`Pay the £${fee.amount} filing fee first.`, ["Use “Pay by card” on the filing screen. The fee covers filing this return, sending it again if HMRC find something to fix, and amending it later."]);
+  }
   if (live.settings.requireTest && rec?.status !== "accepted-test") {
     return stop("Send this return to HMRC's test service first.", ["Your administrator requires these exact figures to pass HMRC's test service before filing."]);
   }

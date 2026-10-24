@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -46,10 +46,14 @@ export default function ReturnWizard(props: {
   company: { id: string; name: string; companyNo: string | null; utr: string | null };
   initial: ReturnData;
   submissions: { at: string; outcome: string; correlationId: string | null; test: boolean; receipt: boolean; period: string | null }[];
+  /** 8 opens straight on "Review and file", as when coming back from paying. */
+  initialStep?: number;
+  /** How a card payment went, when coming back from Stripe. */
+  feeNotice?: { tone: "good" | "bad" | "info"; text: string };
 }) {
   const router = useRouter();
   const [d, setD] = useState<ReturnData>(props.initial);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(props.initialStep ?? 0);
   const [saved, setSaved] = useState<string | null>(null);
   const [preview, setPreview] = useState<ReturnPreview | null>(null);
   const [sent, setSent] = useState<Record<number, SendResult>>({});
@@ -115,6 +119,9 @@ export default function ReturnWizard(props: {
     if (r.ok && r.id) router.push(`/returns/${r.id}`); else setAmendProblems(r.problems);
   });
   const canAmend = props.status === "accepted";
+  // Opened on the last step: load the review straight away.
+  const opened = useRef(false);
+  useEffect(() => { if (!opened.current && props.initialStep === 8) { opened.current = true; check(); } }); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pbt = d.pl.turnover + d.pl.otherIncome + d.pl.interestReceived - d.pl.costOfSales - d.pl.staffCosts - d.pl.depreciation - d.pl.otherCharges;
 
@@ -694,7 +701,7 @@ export default function ReturnWizard(props: {
                 );
               })}
               {preview?.ok && (
-                <LiveFiling returnId={props.id} preview={preview} onFiled={() => start(async () => setPreview(await previewReturn(props.id)))}
+                <LiveFiling returnId={props.id} preview={preview} feeNotice={props.feeNotice} onFiled={() => start(async () => setPreview(await previewReturn(props.id)))}
                   onTest={send} testResults={sent} testing={sending}
                   refreshKey={`${props.status}|${preview.parts.map((x) => x.sent?.status ?? "").join(",")}|${Object.entries(sent).map(([k, v]) => `${k}:${v.outcome}`).join(",")}`} />
               )}

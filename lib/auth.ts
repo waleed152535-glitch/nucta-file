@@ -9,12 +9,18 @@
  *
  * Every page and action that touches a customer's data asks `currentUser()`
  * and limits itself to that user's account.
+ *
+ * A new account's email address is confirmed by a link sent to it. Until it
+ * is, everything works except filing with HMRC and paying — so receipts and
+ * payment confirmations only ever go to an address someone has shown is
+ * theirs. When email isn't set up there's no way to confirm, so nothing waits.
  */
 
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual, randomUUID } from "crypto";
 import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import { ensureSchema } from "./db-ensure";
+import { SITE } from "./site";
 
 export const SESSION_COOKIE = "nf_session";
 /**
@@ -67,6 +73,8 @@ export interface SignedInUser {
   /** "owner" can invite and remove colleagues. */
   role: string;
   admin: boolean;
+  /** Whether the email address has been confirmed by its link. */
+  emailVerified: boolean;
 }
 
 /** The people who can use the developer consoles: NUCTA_ADMIN_EMAILS, comma separated. */
@@ -89,12 +97,13 @@ export const currentUser = cache(async (): Promise<SignedInUser | null> => {
     const [row] = await s.db.select({
       expiresAt: s.sessions.expiresAt, id: s.users.id, name: s.users.name, email: s.users.email,
       accountId: s.accounts.id, accountName: s.accounts.name, accountKind: s.accounts.kind, role: s.users.role,
+      emailVerifiedAt: s.users.emailVerifiedAt,
     }).from(s.sessions)
       .innerJoin(s.users, s.eq(s.users.id, s.sessions.userId))
       .innerJoin(s.accounts, s.eq(s.accounts.id, s.users.accountId))
       .where(s.eq(s.sessions.id, sha256(token)));
     if (!row || row.expiresAt.getTime() < Date.now()) return null;
-    return { id: row.id, name: row.name, email: row.email, accountId: row.accountId, accountName: row.accountName, accountKind: row.accountKind, role: row.role, admin: adminEmails().includes(row.email) };
+    return { id: row.id, name: row.name, email: row.email, accountId: row.accountId, accountName: row.accountName, accountKind: row.accountKind, role: row.role, admin: adminEmails().includes(row.email), emailVerified: Boolean(row.emailVerifiedAt) };
   } catch {
     return null;
   }
@@ -120,7 +129,7 @@ async function claimOldCompanies(accountId: string, email: string) {
 
 export interface SignUpInput { name: string; email: string; password: string; firm: string; kind: "practice" | "company"; agreed: boolean }
 
-export async function createAccount(i: SignUpInput): Promise<{ ok: boolean; problems: string[] }> {
+export async function createAccount(i: SignUpInput): Promise<{ ok: boolean; problems: string[]; userId?: string }> {
   const problems: string[] = [];
   const email = normaliseEmail(i.email);
   if (i.name.trim().length < 2) problems.push("Enter your name.");
@@ -137,7 +146,7 @@ export async function createAccount(i: SignUpInput): Promise<{ ok: boolean; prob
   await s.db.insert(s.users).values({ id: userId, accountId, email, name: i.name.trim(), passwordHash: await hashPassword(i.password), lastLoginAt: new Date() });
   await claimOldCompanies(accountId, email);
   await startSession(userId);
-  return { ok: true, problems: [] };
+  return { ok: true, problems: [], userId };
 }
 
 /**
@@ -155,7 +164,8 @@ export async function joinAccount(i: { accountId: string; email: string; name: s
   const [existing] = await s.db.select({ id: s.users.id }).from(s.users).where(s.eq(s.users.email, email));
   if (existing) return { ok: false, problems: ["There's already a Nucta File account with this email. Ask whoever invited you to use a different email, or sign in with that account."] };
   const userId = randomUUID();
-  await s.db.insert(s.users).values({ id: userId, accountId: i.accountId, email, name: i.name.trim(), passwordHash: await hashPassword(i.password), lastLoginAt: new Date(), role: i.role === "owner" ? "owner" : "member" });
+  // The invitation went to this address and was opened from it, so the address is confirmed.
+  await s.db.insert(s.users).values({ id: userId, accountId: i.accountId, email, name: i.name.trim(), passwordHash: await hashPassword(i.password), lastLoginAt: new Date(), role: i.role === "owner" ? "owner" : "member", emailVerifiedAt: new Date() });
   await startSession(userId);
   return { ok: true, problems: [] };
 }
@@ -263,9 +273,83 @@ export async function resetPassword(token: string, next: string): Promise<{ ok: 
   const [u] = await s.db.select().from(s.users).where(s.eq(s.users.id, r.userId));
   if (!u) return { ok: false, problem: "That account no longer exists." };
   const pp = passwordProblem(next, u.email); if (pp) return { ok: false, problem: pp };
-  await s.db.update(s.users).set({ passwordHash: await hashPassword(next), failedLogins: 0, lockedUntil: null }).where(s.eq(s.users.id, u.id));
+  // The reset link came to this address, so it's confirmed too.
+  await s.db.update(s.users).set({ passwordHash: await hashPassword(next), failedLogins: 0, lockedUntil: null, emailVerifiedAt: u.emailVerifiedAt ?? new Date() }).where(s.eq(s.users.id, u.id));
   await s.db.update(s.passwordResets).set({ usedAt: new Date() }).where(s.eq(s.passwordResets.id, r.id));
   await s.db.delete(s.sessions).where(s.eq(s.sessions.userId, u.id));
   await startSession(u.id);
   return { ok: true };
+}
+
+/**
+ * Where links in emails point: NUCTA_SITE_URL, else the hosting's own
+ * address. Never the request's Host header alone in production, since a forged
+ * one could send a link somewhere else.
+ */
+export async function siteOrigin(): Promise<string> {
+  const configured = process.env.NUCTA_SITE_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "");
+  if (configured) return configured.replace(/\/+$/, "");
+  const h = await headers();
+  return `http://${h.get("host") ?? "localhost:3000"}`;
+}
+
+// ---- confirming the email address ----
+
+const CHECK_HOURS = 48;
+const CHECKS_PER_DAY = 5;
+
+/** Whether this person still has to confirm their email before filing or paying. */
+export const emailCheckNeeded = (u: SignedInUser) => emailReady() && !u.emailVerified;
+
+/**
+ * Emails a link that confirms the address. At most one a minute and five a
+ * day, so the button can't be used to flood someone's inbox.
+ */
+export async function sendEmailCheck(userId: string, origin: string): Promise<{ ok: boolean; problem?: string; already?: boolean }> {
+  if (!emailReady()) return { ok: false, problem: "Email isn't set up for Nucta File yet, so there's nothing to confirm." };
+  const s = await store();
+  const [u] = await s.db.select({ id: s.users.id, email: s.users.email, name: s.users.name, verified: s.users.emailVerifiedAt }).from(s.users).where(s.eq(s.users.id, userId));
+  if (!u) return { ok: false, problem: "That account no longer exists." };
+  if (u.verified) return { ok: true, already: true };
+  const recent = await s.db.select({ at: s.emailChecks.createdAt }).from(s.emailChecks)
+    .where(s.and(s.eq(s.emailChecks.userId, u.id), s.gte(s.emailChecks.createdAt, new Date(Date.now() - 86_400_000))))
+    .orderBy(s.desc(s.emailChecks.createdAt));
+  if (recent[0] && Date.now() - recent[0].at.getTime() < 60_000) return { ok: false, problem: "A link was sent less than a minute ago. Check your inbox and the spam folder, or try again in a minute." };
+  if (recent.length >= CHECKS_PER_DAY) return { ok: false, problem: `${CHECKS_PER_DAY} links have been sent today. Check the spam folder, or email ${SITE.email} and we'll confirm it for you.` };
+  const token = randomBytes(32).toString("base64url");
+  await s.db.insert(s.emailChecks).values({ id: sha256(token), userId: u.id, email: u.email, expiresAt: new Date(Date.now() + CHECK_HOURS * 3_600_000) });
+  const sent = await sendEmailChecked(u.email, "Confirm your email for Nucta File", emailCheckText(u.name, `${origin}/verify-email?token=${token}`));
+  return sent.ok ? { ok: true } : { ok: false, problem: "The email couldn't be sent just now. Try again in a few minutes." };
+}
+
+export function emailCheckText(name: string, link: string): string {
+  return `Hello ${name},
+
+Welcome to Nucta File. Please confirm that this is your email address by opening this link:
+
+${link}
+
+The link works for ${CHECK_HOURS} hours. Once your email is confirmed you can file returns with HMRC, and HMRC's receipts and your payment confirmations come here.
+
+If you didn't create a Nucta File account, ignore this email and nothing more will happen.
+
+${SITE.product}
+${SITE.company}`;
+}
+
+export type EmailCheckOutcome = "confirmed" | "already" | "expired" | "invalid";
+
+/** Confirms an address from its link. Opening the link twice is fine. */
+export async function confirmEmail(token: string): Promise<{ outcome: EmailCheckOutcome; email?: string }> {
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(token)) return { outcome: "invalid" };
+  const s = await store();
+  const [c] = await s.db.select().from(s.emailChecks).where(s.eq(s.emailChecks.id, sha256(token)));
+  if (!c) return { outcome: "invalid" };
+  const [u] = await s.db.select({ id: s.users.id, email: s.users.email, verified: s.users.emailVerifiedAt }).from(s.users).where(s.eq(s.users.id, c.userId));
+  if (!u || u.email !== c.email) return { outcome: "invalid" };
+  if (u.verified || c.usedAt) return { outcome: "already", email: u.email };
+  if (c.expiresAt.getTime() < Date.now()) return { outcome: "expired", email: u.email };
+  await s.db.update(s.users).set({ emailVerifiedAt: new Date() }).where(s.eq(s.users.id, u.id));
+  await s.db.update(s.emailChecks).set({ usedAt: new Date() }).where(s.eq(s.emailChecks.id, c.id));
+  return { outcome: "confirmed", email: u.email };
 }

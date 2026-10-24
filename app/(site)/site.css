@@ -538,3 +538,8 @@ html:has(.site),body:has(.site){background:#070B14;}
   .read .paper{padding:34px 22px 30px;font-size:16.5px;border-radius:8px;}
   .safe div{padding:28px 22px 24px;}
 }
+
+/* Confirming an email address */
+.verify-card .verify-mark{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:22px;font-weight:700;margin-bottom:18px;}
+.verify-card .verify-mark.good{background:rgba(61,220,151,.14);color:#3DDC97;border:1px solid rgba(61,220,151,.35);}
+.verify-card .verify-mark.bad{background:rgba(255,216,77,.12);color:#FFD84D;border:1px solid rgba(255,216,77,.3);}

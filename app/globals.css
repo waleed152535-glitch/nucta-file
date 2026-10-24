@@ -452,3 +452,20 @@ iframe.doc{width:100%;height:760px;border:1px solid var(--border);border-radius:
 .bsgroup > h5{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 10px;font-family:var(--display);font-size:15px;font-weight:600;}
 .bsgroup > h5 b{font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:14px;}
 .bsgroup > .note{padding-bottom:8px;}
+
+/* Until the email address is confirmed */
+.verify-bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 24px;background:var(--amber-soft);border-bottom:1px solid rgba(255,216,77,.22);font-size:13px;line-height:1.5;color:#FFE7A0;}
+.verify-bar b{color:#fff;font-weight:650;}
+.verify-bar .vb-text{flex:1 1 360px;}
+.verify-bar .vb-done{color:#A6F2CF;font-weight:600;}
+.verify-bar .vb-problem{flex-basis:100%;color:#FFB8A6;}
+@media (max-width:640px){.verify-bar{padding:10px 16px;}}
+
+/* The filing fee and payment history */
+.feeline{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.feeline .amt{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;color:#fff;}
+.paytable{width:100%;border-collapse:collapse;font-size:13px;}
+.paytable th{text-align:left;font-weight:600;color:var(--faint);padding:6px 10px 6px 0;border-bottom:1px solid var(--border);}
+.paytable td{padding:9px 10px 9px 0;border-bottom:1px solid var(--border-2);vertical-align:top;}
+.paytable td.num,.paytable th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.paytable tr:last-child td{border-bottom:0;}

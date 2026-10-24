@@ -8,7 +8,7 @@ export default function Privacy() {
       <div className="wrap">
         <div className="paper">
         <h1>Privacy notice</h1>
-        <p className="meta">Last updated 21 October 2026</p>
+        <p className="meta">Last updated 24 October 2026</p>
         <p>This notice explains what information {SITE.product} keeps, why, and your rights. {SITE.company} (&ldquo;we&rdquo;) is the controller of the personal information described here{SITE.companyNumber ? ` (company number ${SITE.companyNumber})` : ""}. Contact us at <a href={`mailto:${SITE.email}`}>{SITE.email}</a>.</p>
 
         <h2>What we keep</h2>
@@ -33,7 +33,8 @@ export default function Privacy() {
         <ul>
           <li><b>HMRC</b>, when you file a return, and <b>Companies House</b>, when you look up or file for a company.</li>
           <li><b>Our hosting and database providers</b> (Vercel and Neon), who store it for us under contract and can&apos;t use it for anything else.</li>
-          <li>An <b>email provider</b>, if password reset emails are sent.</li>
+          <li>Our <b>email provider</b> (Resend), which sends Nucta File&apos;s emails: the link to confirm your address, HMRC&apos;s receipts, payment confirmations, approval links and password resets.</li>
+          <li><b>Stripe</b>, if you pay a filing fee. Card details go only to Stripe; we receive the amount, whether it was paid and a link to Stripe&apos;s receipt.</li>
         </ul>
         <p>We don&apos;t sell personal information or share it for marketing.</p>
 

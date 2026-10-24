@@ -2,7 +2,9 @@
 
 /**
  * Filing with HMRC, in three steps: approve and declare, sign in to HMRC
- * (the company's own account, or an agent's), file. HMRC's test service and
+ * (the company's own account, or an agent's), file — with paying the filing
+ * fee by card first when charging is on, because going to Stripe's page and
+ * back clears whatever was ticked or typed on this one. HMRC's test service and
  * Test in Live are optional checks underneath — required only when the
  * administrators say so. Afterwards: the receipt, paying the tax, and the
  * figures for Companies House.
@@ -14,12 +16,14 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { fileReturnLive, checkLiveFiling, type ReturnPreview, type LiveResult, type SendResult } from "@/lib/return-actions";
 import { getFilingPicture, recordPayment, removePayment, emailReceipt } from "@/lib/live-actions";
+import { payFilingFee } from "@/lib/billing-actions";
 import type { FilingPicture } from "@/lib/filing-checks";
 import { HMRC_BANK, PAY_ONLINE, paymentReferenceProblem } from "@/lib/filing-rules";
 
 const gbp = (n: number) => `£${n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const day = (iso: string) => new Date(iso + (iso.length === 10 ? "T12:00:00Z" : "")).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 const MARK = { ok: "✓", warn: "!", bad: "✕", info: "i" } as const;
+const allFiledNow = (p: FilingPicture) => p.parts.length > 0 && p.parts.every((x) => x.filed?.status === "accepted");
 
 function Result({ r }: { r: LiveResult }) {
   return (
@@ -33,8 +37,10 @@ function Result({ r }: { r: LiveResult }) {
   );
 }
 
-export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onTest, testResults, testing }: {
+export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onTest, testResults, testing, feeNotice }: {
   returnId: string; preview: ReturnPreview; refreshKey: string; onFiled: () => void;
+  /** How a card payment went, checked with Stripe by the server when coming back from Stripe's page. */
+  feeNotice?: { tone: "good" | "bad" | "info"; text: string };
   /** HMRC's test service, run by the return screen; its results by return number. */
   onTest: (n: number) => void; testResults: Record<number, SendResult>; testing: number | null;
 }) {
@@ -51,9 +57,25 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
   const [confirming, setConfirming] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [feeMsg, setFeeMsg] = useState<{ tone: "good" | "bad" | "info"; text: string } | null>(feeNotice ?? null);
+  const [paying, setPaying] = useState(false);
 
   const load = useCallback(async () => setPic(await getFilingPicture(returnId)), [returnId]);
   useEffect(() => { load(); }, [load, refreshKey]);
+
+  // Back from Stripe's page: the server has already asked Stripe how it went (feeNotice). Tidy the address bar.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("fee")) window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
+  const pay = () => start(async () => {
+    setPaying(true); setFeeMsg(null);
+    const r = await payFilingFee(returnId);
+    if (r.ok && r.url) { window.location.assign(r.url); return; }
+    setPaying(false);
+    setFeeMsg({ tone: r.alreadyPaid ? "good" : "bad", text: r.problem ?? "The payment page couldn't be opened." });
+    if (r.alreadyPaid) await load();
+  });
 
   if (!pic) return <div className="card" style={{ padding: 14, marginBottom: 12 }}><p className="note" style={{ margin: 0 }}>Checking what&apos;s needed to file…</p></div>;
   if (!pic.ok) return <div className="banner bad"><span>✕</span><span>{pic.problem}</span></div>;
@@ -64,7 +86,10 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
   const signedIn = Boolean(signIn.userId.trim() && signIn.password);
   const locked = Boolean(pic.lockedUntil);
   const allFiled = pic.parts.every((x) => x.filed?.status === "accepted");
-  const canSend = pic.mode !== "off" && preview.ok && !locked && approvalOk && declared && signedIn;
+  const fee = pic.fee;
+  const showFee = Boolean(fee && (fee.status === "due" || (fee.status === "paid" && !allFiledNow(pic))));
+  const feeOk = !fee || fee.status !== "due";
+  const canSend = pic.mode !== "off" && preview.ok && !locked && approvalOk && declared && signedIn && !pic.emailCheckNeeded;
   const blockingCheck = pic.checks.some((c) => c.state === "bad" && c.key !== "tested" && c.key !== "lock");
 
   const run = (key: string, fn: () => Promise<LiveResult>) => start(async () => {
@@ -84,6 +109,8 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
   const stage = (done: boolean, now: boolean) => `fstage${done ? " done" : now ? " now" : " wait"}`;
   const notifyOk = notify !== "other" || /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(notifyOther.trim());
   const s1 = approvalOk && declared, s2 = signedIn && notifyOk;
+  // The steps' numbers: paying the fee, when it's shown, comes first — so nothing ticked or typed is lost going to Stripe's page.
+  const nSign = showFee ? 3 : 2, nFile = showFee ? 4 : 3;
   const checksRequired = pic.requireTest || pic.requireTil || pic.mode === "til";
   const attention = pic.checks.filter((c) => c.state !== "ok");
   const fine = pic.checks.filter((c) => c.state === "ok");
@@ -117,8 +144,30 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
           <p className="note" style={{ margin: "12px 0 0" }}>{pic.why}</p>
         ) : allFiled ? null : (
           <>
-            <div className={stage(s1, true)} style={{ marginTop: 10 }}>
-              <h5><span className="n">{s1 ? "✓" : 1}</span>Approve and declare</h5>
+            {showFee && fee && (
+              <div className={stage(feeOk, true)} id="fee" style={{ marginTop: 10 }}>
+                <h5><span className="n">{feeOk ? "✓" : 1}</span>{feeOk ? "Filing fee paid" : "Pay the filing fee"}</h5>
+                {feeOk ? (
+                  <p className="note" style={{ marginTop: 0 }}>
+                    ✓ {gbp(fee.amount)} paid{fee.paidAt ? ` on ${day(fee.paidAt)}` : ""}{fee.reference ? ` · reference ${fee.reference}` : ""}{fee.testMode ? " · test payment" : ""}.{" "}
+                    {fee.receiptUrl && <a href={fee.receiptUrl} target="_blank" rel="noreferrer">Card receipt</a>}
+                  </p>
+                ) : (
+                  <div className="feeline">
+                    <span className="amt">{gbp(fee.amount)}</span>
+                    <button type="button" className="btn" disabled={pending || paying || pic.emailCheckNeeded} onClick={pay}>{paying ? "Opening the payment page…" : "Pay by card"}</button>
+                    <span className="note" style={{ flex: "1 1 260px" }}>
+                      {pic.emailCheckNeeded ? "Confirm your email address first — the payment confirmation goes there." : <>On Stripe&apos;s secure page; Nucta File never sees the card. The fee covers filing this return, sending it again if HMRC find something to fix, and amending it later.{fee.testMode ? " Test mode: use card 4242 4242 4242 4242." : ""}</>}
+                    </span>
+                  </div>
+                )}
+                {feeMsg && <div className={`banner ${feeMsg.tone}`} style={{ marginTop: 10, marginBottom: 0 }}><span>{feeMsg.tone === "good" ? "✓" : feeMsg.tone === "bad" ? "✕" : "i"}</span><span>{feeMsg.text}</span></div>}
+              </div>
+            )}
+            {!showFee && feeMsg && <div className={`banner ${feeMsg.tone}`} style={{ marginTop: 10 }}><span>{feeMsg.tone === "good" ? "✓" : feeMsg.tone === "bad" ? "✕" : "i"}</span><span>{feeMsg.text}</span></div>}
+
+            <div className={stage(s1, feeOk)} style={showFee ? undefined : { marginTop: 10 }}>
+              <h5><span className="n">{s1 ? "✓" : showFee ? 2 : 1}</span>Approve and declare</h5>
               {onlineOk ? (
                 <p className="note" style={{ marginTop: 0 }}>✓ {pic.approval!.name} approved these figures online{pic.approval!.at ? ` on ${new Date(pic.approval!.at).toLocaleString("en-GB")}` : ""}. The approval is recorded with the filing.</p>
               ) : (
@@ -136,8 +185,12 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
               </label>
             </div>
 
-            <div className={stage(s2, s1)}>
-              <h5><span className="n">{s2 ? "✓" : 2}</span>Sign in to HMRC</h5>
+
+            <div className={stage(s2, s1 && feeOk)}>
+              <h5><span className="n">{s2 ? "✓" : nSign}</span>Sign in to HMRC</h5>
+              {!feeOk ? (
+                <p className="note" style={{ marginTop: 0 }}>This comes after paying the fee, so nothing typed here is lost going to Stripe&apos;s page and back.</p>
+              ) : (<>
               <div className="picks" role="radiogroup" aria-label="Whose HMRC account">
                 <button type="button" role="radio" aria-checked={as === "company"} className="pick" onClick={() => setAs("company")}>
                   <span className="dot" aria-hidden /><span><b>The company&apos;s own HMRC account</b><small>Its Government Gateway organisation sign-in, with Corporation Tax added.</small></span>
@@ -175,6 +228,7 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
                 )}
                 <p className="note" style={{ marginTop: 0 }}>Nucta File keeps HMRC&apos;s receipt with the return{pic.emailReady ? " and emails it to you" : ""} either way.</p>
               </details>
+              </>)}
             </div>
 
             {pic.parts.map((x) => {
@@ -183,15 +237,15 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
               const testedNow = x.passedTest || Boolean(testResults[x.n]?.ok);
               const filed = x.filed?.status === "accepted" || fileR?.filed;
               const waiting = x.filed?.status === "submitted-live" && !fileR?.filed;
-              const canFileReal = pic.mode === "on" && canSend && (!pic.requireTest || testedNow) && (!pic.requireTil || tilPassed) && !blockingCheck;
+              const canFileReal = pic.mode === "on" && canSend && feeOk && (!pic.requireTest || testedNow) && (!pic.requireTil || tilPassed) && !blockingCheck;
               const label = many ? ` return ${x.n + 1} (to ${day(x.periodTo)})` : "";
-              const why = !s1 ? "Approve and declare first." : !s2 ? "Sign in to HMRC above." : locked ? "Wait until the sign-in pause ends." : pic.requireTest && !testedNow ? "Your administrator requires HMRC's test service first (below)." : pic.requireTil && !tilPassed ? "Your administrator requires the Test in Live check first (below)." : blockingCheck ? "Fix the items marked ✕ above." : "";
+              const why = pic.emailCheckNeeded ? "Confirm your email address first (the bar at the top of the page)." : !feeOk ? "Pay the filing fee first (above)." : !s1 ? "Approve and declare first." : !s2 ? "Sign in to HMRC above." : locked ? "Wait until the sign-in pause ends." : pic.requireTest && !testedNow ? "Your administrator requires HMRC's test service first (below)." : pic.requireTil && !tilPassed ? "Your administrator requires the Test in Live check first (below)." : blockingCheck ? "Fix the items marked ✕ above." : "";
               const tr = testResults[x.n];
               return (
                 <div key={x.n}>
                   {pic.mode === "on" && (
                     <div className={stage(Boolean(filed), canFileReal)}>
-                      <h5><span className="n">{filed ? "✓" : 3}</span>File{label}</h5>
+                      <h5><span className="n">{filed ? "✓" : nFile}</span>File{label}</h5>
                       {filed ? null : waiting ? (
                         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                           <button type="button" className="btn" disabled={pending || !signedIn} onClick={() => ask(x.n)}>{busy === `file-${x.n}` ? "Asking HMRC…" : "Ask HMRC again"}</button>

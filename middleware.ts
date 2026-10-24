@@ -8,7 +8,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * the session itself is checked against the database by every page and action
  * (lib/auth.ts), so a made-up cookie gets nothing.
  */
-const PRIVATE = ["/dashboard", "/companies", "/returns", "/deadlines", "/calendar.ics", "/gateway", "/live-filing", "/companies-house", "/log", "/settings", "/status", "/account"];
+const PRIVATE = ["/dashboard", "/companies", "/returns", "/deadlines", "/calendar.ics", "/gateway", "/live-filing", "/payments", "/companies-house", "/log", "/settings", "/status", "/account"];
 
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;

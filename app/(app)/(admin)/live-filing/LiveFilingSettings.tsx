@@ -17,15 +17,16 @@ export default function LiveFilingSettings({ initial }: { initial: LiveSettings 
   const [mode, setMode] = useState<LiveFiling>(initial.mode);
   const [who, setWho] = useState(initial.who);
   const [requireTil, setRequireTil] = useState(initial.requireTil);
+  const [requireTest, setRequireTest] = useState(initial.requireTest);
   const [emailReceipt, setEmailReceipt] = useState(initial.emailReceipt);
   const [confirmLive, setConfirmLive] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
-  const changed = mode !== initial.mode || who !== initial.who || requireTil !== initial.requireTil || emailReceipt !== initial.emailReceipt;
+  const changed = mode !== initial.mode || who !== initial.who || requireTil !== initial.requireTil || requireTest !== initial.requireTest || emailReceipt !== initial.emailReceipt;
   const needsConfirm = (mode === "on" && initial.mode !== "on") || (mode === "on" && who === "everyone" && !(initial.mode === "on" && initial.who === "everyone"));
 
   const save = () => start(async () => {
-    const r = await updateLiveFiling({ mode, who, requireTil, emailReceipt, confirmLive });
+    const r = await updateLiveFiling({ mode, who, requireTil, requireTest, emailReceipt, confirmLive });
     setMsg(r.ok ? { ok: true, text: "Saved. It applies straight away — no redeploy needed." } : { ok: false, text: r.problem ?? "Couldn't save." });
     if (r.ok) { setConfirmLive(false); router.refresh(); }
   });
@@ -55,8 +56,12 @@ export default function LiveFilingSettings({ initial }: { initial: LiveSettings 
           </button>
         </div>
         <label className="toggle-row">
+          <input type="checkbox" checked={requireTest} onChange={(e) => { setRequireTest(e.target.checked); setMsg(null); }} />
+          <span>Require HMRC&apos;s test service before every real filing<small>Off: customers file in one step, and if HMRC reject a return nothing is filed and the screen says why. The test service stays available as an optional check.</small></span>
+        </label>
+        <label className="toggle-row">
           <input type="checkbox" checked={requireTil} onChange={(e) => { setRequireTil(e.target.checked); setMsg(null); }} />
-          <span>Require HMRC&apos;s Test in Live check before every real filing<small>Recommended. It uses the same sign-in and files nothing, so a wrong password or an HMRC account without Corporation Tax shows up first. Turn it off only if HMRC&apos;s Test in Live service is unavailable.</small></span>
+          <span>Require HMRC&apos;s Test in Live check before every real filing<small>Off: it stays available as an optional check. It uses the same sign-in and files nothing.</small></span>
         </label>
         <label className="toggle-row">
           <input type="checkbox" checked={emailReceipt} onChange={(e) => { setEmailReceipt(e.target.checked); setMsg(null); }} />

@@ -268,7 +268,7 @@ export default function Film() {
             <div className="scene">
               <span className="n">4 of 4</span>
               <h2>File with HMRC</h2>
-              <p className="lede">Tested by HMRC&apos;s test service first, then filed with your own sign-in. HMRC&apos;s receipt is kept with the return, for good.</p>
+              <p className="lede">Filed with your own HMRC sign-in, used once and never stored. HMRC&apos;s receipt is kept with the return, for good.</p>
               <Still at={4} />
             </div>
           </div>

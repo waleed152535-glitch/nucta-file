@@ -57,7 +57,7 @@ export default function AppBar({ user }: { user: BarUser }) {
     <>
       <header className="appbar">
         <div className="appbar-in">
-          <Link href="/dashboard" className="brand" aria-label="Nucta File dashboard"><Mark size={24} />Nucta File<small title={user.live === "on" ? "Returns can be filed with HMRC for real" : user.live === "til" ? "HMRC's Test in Live check is open" : "Returns go to HMRC's test service"}>{user.live === "on" ? "Live filing" : user.live === "til" ? "Test in Live" : "Test service"}</small></Link>
+          <Link href="/dashboard" className="brand" aria-label="Nucta File dashboard"><Mark size={24} />Nucta File{(user.admin || user.live !== "on") && <small title={user.live === "on" ? "Returns can be filed with HMRC for real" : user.live === "til" ? "HMRC's Test in Live check is open" : "Filing isn't open for this account yet"}>{user.live === "on" ? "Live filing" : user.live === "til" ? "Test in Live" : "Preparing only"}</small>}</Link>
           <nav className="tabsnav" aria-label="Main">
             {TABS.map((t) => <Link key={t.href} href={t.href} className={active(t) ? "active" : ""} aria-current={active(t) ? "page" : undefined}>{t.label}</Link>)}
           </nav>

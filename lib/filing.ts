@@ -15,6 +15,7 @@
 import type { ComputationResult, ReturnFigures } from "./tax/computation";
 import { scopeProblems, type ScopeAnswers } from "./tax/scope";
 import { checkMicroAccounts, microAccounts, type BalanceSheet } from "./accounts/micro";
+import { companiesHouseForm, type CompaniesHouseForm } from "./accounts/ch-form";
 import { buildAccounts, buildFullComputation, type PriorYear } from "./ixbrl";
 import { buildCt600FromComputation } from "./ct600-return";
 import type { LoansResult, ParticipatorAccount } from "./tax/directors-loans";
@@ -83,6 +84,8 @@ export interface PreparedReturn {
   ct600: string | null;
   /** The accounts, the same for every return of the period. */
   accountsHtml: string | null;
+  /** The same accounts as Companies House's online form asks for them, box by box. */
+  companiesHouse: CompaniesHouseForm | null;
   /** Corporation Tax and tax on director's loans for the whole period. */
   corporationTax: number;
   loansTax: number;
@@ -98,7 +101,7 @@ export function prepareReturn(i: CompanyReturnInput): PreparedReturn {
   const returnType = i.returnType ?? "new";
   const base = { long: false, returnType, parts: [] as PreparedPart[], corporationTax: 0, loansTax: 0, filingDue: "", amendBy: "" };
   const nothing = (problems: string[], warnings: string[] = [], extra: Partial<PreparedReturn> = {}): PreparedReturn => ({
-    ok: false, problems, warnings, ...base, computation: null, loans: null, computationHtml: null, ct600: null, accountsHtml: null, ...extra,
+    ok: false, problems, warnings, ...base, computation: null, loans: null, computationHtml: null, ct600: null, accountsHtml: null, companiesHouse: null, ...extra,
   });
 
   const scope = scopeProblems(i.scope);
@@ -151,7 +154,9 @@ export function prepareReturn(i: CompanyReturnInput): PreparedReturn {
   warnings.push(...check.warnings);
   if (check.problems.length) return nothing(check.problems, warnings, computed);
 
-  const accountsHtml = buildAccounts(microAccounts(accountsFigures));
+  const accountsInput = microAccounts(accountsFigures);
+  const accountsHtml = buildAccounts(accountsInput);
+  const companiesHouse = companiesHouseForm(accountsInput);
   const companyNo = i.company.number.trim().toUpperCase();
   const parts = partsWithoutDocs.map((p, n): PreparedPart => {
     // A dormant company sends no computation: there is nothing to compute.
@@ -174,7 +179,7 @@ export function prepareReturn(i: CompanyReturnInput): PreparedReturn {
 
   return {
     ok: true, problems: [], warnings, returnType, ...computed, parts,
-    computation: parts[0].computation, loans: parts[0].loans, computationHtml: parts[0].computationHtml, ct600: parts[0].ct600, accountsHtml,
+    computation: parts[0].computation, loans: parts[0].loans, computationHtml: parts[0].computationHtml, ct600: parts[0].ct600, accountsHtml, companiesHouse,
   };
 }
 

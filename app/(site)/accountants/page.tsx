@@ -43,7 +43,7 @@ export default function Accountants() {
             <li><span className="n">3</span><h3>Send for approval</h3><p>Download the approval pack and send it to the director.</p></li>
             <li><span className="n">4</span><h3>File</h3><p>Once it&apos;s signed, file the return. HMRC&apos;s receipt is kept with it.</p></li>
           </ol>
-          <p className="small" style={{ marginTop: 32 }}>Practices pay {gbp(PRICES.practice.perReturn)} per return filed ({gbp(PRICES.practice.dormant)} for a dormant company). No subscription. <Link href="/pricing">Pricing</Link></p>
+          <p className="small" style={{ marginTop: 32 }}>Free while we launch. Later, practices will pay {gbp(PRICES.practice.perReturn)} per return filed ({gbp(PRICES.practice.dormant)} for a dormant company), with no subscription — and we&apos;ll tell you before any charge starts. <Link href="/pricing">Pricing</Link></p>
         </div>
       </section>
     </>

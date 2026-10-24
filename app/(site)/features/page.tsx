@@ -43,7 +43,7 @@ const GROUPS: { heading: string; intro: string; items: [string, string][] }[] = 
     heading: "Filing",
     intro: "Tested, then filed, with nothing sensitive kept.",
     items: [
-      ["Tested first", "Every return can be sent to HMRC's test service, which checks it exactly as a live filing would. Live filing is only offered for figures that have passed."],
+      ["Checked before it's sent", "Every figure is checked against HMRC's rules before filing, and HMRC check it again as it arrives: if anything is wrong, nothing is filed and the screen says what to fix. HMRC's free test service and Test in Live are there if you want to check first."],
       ["Your sign-in, never stored", "The company's or agent's Government Gateway sign-in is typed in at the moment of filing and used once."],
       ["Checked live before filing", "HMRC's Test in Live check runs the return through HMRC's live service with the real sign-in and files nothing, so a wrong password or a missing Corporation Tax enrolment shows up first."],
       ["Approval on record", "A director's online approval is recorded with the filing, with the date and time — or you confirm it was approved another way."],

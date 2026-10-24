@@ -12,9 +12,9 @@ import { accountingPeriodsOf } from "@/lib/tax/long-period";
 import { exceedsEighteenMonths, isIsoDate, monthsIn } from "@/lib/tax/dates";
 
 const STATUS: Record<string, string> = {
-  draft: "Draft", "accepted-test": "Passed HMRC's test service", "rejected-test": "Rejected by the test service — open to see why",
-  "submitted-test": "Sent to the test service, awaiting the answer", accepted: "Filed with HMRC",
-  "partly-sent-test": "One of the two returns has passed HMRC's test service — send the other",
+  draft: "Draft — not filed yet", "accepted-test": "Checked by HMRC's test service — ready to file", "rejected-test": "HMRC's test found a problem — open to see why",
+  "submitted-test": "With HMRC's test service", accepted: "Filed with HMRC",
+  "partly-sent-test": "One of the two returns checked by HMRC's test service",
   "partly-filed": "One of the two returns has been filed with HMRC — file the other",
   "submitted-live": "Filed — waiting for HMRC's answer",
 };

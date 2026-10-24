@@ -48,6 +48,8 @@ export interface FilingPicture {
   mode: LiveFiling;
   why: string;
   requireTil: boolean;
+  /** Whether these figures must pass HMRC's test service before a real filing. */
+  requireTest: boolean;
   checks: FilingCheck[];
   approval: OnlineApprovalState | null;
   /** Set when failed sign-ins mean filing should wait, to protect the HMRC account. */
@@ -111,7 +113,7 @@ const money = (n: number) => `£${n.toLocaleString("en-GB", { minimumFractionDig
 
 export async function filingPicture(u: SignedInUser, returnId: string, today = new Date().toISOString().slice(0, 10)): Promise<FilingPicture> {
   const blank = (problem: string): FilingPicture => ({
-    ok: false, problem, mode: "off", why: "", requireTil: true, checks: [], approval: null, lockedUntil: null, parts: [],
+    ok: false, problem, mode: "off", why: "", requireTil: false, requireTest: false, checks: [], approval: null, lockedUntil: null, parts: [],
     company: { name: "", utr: null, companyNo: null }, filingDue: "", late: null, emailReady: emailReady(), userEmail: u.email, amendment: false,
   });
   const s = await store();
@@ -149,9 +151,11 @@ export async function filingPicture(u: SignedInUser, returnId: string, today = n
     ? { key: "utr", state: "ok", title: `Corporation Tax UTR ${c.utr.slice(0, 5)} ${c.utr.slice(5)}`, detail: "Check it against HMRC's letters to the company: a return filed under the wrong UTR is refused or lands on the wrong company." }
     : { key: "utr", state: "bad", title: "The company's 10-digit Corporation Tax UTR is missing", detail: "Add it on the company's page. It's on HMRC's letters to the company." });
   const untested = parts.filter((x) => !x.passedTest && !x.filed);
-  checks.push(!untested.length
-    ? { key: "tested", state: "ok", title: parts.length > 1 ? "Both returns passed HMRC's test service with these figures" : "Passed HMRC's test service with these figures" }
-    : { key: "tested", state: "bad", title: `Send ${parts.length > 1 ? `return ${untested.map((x) => x.n + 1).join(" and ")}` : "the return"} to HMRC's test service first`, detail: "Live filing is offered only for figures that HMRC's test service has accepted. Changing any figure means testing again." });
+  if (!untested.length) {
+    checks.push({ key: "tested", state: "ok", title: parts.length > 1 ? "Both returns passed HMRC's test service with these figures" : "Passed HMRC's test service with these figures" });
+  } else if (live.settings.requireTest) {
+    checks.push({ key: "tested", state: "bad", title: `Send ${parts.length > 1 ? `return ${untested.map((x) => x.n + 1).join(" and ")}` : "the return"} to HMRC's test service first`, detail: "Your administrator requires these exact figures to pass HMRC's test service before filing. Changing any figure means testing again." });
+  }
   checks.push(!approval ? { key: "approval", state: "info", title: "Director's approval: confirm it below", detail: "Or send it for approval online in the step before, and the approval is recorded here with the date and time." }
     : approval.status === "approved" ? { key: "approval", state: "ok", title: `Approved online by ${approval.name}`, detail: approval.at ? `On ${new Date(approval.at).toLocaleString("en-GB")}${approval.ip ? `, from ${approval.ip}` : ""}.` : undefined }
       : approval.status === "stale" ? { key: "approval", state: "warn", title: `${approval.name} approved earlier figures`, detail: "The figures changed after the approval. Send the new version for approval, or confirm below that the director has approved these figures." }
@@ -179,7 +183,7 @@ export async function filingPicture(u: SignedInUser, returnId: string, today = n
   checks.push({ key: "account", state: "info", title: "The HMRC sign-in", detail: "Use the company's own HMRC organisation account with Corporation Tax added to it, or an agent's account authorised for this company's Corporation Tax. If Corporation Tax hasn't been added, HMRC refuse the sign-in: add it in the HMRC account (an activation code comes by post to the registered office)." });
 
   return {
-    ok: true, mode: live.mode, why: live.why, requireTil: live.settings.requireTil, checks, approval, lockedUntil, parts,
+    ok: true, mode: live.mode, why: live.why, requireTil: live.settings.requireTil, requireTest: live.settings.requireTest, checks, approval, lockedUntil, parts,
     company: { name: c.name, utr: c.utr, companyNo: c.companyNo }, filingDue: p.filingDue, late,
     emailReady: emailReady(), userEmail: u.email, amendment: Boolean(data.amends),
   };

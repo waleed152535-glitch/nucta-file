@@ -6,8 +6,8 @@ import { getDashboard, listCompanies } from "@/lib/return-actions";
 export const dynamic = "force-dynamic";
 
 const STATUS: Record<string, string> = {
-  draft: "Draft", "accepted-test": "Passed HMRC's test service", "rejected-test": "Turned down by the test service", "submitted-test": "With the test service",
-  "partly-sent-test": "One of two tested", accepted: "Filed with HMRC", "submitted-live": "Filed, waiting for HMRC", "partly-filed": "One of two filed",
+  draft: "Not filed yet", "accepted-test": "Ready to file (checked by HMRC's test service)", "rejected-test": "HMRC's test found a problem", "submitted-test": "Being checked",
+  "partly-sent-test": "One of two checked", accepted: "Filed with HMRC", "submitted-live": "Filed, waiting for HMRC", "partly-filed": "One of two filed",
 };
 
 /** A cell, quoted, and made safe from being read as a formula. */

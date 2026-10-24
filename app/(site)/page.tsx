@@ -90,8 +90,8 @@ export default function Home() {
             </div>
             <div>
               <Icon d={<><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.6 2.6L16 9.5" /></>} />
-              <h3>Tested before it&apos;s filed</h3>
-              <p>A return goes to HMRC for real only once the same figures have passed HMRC&apos;s test service.</p>
+              <h3>Checked before it&apos;s filed</h3>
+              <p>Nucta File checks every figure against HMRC&apos;s rules before it&apos;s sent, and HMRC check it again as it arrives. If anything is wrong, nothing is filed and you see what to fix.</p>
             </div>
             <div>
               <Icon d={<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6M9 16h3" /></>} />
@@ -109,12 +109,12 @@ export default function Home() {
 
       <section className="s-sec" aria-labelledby="price-h">
         <div className="wrap">
-          <h2 id="price-h">Pay for a return when you file it</h2>
-          <p className="intro">No subscription. Preparing, checking and testing returns cost nothing, and nothing is charged until live filing is open for your account.</p>
+          <h2 id="price-h">Free while we launch</h2>
+          <p className="intro">Prepare, approve and file as many returns as you like, free. When charging starts we&apos;ll tell you first — nothing is ever charged without your agreement.</p>
           <div className="price-row">
-            <div><b>£0</b><p>Until live filing is open for your account: prepare, check and test as many returns as you like.</p></div>
-            <div><b>{gbp(PRICES.company.perReturn)}</b><p>Per return, for a company filing its own. {gbp(PRICES.company.dormant)} for a dormant company.</p></div>
-            <div><b>{gbp(PRICES.practice.perReturn)}</b><p>Per return, for practices filing for clients. {gbp(PRICES.practice.dormant)} for a dormant company.</p></div>
+            <div><b>£0</b><p>Now: every return, filed with HMRC, with the accounts for Companies House.</p></div>
+            <div><b>{gbp(PRICES.company.perReturn)}</b><p>Later, per return, for a company filing its own. {gbp(PRICES.company.dormant)} for a dormant company.</p></div>
+            <div><b>{gbp(PRICES.practice.perReturn)}</b><p>Later, per return, for practices filing for clients. {gbp(PRICES.practice.dormant)} for a dormant company.</p></div>
           </div>
           <p style={{ marginTop: 28 }}><Link href="/pricing">See pricing in full</Link></p>
         </div>
@@ -124,7 +124,7 @@ export default function Home() {
         <div className="wrap">
           <h2 id="faq-h">Questions</h2>
           <div className="faq">
-            <details><summary>Does Nucta File need HMRC&apos;s recognition to file?</summary><p>No — HMRC say recognition is optional. Nucta File is registered with HMRC as a software developer (vendor {SITE.vendorId}), builds every return to HMRC&apos;s published specifications, and checks each one with HMRC&apos;s test service before it is filed. Its returns pass that service with director&apos;s loans, long periods, dormant companies and amendments. Live filing is opening in stages: if it isn&apos;t open for your account yet, prepare and test the return now and file the same return when it opens.</p></details>
+            <details><summary>Can I file with HMRC through Nucta File now?</summary><p>Yes. Nucta File files Company Tax Returns directly with HMRC, with the accounts and computation attached in iXBRL. You type the company&apos;s HMRC sign-in — or your agent sign-in — at the moment of filing; it is used once and never stored, and HMRC&apos;s receipt is kept with the return. Nucta File is registered with HMRC as a software developer (vendor {SITE.vendorId}). HMRC&apos;s recognition of software is optional — HMRC say so themselves.</p></details>
             <details><summary>Can I still use HMRC&apos;s own free filing service?</summary><p>No. HMRC closed its free Company Accounts and Tax Online service on 31 March 2026, so a company&apos;s return now has to be filed with commercial software such as Nucta File.</p></details>
             <details><summary>Which companies can use it?</summary><p>UK limited companies with one trade, filing micro-entity accounts, which is most small companies, and dormant companies. Groups, research and development relief, rental income and companies that sold land or shares aren&apos;t handled yet; Nucta File tells you at the start if a company is one of them.</p></details>
             <details><summary>What does HMRC need with the return?</summary><p>The CT600, the company&apos;s accounts and a tax computation, both in iXBRL. Nucta File prepares all three from the figures you enter and sends them together.</p></details>
@@ -137,7 +137,7 @@ export default function Home() {
       <section className="closing" aria-labelledby="closing-h">
         <div className="wrap">
           <h2 id="closing-h">Your next return, ready before the deadline.</h2>
-          <p>Create an account and prepare a return today. Test it with HMRC&apos;s test service, then file the same return with HMRC.</p>
+          <p>Create an account, add the company, enter the year&apos;s figures and file with HMRC — free while we launch.</p>
           <div className="ctas">
             <Link href="/sign-up" className="s-btn big">Create your account</Link>
             <a href={`mailto:${SITE.email}`} className="s-btn quiet big">Email us</a>

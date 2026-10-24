@@ -19,10 +19,11 @@ import { Money, Whole, Text, DateField, YesNo, gbp } from "./fields";
 import OnlineApproval from "./OnlineApproval";
 import TrialBalanceImport from "./TrialBalanceImport";
 import LiveFiling from "./LiveFiling";
+import CompaniesHouseAccounts from "./CompaniesHouseAccounts";
 
 const STEPS = [
   "The company", "Profit and loss", "Expenses tax doesn't allow", "Equipment and vehicles",
-  "Director's loans", "Last year", "Balance sheet", "Approval", "Check and send",
+  "Director's loans", "Last year", "Balance sheet", "Approval", "Review and file",
 ] as const;
 
 const ASSET_KINDS: { key: AssetKind; label: string }[] = [
@@ -64,7 +65,8 @@ export default function ReturnWizard(props: {
   const [tbOpen, setTbOpen] = useState(false);
   const [tbDone, setTbDone] = useState(false);
   const fromTrialBalance = (pl: Partial<ReturnData["pl"]>, bs: Partial<ReturnData["balanceSheet"]>) => {
-    setD((p) => ({ ...p, pl: { ...p.pl, ...pl }, balanceSheet: { ...p.balanceSheet, ...bs } }));
+    const whole = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "number" ? Math.round(v) : v])) as T;
+    setD((p) => ({ ...p, pl: { ...p.pl, ...whole(pl) }, balanceSheet: { ...p.balanceSheet, ...whole(bs) } }));
     setSaved(null); setTbOpen(false); setTbDone(true);
   };
   const set = <K extends keyof ReturnData>(k: K, v: ReturnData[K]) => { setD((p) => ({ ...p, [k]: v })); setSaved(null); };
@@ -112,7 +114,7 @@ export default function ReturnWizard(props: {
     const r = await startAmendment(props.id);
     if (r.ok && r.id) router.push(`/returns/${r.id}`); else setAmendProblems(r.problems);
   });
-  const canAmend = props.status === "accepted" || props.status === "accepted-test";
+  const canAmend = props.status === "accepted";
 
   const pbt = d.pl.turnover + d.pl.otherIncome + d.pl.interestReceived - d.pl.costOfSales - d.pl.staffCosts - d.pl.depreciation - d.pl.otherCharges;
 
@@ -151,7 +153,7 @@ export default function ReturnWizard(props: {
           <div className="banner good" style={{ alignItems: "center" }}>
             <span>✓</span>
             <span style={{ flex: 1 }}>
-              <b>{long ? "Both returns have" : "This return has"} been accepted{props.status === "accepted-test" ? " by HMRC's test service" : " by HMRC"}.</b>{" "}
+              <b>{long ? "Both returns have" : "This return has"} been filed with HMRC.</b>{" "}
               To correct {long ? "them" : "it"}, amend: you get a copy to change, which is sent marked as an amendment, and HMRC put it in place of the original.
               {amendProblems.length > 0 && <div style={{ marginTop: 4 }}>{amendProblems.join(" ")}</div>}
             </span>
@@ -529,13 +531,6 @@ export default function ReturnWizard(props: {
                   if they were paid into the bank, enter the 100 as cash instead.
                 </p>
               )}
-              {!d.dormant && (
-                <div className="row3">
-                  <Money label="Equipment and vehicles" hint="value in the books" value={d.balanceSheet.fixedAssets} onChange={(v) => setIn("balanceSheet", "fixedAssets", v)} />
-                  <Money label="Stock" value={d.balanceSheet.stock} onChange={(v) => setIn("balanceSheet", "stock", v)} />
-                  <Money label="Owed to the company" hint="customers, marketplace, VAT refund" value={d.balanceSheet.debtors} onChange={(v) => setIn("balanceSheet", "debtors", v)} />
-                </div>
-              )}
               {d.dormant ? (
                 <>
                   <div className="row3">
@@ -550,28 +545,54 @@ export default function ReturnWizard(props: {
                   </div>
                   <Money label="Reserves at the start of the year" hint="only if it traded before; a minus number for losses" value={d.balanceSheet.reservesBroughtForward} onChange={(v) => setIn("balanceSheet", "reservesBroughtForward", v)} />
                 </>
-              ) : (
-                <>
-                  <div className="row3">
-                    <Money label="Cash at bank" value={d.balanceSheet.cash} onChange={(v) => setIn("balanceSheet", "cash", v)} />
-                    <Money label="Prepayments" hint="paid in advance, if not above" value={d.balanceSheet.prepayments} onChange={(v) => setIn("balanceSheet", "prepayments", v)} />
-                    <Money label="Owed by the company" hint="suppliers, VAT, PAYE — not tax or directors" value={d.balanceSheet.creditorsWithin} onChange={(v) => setIn("balanceSheet", "creditorsWithin", v)} />
-                  </div>
-                  <div className="row3">
-                    <Money label="Owed to directors" hint="director's loan account in credit" value={d.balanceSheet.owedToDirectors} onChange={(v) => setIn("balanceSheet", "owedToDirectors", v)} />
-                    <Money label="Loans due after a year" value={d.balanceSheet.creditorsAfter} onChange={(v) => setIn("balanceSheet", "creditorsAfter", v)} />
-                    <Money label="Provisions" value={d.balanceSheet.provisions} onChange={(v) => setIn("balanceSheet", "provisions", v)} />
-                  </div>
-                  <div className="row3">
-                    <Money label="Share capital" hint="e.g. 100 shares of £1 = 100" value={d.balanceSheet.shareCapital} onChange={(v) => setIn("balanceSheet", "shareCapital", v)} />
-                    <Money label="Reserves at the start of the year" hint="retained profits; a minus number for losses" value={d.balanceSheet.reservesBroughtForward} onChange={(v) => setIn("balanceSheet", "reservesBroughtForward", v)} />
-                    <Money label="Dividends paid this year" value={d.balanceSheet.dividendsPaid} onChange={(v) => setIn("balanceSheet", "dividendsPaid", v)} />
-                  </div>
-                  <Money label="Share capital not paid" hint="shares issued but not yet paid for — usually nothing" value={d.balanceSheet.shareCapitalNotPaid} onChange={(v) => setIn("balanceSheet", "shareCapitalNotPaid", v)} />
-                </>
-              )}
+              ) : (() => {
+                const b = d.balanceSheet, a75 = live.poa.closingLoans?.a75 ?? 0, ct = Math.round(live.poa.corporationTax);
+                const has = b.fixedAssets + b.stock + b.debtors + b.cash + b.prepayments + b.shareCapitalNotPaid + a75;
+                const owes = b.creditorsWithin + b.owedToDirectors + b.creditorsAfter + b.provisions + (live.computed ? ct : 0);
+                return (
+                  <>
+                    <div className="bsgroup">
+                      <h5><span>What the company has</span><b>{gbp(has)}</b></h5>
+                      <div className="row3">
+                        <Money label="Cash at bank" hint="every account, at the year end" value={b.cash} onChange={(v) => setIn("balanceSheet", "cash", v)} />
+                        <Money label="Owed to the company" hint="customers, payouts due, VAT refund" value={b.debtors} onChange={(v) => setIn("balanceSheet", "debtors", v)} />
+                        <Money label="Stock" hint="unsold goods, at cost" value={b.stock} onChange={(v) => setIn("balanceSheet", "stock", v)} />
+                      </div>
+                      <div className="row2">
+                        <Money label="Equipment and vehicles" hint="value in the books" value={b.fixedAssets} onChange={(v) => setIn("balanceSheet", "fixedAssets", v)} />
+                        <Money label="Prepayments" hint="paid in advance, if not above" value={b.prepayments} onChange={(v) => setIn("balanceSheet", "prepayments", v)} />
+                      </div>
+                      {a75 > 0 && <p className="note" style={{ margin: 0 }}>Includes {gbp(a75)} the directors owe the company, from the director&apos;s loans step.</p>}
+                    </div>
+                    <div className="bsgroup">
+                      <h5><span>What the company owes</span><b>{gbp(owes)}</b></h5>
+                      <div className="row2">
+                        <Money label="Owed by the company" hint="suppliers, loans, VAT — not tax or directors" value={b.creditorsWithin} onChange={(v) => setIn("balanceSheet", "creditorsWithin", v)} />
+                        <Money label="Owed to directors" hint="director's loan account in credit" value={b.owedToDirectors} onChange={(v) => setIn("balanceSheet", "owedToDirectors", v)} />
+                      </div>
+                      <div className="row2">
+                        <Money label="Loans due after a year" value={b.creditorsAfter} onChange={(v) => setIn("balanceSheet", "creditorsAfter", v)} />
+                        <Money label="Provisions" value={b.provisions} onChange={(v) => setIn("balanceSheet", "provisions", v)} />
+                      </div>
+                      {live.computed && ct > 0 && <p className="note" style={{ margin: 0 }}>Includes this year&apos;s Corporation Tax of {gbp(ct)}, which Nucta File adds for you.</p>}
+                    </div>
+                    <div className="bsgroup">
+                      <h5><span>Shares and reserves</span>{live.acc && <b>{gbp(live.acc.capitalAndReserves)}</b>}</h5>
+                      <div className="row3">
+                        <Money label="Share capital" hint="e.g. 100 shares of £1 = 100" value={b.shareCapital} onChange={(v) => setIn("balanceSheet", "shareCapital", v)} />
+                        <Money label="Reserves at the start of the year" hint="minus for losses" value={b.reservesBroughtForward} onChange={(v) => setIn("balanceSheet", "reservesBroughtForward", v)} />
+                        <Money label="Dividends paid this year" value={b.dividendsPaid} onChange={(v) => setIn("balanceSheet", "dividendsPaid", v)} />
+                      </div>
+                      <div className="row3">
+                        <Money label="Share capital not paid" hint="usually nothing" value={b.shareCapitalNotPaid} onChange={(v) => setIn("balanceSheet", "shareCapitalNotPaid", v)} />
+                      </div>
+                      {live.acc && <p className="note" style={{ margin: 0 }}>Includes this year&apos;s {live.acc.profitAfterTax < 0 ? "loss" : "profit"} after tax of {gbp(Math.abs(live.acc.profitAfterTax))}, from the profit and loss step.</p>}
+                    </div>
+                  </>
+                );
+              })()}
               <Whole label="Average number of employees" hint="including paid directors" value={d.balanceSheet.employees} onChange={(v) => setIn("balanceSheet", "employees", v)} />
-              {(live.poa.closingLoans?.a75 ?? 0) > 0 && <p className="note">Also counted as owed to the company: {gbp(live.poa.closingLoans!.a75)} from director&apos;s loans (the director&apos;s loans step).</p>}
+              {d.dormant && (live.poa.closingLoans?.a75 ?? 0) > 0 && <p className="note">Also counted as owed to the company: {gbp(live.poa.closingLoans!.a75)} from director&apos;s loans (the director&apos;s loans step).</p>}
               {live.computed && live.acc && (() => {
                 const diff = live.acc.netAssets - live.acc.capitalAndReserves;
                 return (
@@ -580,7 +601,8 @@ export default function ReturnWizard(props: {
                     <span>
                       {Math.abs(diff) < 1
                         ? <b>The balance sheet balances: net assets {gbp(live.acc.netAssets)}.</b>
-                        : <><b>Out by {gbp(Math.abs(diff))}.</b> Net assets come to {gbp(live.acc.netAssets)}, share capital and reserves to {gbp(live.acc.capitalAndReserves)}. Corporation Tax of {gbp(Math.round(live.poa.corporationTax))}{long ? " (both returns)" : ""} is included as owed.</>}
+                        : <><b>Out by {gbp(Math.abs(diff))}.</b> What the company has, less what it owes, comes to {gbp(live.acc.netAssets)}; shares and reserves come to {gbp(live.acc.capitalAndReserves)}.
+                          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{balanceHints(diff, d.balanceSheet, live.acc.profitBeforeTax).map((h, i) => <li key={i}>{h}</li>)}</ul></>}
                     </span>
                   </div>
                 );
@@ -614,7 +636,7 @@ export default function ReturnWizard(props: {
 
         {step === 8 && (
           <div className="card">
-            <div className="hd"><h3>Check and send</h3>{long && <span className="note">Two returns, one after the other</span>}</div>
+            <div className="hd"><h3>Review and file</h3>{long && <span className="note">Two returns, one after the other</span>}</div>
             <div className="bd">
               {!preview && <p className="note">{pending ? "Checking…" : "Press Check to build the return."}</p>}
               {preview && preview.problems.length > 0 && (
@@ -634,13 +656,10 @@ export default function ReturnWizard(props: {
                 <p className="note" style={{ marginTop: 0 }}>
                   {preview.long ? "Both returns are" : "The return is"} due at HMRC by <b>{longDate(preview.filingDue)}</b>
                   {preview.amended ? <>; amendments can be made until <b>{longDate(preview.amendBy)}</b></> : null}.
-                  {preview.ok && <> Each return goes to <b>HMRC&apos;s test service</b> first, which checks it exactly as a live filing would but files nothing.
-                  {preview.liveFiling === "off" ? " Once live filing is open for this account, it is filed below." : " Then it is filed below, with the company's or agent's HMRC sign-in."}</>}
+                  {preview.ok && <> Check the figures and the documents, then file {preview.long ? "them" : "it"} below with the company&apos;s or agent&apos;s HMRC sign-in.</>}
                 </p>
               )}
               {preview?.parts.map((pt, n) => {
-                const r = sent[n];
-                const before = pt.sent && !r ? pt.sent : null;
                 return (
                   <div key={n} className="card" style={{ padding: 12, marginBottom: 12 }}>
                     {preview.long && (
@@ -671,30 +690,15 @@ export default function ReturnWizard(props: {
                     {preview.ok && pt.sent && (pt.sent.status === "accepted" || pt.sent.status === "submitted-live") && (
                       <p className="note"><b>{pt.sent.status === "accepted" ? "Filed with HMRC" : "Sent to HMRC, waiting for their answer"}</b> on {new Date(pt.sent.at).toLocaleString("en-GB")}{pt.sent.correlationId ? ` · correlation ID ${pt.sent.correlationId}` : ""}.</p>
                     )}
-                    {preview.ok && !(pt.sent && (pt.sent.status === "accepted" || pt.sent.status === "submitted-live")) && (
-                      <div className="acts" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                        <button type="button" className="btn" disabled={pending} onClick={() => send(n)}>
-                          {sending === n ? "Talking to HMRC…" : `Send ${preview.long ? `return ${n + 1} ` : ""}${preview.amended ? "as an amendment " : ""}to HMRC test service`}
-                        </button>
-                        {before && <span className="note">Sent {new Date(before.at).toLocaleString("en-GB")}: {SENT_TEXT[before.status] ?? before.status}</span>}
-                      </div>
-                    )}
-                    {r && (
-                      <div className={`banner ${r.ok ? "good" : r.outcome === "timeout" ? "info" : "bad"}`} style={{ marginTop: 12 }}>
-                        <span>{r.ok ? "✓" : r.outcome === "timeout" ? "…" : "✕"}</span>
-                        <span><b>{r.headline}</b>
-                          {r.detail.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{r.detail.map((t, i) => <li key={i}>{t}</li>)}</ul>}
-                          {r.correlationId && <div className="note mono">Correlation ID {r.correlationId}{r.irmark ? ` · IRmark ${r.irmark}` : ""}</div>}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 );
               })}
               {preview?.ok && (
                 <LiveFiling returnId={props.id} preview={preview} onFiled={() => start(async () => setPreview(await previewReturn(props.id)))}
+                  onTest={send} testResults={sent} testing={sending}
                   refreshKey={`${props.status}|${preview.parts.map((x) => x.sent?.status ?? "").join(",")}|${Object.entries(sent).map(([k, v]) => `${k}:${v.outcome}`).join(",")}`} />
               )}
+              {preview?.ok && preview.companiesHouse && <CompaniesHouseAccounts returnId={props.id} form={preview.companiesHouse} />}
               {preview?.ok && (() => {
                 const base = `/returns/${props.id}/documents`;
                 const many = preview.parts.length > 1;
@@ -708,6 +712,10 @@ export default function ReturnWizard(props: {
                     <div className="row">
                       <div className="what"><div className="t">Accounts</div><div className="d">Micro-entity accounts, {longDate(props.periodStart)} to {longDate(props.periodEnd)}</div></div>
                       {link("accounts.html", "View")}{link("accounts.pdf", "PDF")}{link("accounts.xhtml", "iXBRL")}
+                    </div>
+                    <div className="row">
+                      <div className="what"><div className="t">Accounts for Companies House</div><div className="d">Balance sheet and notes, without the profit and loss account</div></div>
+                      {link("accounts-ch.html", "View")}{link("accounts-ch.pdf", "PDF")}
                     </div>
                     {preview.parts.map((pt, n) => (
                       <div key={n}>
@@ -760,7 +768,7 @@ export default function ReturnWizard(props: {
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
           {step > 0 && <button type="button" className="btn ghost" disabled={pending} onClick={() => save(step - 1)}>Back</button>}
           {step < 7 && <button type="button" className="btn" disabled={pending} onClick={() => save(step + 1)}>Save and continue</button>}
-          {step === 7 && <button type="button" className="btn" disabled={pending} onClick={() => { setStep(8); check(); }}>Save and check</button>}
+          {step === 7 && <button type="button" className="btn" disabled={pending} onClick={() => { setStep(8); check(); }}>Save and review</button>}
           {step === 8 && <button type="button" className="btn ghost" disabled={pending} onClick={check}>Check again</button>}
           {saved && <span className="note">{saved}</span>}
         </div>
@@ -769,14 +777,30 @@ export default function ReturnWizard(props: {
   );
 }
 
-const SENT_TEXT: Record<string, string> = {
-  "accepted-test": "accepted by HMRC's test service", "rejected-test": "rejected by the test service",
-  "submitted-test": "awaiting HMRC's answer", accepted: "filed with HMRC", "submitted-live": "sent to HMRC, waiting for their answer",
-};
+
 
 function shortDate(iso: string): string {
   const d = new Date(iso + "T12:00:00Z");
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/**
+ * Likely reasons the balance sheet is out, from the size of the difference:
+ * a figure on the wrong side shows up as exactly twice that figure.
+ */
+function balanceHints(diff: number, b: ReturnData["balanceSheet"], profit: number): string[] {
+  const near = (x: number) => Math.abs(diff - x) < 1.5;
+  const money = (n: number) => `£${Math.abs(n).toLocaleString("en-GB")}`;
+  const hints: string[] = [];
+  if (b.debtors > 0 && near(2 * b.debtors)) hints.push(`Is the ${money(b.debtors)} in “Owed to the company” really money the company owes? If so, move it to “Owed by the company”.`);
+  if (b.creditorsWithin > 0 && near(-2 * b.creditorsWithin)) hints.push(`Is the ${money(b.creditorsWithin)} in “Owed by the company” really money owed to the company? If so, move it to “Owed to the company”.`);
+  if (b.reservesBroughtForward && near(-2 * b.reservesBroughtForward)) hints.push(`Check the sign of “Reserves at the start of the year”: a loss from earlier years is a minus number, like -${money(b.reservesBroughtForward).slice(1)}.`);
+  if (b.dividendsPaid > 0 && near(2 * b.dividendsPaid)) hints.push("Check the dividends: enter them once, as dividends paid, not also as money owed to the company.");
+  if (Math.abs(diff) <= 2) hints.push("A difference this small is usually rounding: make sure every figure is in whole pounds.");
+  else if (hints.length === 0) hints.push(`A figure on the wrong side — something the company owes entered as something it has, or the other way round — puts it out by twice that figure. Look for £${Math.abs(diff / 2).toLocaleString("en-GB", { maximumFractionDigits: 0 })} in the wrong box.`);
+  hints.push(`The reserves include the ${profit < 0 ? "loss" : "profit"} from the profit and loss step (${money(profit)} before tax). If that step isn't finished, this side will change.`);
+  hints.push("Otherwise, check the cash at the year end (every bank account), what's owed each way, and last year's reserves.");
+  return hints;
 }
 
 function longDate(iso: string): string {

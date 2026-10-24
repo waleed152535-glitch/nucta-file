@@ -82,7 +82,7 @@ export async function getLiveAdmin(): Promise<LiveAdminView> {
   return { ok: true, settings, changes: await getLiveChanges(), checks, filings };
 }
 
-export async function updateLiveFiling(next: { mode: LiveFiling; who: LiveWho; requireTil: boolean; emailReceipt: boolean; confirmLive?: boolean }): Promise<{ ok: boolean; problem?: string; settings?: LiveSettings }> {
+export async function updateLiveFiling(next: { mode: LiveFiling; who: LiveWho; requireTil: boolean; requireTest?: boolean; emailReceipt: boolean; confirmLive?: boolean }): Promise<{ ok: boolean; problem?: string; settings?: LiveSettings }> {
   const u = await currentUser();
   if (!u?.admin) return { ok: false, problem: "This is for Nucta File's administrators only." };
   if (!["off", "til", "on"].includes(next.mode) || !["admins", "everyone"].includes(next.who)) return { ok: false, problem: "That isn't a setting Nucta File knows." };
@@ -90,7 +90,7 @@ export async function updateLiveFiling(next: { mode: LiveFiling; who: LiveWho; r
   if (next.mode === "on" && before.mode !== "on" && !next.confirmLive) return { ok: false, problem: "Tick the box to confirm real filing should be switched on." };
   if (next.mode === "on" && next.who === "everyone" && !(before.mode === "on" && before.who === "everyone") && !next.confirmLive) return { ok: false, problem: "Tick the box to confirm real filing should open to every account." };
   try {
-    const settings = await saveLiveSettings({ mode: next.mode, who: next.who, requireTil: Boolean(next.requireTil), emailReceipt: Boolean(next.emailReceipt) }, u.email);
+    const settings = await saveLiveSettings({ mode: next.mode, who: next.who, requireTil: Boolean(next.requireTil), requireTest: Boolean(next.requireTest), emailReceipt: Boolean(next.emailReceipt) }, u.email);
     revalidatePath("/live-filing");
     return { ok: true, settings };
   } catch (e) {
@@ -112,12 +112,12 @@ export async function sendTestEmail(): Promise<{ ok: boolean; problem?: string; 
 export async function getFilingPicture(returnId: string): Promise<FilingPicture> {
   const u = await signedIn();
   if (!u) {
-    return { ok: false, problem: SIGNED_OUT, mode: "off", why: "", requireTil: true, checks: [], approval: null, lockedUntil: null, parts: [], company: { name: "", utr: null, companyNo: null }, filingDue: "", late: null, emailReady: false, userEmail: "", amendment: false };
+    return { ok: false, problem: SIGNED_OUT, mode: "off", why: "", requireTil: false, requireTest: false, checks: [], approval: null, lockedUntil: null, parts: [], company: { name: "", utr: null, companyNo: null }, filingDue: "", late: null, emailReady: false, userEmail: "", amendment: false };
   }
   try {
     return await filingPicture(u, returnId);
   } catch (e) {
-    return { ok: false, problem: problem(e), mode: "off", why: "", requireTil: true, checks: [], approval: null, lockedUntil: null, parts: [], company: { name: "", utr: null, companyNo: null }, filingDue: "", late: null, emailReady: emailReady(), userEmail: u.email, amendment: false };
+    return { ok: false, problem: problem(e), mode: "off", why: "", requireTil: false, requireTest: false, checks: [], approval: null, lockedUntil: null, parts: [], company: { name: "", utr: null, companyNo: null }, filingDue: "", late: null, emailReady: emailReady(), userEmail: u.email, amendment: false };
   }
 }
 

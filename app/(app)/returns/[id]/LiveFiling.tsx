@@ -1,17 +1,18 @@
 "use client";
 
 /**
- * Filing with HMRC for real, in stages: the checks, the director's approval
- * and the declaration, the HMRC sign-in (the company's own, or an agent's),
- * HMRC's Test in Live check, then the filing itself — and afterwards the
- * receipt, and paying the tax.
+ * Filing with HMRC, in three steps: approve and declare, sign in to HMRC
+ * (the company's own account, or an agent's), file. HMRC's test service and
+ * Test in Live are optional checks underneath — required only when the
+ * administrators say so. Afterwards: the receipt, paying the tax, and the
+ * figures for Companies House.
  *
  * The sign-in lives only in this component's memory, is sent once with the
  * filing, and is never stored. The server checks every rule again.
  */
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { fileReturnLive, checkLiveFiling, type ReturnPreview, type LiveResult } from "@/lib/return-actions";
+import { fileReturnLive, checkLiveFiling, type ReturnPreview, type LiveResult, type SendResult } from "@/lib/return-actions";
 import { getFilingPicture, recordPayment, removePayment, emailReceipt } from "@/lib/live-actions";
 import type { FilingPicture } from "@/lib/filing-checks";
 import { HMRC_BANK, PAY_ONLINE, paymentReferenceProblem } from "@/lib/filing-rules";
@@ -32,7 +33,11 @@ function Result({ r }: { r: LiveResult }) {
   );
 }
 
-export default function LiveFiling({ returnId, preview, refreshKey, onFiled }: { returnId: string; preview: ReturnPreview; refreshKey: string; onFiled: () => void }) {
+export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onTest, testResults, testing }: {
+  returnId: string; preview: ReturnPreview; refreshKey: string; onFiled: () => void;
+  /** HMRC's test service, run by the return screen; its results by return number. */
+  onTest: (n: number) => void; testResults: Record<number, SendResult>; testing: number | null;
+}) {
   const router = useRouter();
   const [pic, setPic] = useState<FilingPicture | null>(null);
   const [as, setAs] = useState<"company" | "agent">(preview.declarant.status === "Agent" ? "agent" : "company");
@@ -79,33 +84,41 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled }: {
   const stage = (done: boolean, now: boolean) => `fstage${done ? " done" : now ? " now" : " wait"}`;
   const notifyOk = notify !== "other" || /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(notifyOther.trim());
   const s1 = approvalOk && declared, s2 = signedIn && notifyOk;
+  const checksRequired = pic.requireTest || pic.requireTil || pic.mode === "til";
+  const attention = pic.checks.filter((c) => c.state !== "ok");
+  const fine = pic.checks.filter((c) => c.state === "ok");
 
   return (
     <>
-      <div className="card" style={{ padding: "14px 16px", marginBottom: 12 }} id="file">
+      <div className="card filing" style={{ padding: "16px 18px", marginBottom: 12 }} id="file">
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-          <h4 style={{ margin: 0, fontFamily: "var(--display)", fontSize: 18, fontWeight: 600 }}>File with HMRC</h4>
-          <span className={`pill ${pic.mode === "on" ? "ok" : pic.mode === "til" ? "live" : "draft"}`}>{pic.mode === "on" ? "Live filing open" : pic.mode === "til" ? "Test in Live only" : "Test service only"}</span>
+          <h4 style={{ margin: 0, fontFamily: "var(--display)", fontSize: 19, fontWeight: 600 }}>{allFiled ? "Filed with HMRC" : "File with HMRC"}</h4>
+          {pic.mode !== "on" && <span className={`pill ${pic.mode === "til" ? "live" : "draft"}`}>{pic.mode === "til" ? "Test in Live only" : "Filing not open yet"}</span>}
         </div>
 
-        <div style={{ marginTop: 8 }}>
-          {!allFiled && pic.checks.map((c) => (
-            <div className="fcheck" key={c.key}>
-              <span className={`m ${c.state}`} aria-hidden>{MARK[c.state]}</span>
-              <span><div className="t">{c.title}</div>{c.detail && <div className="d">{c.detail}</div>}</span>
-            </div>
-          ))}
-        </div>
+        {!allFiled && (
+          <div style={{ marginTop: 8 }}>
+            {attention.map((c) => (
+              <div className="fcheck" key={c.key}>
+                <span className={`m ${c.state}`} aria-hidden>{MARK[c.state]}</span>
+                <span><div className="t">{c.title}</div>{c.detail && <div className="d">{c.detail}</div>}</span>
+              </div>
+            ))}
+            {fine.length > 0 && (
+              <div className="fcheck">
+                <span className="m ok" aria-hidden>✓</span>
+                <span><div className="t">{fine.map((c) => c.title).join(" · ")}</div></span>
+              </div>
+            )}
+          </div>
+        )}
 
         {pic.mode === "off" ? (
-          <p className="note" style={{ margin: "12px 0 0" }}>
-            When live filing is open for this account, the return is filed from here: the company&apos;s HMRC sign-in — or your agent account&apos;s — is typed
-            in at that moment and never stored, HMRC&apos;s Test in Live check runs first, and HMRC&apos;s receipt is kept with the return.
-          </p>
+          <p className="note" style={{ margin: "12px 0 0" }}>{pic.why}</p>
         ) : allFiled ? null : (
           <>
             <div className={stage(s1, true)} style={{ marginTop: 10 }}>
-              <h5><span className="n">{s1 ? "✓" : 1}</span>The director&apos;s approval and the declaration</h5>
+              <h5><span className="n">{s1 ? "✓" : 1}</span>Approve and declare</h5>
               {onlineOk ? (
                 <p className="note" style={{ marginTop: 0 }}>✓ {pic.approval!.name} approved these figures online{pic.approval!.at ? ` on ${new Date(pic.approval!.at).toLocaleString("en-GB")}` : ""}. The approval is recorded with the filing.</p>
               ) : (
@@ -141,52 +154,44 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled }: {
                   <input type="password" autoComplete="new-password" value={signIn.password} onChange={(e) => setSignIn({ ...signIn, password: e.target.value })} />
                 </div>
               </div>
-              <p className="note" style={{ marginTop: -6 }}>Type it here only. Several wrong passwords can lock a Government Gateway account, so Nucta File stops after two failed sign-ins in an hour.</p>
-              <div className="note" style={{ margin: "4px 0" }}>HMRC&apos;s own confirmation email goes to</div>
-              <div className="picks" role="radiogroup" aria-label="HMRC's confirmation email">
-                <button type="button" role="radio" aria-checked={notify === "account"} className="pick" onClick={() => setNotify("account")}>
-                  <span className="dot" aria-hidden /><span><b>The email on this HMRC account</b><small>{as === "agent" ? "Your agent account's email, as HMRC have it." : "The company's email, as HMRC have it — the client hears from HMRC directly."}</small></span>
-                </button>
-                <button type="button" role="radio" aria-checked={notify === "me"} className="pick" onClick={() => setNotify("me")}>
-                  <span className="dot" aria-hidden /><span><b>Me</b><small>{pic.userEmail}</small></span>
-                </button>
-                <button type="button" role="radio" aria-checked={notify === "other"} className="pick" onClick={() => setNotify("other")}>
-                  <span className="dot" aria-hidden /><span><b>Another address</b><small>Such as the director&apos;s.</small></span>
-                </button>
-              </div>
-              {notify === "other" && (
-                <div className="field" style={{ maxWidth: 420 }}><label>Email for HMRC&apos;s confirmation</label>
-                  <input type="email" value={notifyOther} onChange={(e) => setNotifyOther(e.target.value)} placeholder="name@example.co.uk" />
+              <p className="note" style={{ marginTop: -6 }}>Nucta File uses it once, for this filing, and never keeps it. Several wrong passwords can lock a Government Gateway account, so Nucta File stops after two failed sign-ins in an hour.</p>
+              <details className="more-opts">
+                <summary>HMRC&apos;s own confirmation email: {notify === "account" ? "the email on this HMRC account" : notify === "me" ? pic.userEmail : notifyOther || "another address"}</summary>
+                <div className="picks" role="radiogroup" aria-label="HMRC's confirmation email">
+                  <button type="button" role="radio" aria-checked={notify === "account"} className="pick" onClick={() => setNotify("account")}>
+                    <span className="dot" aria-hidden /><span><b>The email on this HMRC account</b><small>{as === "agent" ? "Your agent account's email, as HMRC have it." : "The company's email, as HMRC have it."}</small></span>
+                  </button>
+                  <button type="button" role="radio" aria-checked={notify === "me"} className="pick" onClick={() => setNotify("me")}>
+                    <span className="dot" aria-hidden /><span><b>Me</b><small>{pic.userEmail}</small></span>
+                  </button>
+                  <button type="button" role="radio" aria-checked={notify === "other"} className="pick" onClick={() => setNotify("other")}>
+                    <span className="dot" aria-hidden /><span><b>Another address</b><small>Such as the director&apos;s.</small></span>
+                  </button>
                 </div>
-              )}
-              <p className="note" style={{ marginTop: 0 }}>Either way, Nucta File keeps HMRC&apos;s receipt with the return{pic.emailReady ? " and emails it to you" : ""} — the receipt is the proof of filing.</p>
+                {notify === "other" && (
+                  <div className="field" style={{ maxWidth: 420 }}><label>Email for HMRC&apos;s confirmation</label>
+                    <input type="email" value={notifyOther} onChange={(e) => setNotifyOther(e.target.value)} placeholder="name@example.co.uk" />
+                  </div>
+                )}
+                <p className="note" style={{ marginTop: 0 }}>Nucta File keeps HMRC&apos;s receipt with the return{pic.emailReady ? " and emails it to you" : ""} either way.</p>
+              </details>
             </div>
 
             {pic.parts.map((x) => {
               const tilR = results[`til-${x.n}`], fileR = results[`file-${x.n}`];
               const tilPassed = x.til?.outcome === "accepted" || (tilR?.ok ?? false);
+              const testedNow = x.passedTest || Boolean(testResults[x.n]?.ok);
               const filed = x.filed?.status === "accepted" || fileR?.filed;
               const waiting = x.filed?.status === "submitted-live" && !fileR?.filed;
-              const canFileReal = pic.mode === "on" && canSend && x.passedTest && (!pic.requireTil || tilPassed) && !blockingCheck;
+              const canFileReal = pic.mode === "on" && canSend && (!pic.requireTest || testedNow) && (!pic.requireTil || tilPassed) && !blockingCheck;
               const label = many ? ` return ${x.n + 1} (to ${day(x.periodTo)})` : "";
+              const why = !s1 ? "Approve and declare first." : !s2 ? "Sign in to HMRC above." : locked ? "Wait until the sign-in pause ends." : pic.requireTest && !testedNow ? "Your administrator requires HMRC's test service first (below)." : pic.requireTil && !tilPassed ? "Your administrator requires the Test in Live check first (below)." : blockingCheck ? "Fix the items marked ✕ above." : "";
+              const tr = testResults[x.n];
               return (
                 <div key={x.n}>
-                  <div className={stage(tilPassed || Boolean(filed), s1 && s2)}>
-                    <h5><span className="n">{tilPassed || filed ? "✓" : 3}</span>Check{label} with HMRC&apos;s live service{pic.requireTil ? "" : " (recommended)"}</h5>
-                    {!x.passedTest && !x.filed ? <p className="note" style={{ marginTop: 0 }}>Send it to HMRC&apos;s test service first, above.</p> : filed ? <p className="note" style={{ marginTop: 0 }}>Filed — no further check needed.</p> : (
-                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                        <button type="button" className={`btn ${tilPassed ? "ghost" : ""}`} disabled={pending || !canSend || waiting || blockingCheck} onClick={() => til(x.n)}>
-                          {busy === `til-${x.n}` ? "Talking to HMRC…" : tilPassed ? "Check again" : "Check with HMRC's live service"}
-                        </button>
-                        <span className="note">Test in Live: the same sign-in, every check HMRC run on a real filing, and nothing filed.{x.til && !tilR ? ` Last check ${new Date(x.til.at).toLocaleString("en-GB")}: ${x.til.outcome}.` : ""}</span>
-                      </div>
-                    )}
-                    {tilR && <Result r={tilR} />}
-                  </div>
-
                   {pic.mode === "on" && (
                     <div className={stage(Boolean(filed), canFileReal)}>
-                      <h5><span className="n">{filed ? "✓" : 4}</span>File{label} with HMRC</h5>
+                      <h5><span className="n">{filed ? "✓" : 3}</span>File{label}</h5>
                       {filed ? null : waiting ? (
                         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                           <button type="button" className="btn" disabled={pending || !signedIn} onClick={() => ask(x.n)}>{busy === `file-${x.n}` ? "Asking HMRC…" : "Ask HMRC again"}</button>
@@ -200,12 +205,34 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled }: {
                         </div>
                       ) : (
                         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                          <button type="button" className="btn" disabled={pending || !canFileReal} onClick={() => setConfirming(x.n)}>File{many ? ` return ${x.n + 1}` : ""} with HMRC</button>
-                          {!canFileReal && <span className="note">{!x.passedTest ? "Pass HMRC's test service first." : !s1 ? "Confirm the approval and the declaration." : !s2 ? "Sign in to HMRC above." : locked ? "Wait until the sign-in pause ends." : pic.requireTil && !tilPassed ? "Pass the live check first." : blockingCheck ? "Fix the items marked ✕ above." : ""}</span>}
+                          <button type="button" className="btn big" disabled={pending || !canFileReal} onClick={() => setConfirming(x.n)}>File{many ? ` return ${x.n + 1}` : ""} with HMRC</button>
+                          {!canFileReal ? <span className="note">{why}</span> : <span className="note">HMRC check it as it arrives. If they find a problem, nothing is filed and you&apos;ll see what to fix.</span>}
                         </div>
                       )}
                       {fileR && <Result r={fileR} />}
                     </div>
+                  )}
+
+                  {!filed && (
+                    <details className="more-opts" open={checksRequired || Boolean(tr) || Boolean(tilR) || undefined}>
+                      <summary>{checksRequired ? "Checks to run first" : "Check it first without filing (optional)"}{label}</summary>
+                      <div className="opt-check">
+                        <div>
+                          <b>HMRC&apos;s test service</b>{pic.requireTest && <span className="pill warn" style={{ marginLeft: 8 }}>required</span>}
+                          <div className="note">Free. HMRC check the format and the figures exactly as for a real return; nothing is filed and no sign-in is needed.{x.passedTest && !tr ? " Already passed with these figures." : ""}</div>
+                        </div>
+                        <button type="button" className="btn ghost sm" disabled={pending || testing !== null} onClick={() => onTest(x.n)}>{testing === x.n ? "Talking to HMRC…" : x.passedTest || tr?.ok ? "Check again" : "Run the test"}</button>
+                      </div>
+                      {tr && <Result r={{ ...tr, filed: false, receiptText: null, receiptNotSaved: false }} />}
+                      <div className="opt-check">
+                        <div>
+                          <b>HMRC&apos;s Test in Live</b>{pic.requireTil && <span className="pill warn" style={{ marginLeft: 8 }}>required</span>}
+                          <div className="note">Uses the HMRC sign-in above, so a wrong password or an account without Corporation Tax shows up — and files nothing.{x.til && !tilR ? ` Last check ${new Date(x.til.at).toLocaleString("en-GB")}: ${x.til.outcome}.` : ""}</div>
+                        </div>
+                        <button type="button" className="btn ghost sm" disabled={pending || !canSend || waiting || blockingCheck} onClick={() => til(x.n)}>{busy === `til-${x.n}` ? "Talking to HMRC…" : tilPassed ? "Check again" : "Run Test in Live"}</button>
+                      </div>
+                      {tilR && <Result r={tilR} />}
+                    </details>
                   )}
                 </div>
               );
@@ -255,7 +282,7 @@ function Receipt({ returnId, pic, n, defaultTo }: { returnId: string; pic: Filin
           {msg && <span className={msg.ok ? "ok-t" : "late-t"} style={{ fontSize: 13 }}>{msg.text}</span>}
         </div>
       )}
-      <p className="note" style={{ margin: "12px 0 0" }}>Next: the accounts go to Companies House separately — check the company&apos;s deadlines. To correct this return, start an amended return.</p>
+      <p className="note" style={{ margin: "12px 0 0" }}>Next: pay the tax, and file the accounts at Companies House — both below. To correct this return later, use “Amend this return” at the top of the page.</p>
     </div>
   );
 }

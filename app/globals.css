@@ -421,3 +421,34 @@ iframe.doc{width:100%;height:760px;border:1px solid var(--border);border-radius:
 .paidlist{margin:6px 0 0;padding:0;list-style:none;}
 .paidlist li{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border-2);font-size:13px;}
 @media (max-width:640px){ .picks{grid-template-columns:1fr;} }
+
+/* ——— One-button filing (build 46) ——— */
+.btn.big{padding:12px 24px;font-size:15px;border-radius:12px;}
+.more-opts{margin-top:12px;border:1px solid var(--border-2);border-radius:12px;padding:0 14px;background:rgba(255,255,255,.015);}
+.more-opts > summary{cursor:pointer;padding:11px 0;font-size:13px;color:var(--muted);font-weight:600;list-style:none;}
+.more-opts > summary::-webkit-details-marker{display:none;}
+.more-opts > summary::before{content:"▸";display:inline-block;margin-right:8px;transition:transform .15s;}
+.more-opts[open] > summary::before{transform:rotate(90deg);}
+.more-opts[open]{padding-bottom:12px;}
+.more-opts > summary:hover{color:var(--text);}
+.more-opts > summary:focus-visible{outline:2px solid var(--box);outline-offset:2px;border-radius:6px;}
+.opt-check{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border-2);}
+.opt-check b{font-size:13.5px;}
+.opt-check .btn{flex:none;}
+@media (max-width:640px){ .opt-check{flex-direction:column;align-items:flex-start;} }
+/* Companies House's form, box by box */
+.chform{width:100%;border-collapse:collapse;font-size:13.5px;}
+.chform th{text-align:left;font-size:11.5px;color:var(--faint);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border);}
+.chform td{padding:6px 8px;border-bottom:1px solid var(--border-2);}
+.chform .num{text-align:right;width:150px;white-space:nowrap;}
+.chform tr.t td:first-child{font-weight:650;}
+.copyval{font-family:var(--mono);font-size:13.5px;font-weight:600;background:rgba(0,0,0,.25);color:var(--text);border:1px solid var(--border-2);border-radius:8px;padding:4px 10px;min-width:72px;text-align:right;}
+.copyval:hover{border-color:rgba(196,210,240,.35);}
+.copyval.done{color:var(--green);border-color:rgba(61,220,151,.4);}
+.chsteps{margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:var(--muted);}
+.chsteps b{color:var(--text);}
+/* The balance sheet step: what the company has, what it owes, shares and reserves */
+.bsgroup{border:1px solid var(--border-2);border-radius:14px;padding:12px 14px 4px;margin-bottom:12px;background:rgba(255,255,255,.015);}
+.bsgroup > h5{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 10px;font-family:var(--display);font-size:15px;font-weight:600;}
+.bsgroup > h5 b{font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:14px;}
+.bsgroup > .note{padding-bottom:8px;}

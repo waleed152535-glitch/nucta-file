@@ -5,14 +5,22 @@ import { useEffect, useState } from "react";
 /**
  * Inputs for the return screens.
  *
- * Amounts accept what people actually type — "182,400", "£1,250", "1250.50"
- * — and show thousands commas once you move on.
+ * Amounts accept what people actually type or paste — "182,400", "£1,250",
+ * "1250.50", "-45", "−45", "(45)" — and show thousands commas once you move
+ * on. Accounts and tax returns are in whole pounds, so amounts are kept to
+ * the nearest pound: what the screen adds up is exactly what is filed.
  */
 
-const parse = (v: string): number => {
-  const n = Number(v.replace(/[£,\s]/g, ""));
-  return Number.isFinite(n) ? n : 0;
+export const parseMoney = (v: string): number => {
+  let t = v.trim().replace(/[\u2212\u2013\u2012\u2014]/g, "-").replace(/[£,\s]/g, "");
+  let sign = 1;
+  if (/^\(.*\)$/.test(t)) { sign = -1; t = t.slice(1, -1); }
+  if (/^.+-$/.test(t)) { sign = -sign; t = t.slice(0, -1); }
+  if (t.startsWith("-")) { sign = -sign; t = t.slice(1); }
+  const n = Number(t);
+  return Number.isFinite(n) ? sign * n : 0;
 };
+const parse = (v: string): number => Math.round(parseMoney(v));
 const show = (n: number): string => (n ? n.toLocaleString("en-GB", { maximumFractionDigits: 2 }) : "");
 
 export function Money({ label, hint, value, onChange, help }: {

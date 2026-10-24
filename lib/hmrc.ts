@@ -14,7 +14,7 @@ export const SENDER_ID = process.env.HMRC_SENDER_ID ?? "CTUser100";
 export const PRODUCT_NAME = process.env.HMRC_PRODUCT_NAME ?? "Nucta File";
 export const PRODUCT_VERSION = process.env.HMRC_PRODUCT_VERSION ?? "1.0";
 /** The last build whose CT600s, accounts and computations passed HMRC's own validation tools (schema, business rules, iXBRL, IRmark). */
-export const SCHEMA_CHECKED_BUILD = "44";
+export const SCHEMA_CHECKED_BUILD = "46";
 
 /** HMRC_CONTACT_EMAIL, only when it is an email address: a malformed one would make HMRC refuse the envelope. */
 export function contactEmail(): string | undefined {

@@ -22,6 +22,8 @@ export interface LiveSettings {
   who: LiveWho;
   /** A real filing needs a passed Test in Live check of the same figures first. */
   requireTil: boolean;
+  /** A real filing needs these figures to have passed HMRC's test service first. */
+  requireTest: boolean;
   /** Email HMRC's receipt to the person who filed, as soon as it arrives. */
   emailReceipt: boolean;
   changedBy: string | null;
@@ -34,7 +36,7 @@ const KEY = "live_filing";
 const LOG_KEY = "live_filing_changes";
 
 export const defaultLiveSettings = (): LiveSettings => ({
-  mode: liveFiling(), who: "admins", requireTil: true, emailReceipt: true, changedBy: null, changedAt: null,
+  mode: liveFiling(), who: "admins", requireTil: false, requireTest: false, emailReceipt: true, changedBy: null, changedAt: null,
 });
 
 function clean(v: unknown): LiveSettings {
@@ -44,6 +46,7 @@ function clean(v: unknown): LiveSettings {
     mode: o.mode === "on" || o.mode === "til" || o.mode === "off" ? o.mode : d.mode,
     who: o.who === "everyone" ? "everyone" : "admins",
     requireTil: typeof o.requireTil === "boolean" ? o.requireTil : d.requireTil,
+    requireTest: typeof o.requireTest === "boolean" ? o.requireTest : d.requireTest,
     emailReceipt: typeof o.emailReceipt === "boolean" ? o.emailReceipt : d.emailReceipt,
     changedBy: typeof o.changedBy === "string" ? o.changedBy : null,
     changedAt: typeof o.changedAt === "string" ? o.changedAt : null,
@@ -83,6 +86,7 @@ export async function saveLiveSettings(next: Omit<LiveSettings, "changedBy" | "c
   if (before.mode !== value.mode) parts.push(`mode ${MODE_WORDS[before.mode]} → ${MODE_WORDS[value.mode]}`);
   if (before.who !== value.who) parts.push(value.who === "everyone" ? "opened to every account" : "limited to administrators");
   if (before.requireTil !== value.requireTil) parts.push(value.requireTil ? "Test in Live required before filing" : "Test in Live no longer required");
+  if (before.requireTest !== value.requireTest) parts.push(value.requireTest ? "test service required before filing" : "test service no longer required");
   if (before.emailReceipt !== value.emailReceipt) parts.push(value.emailReceipt ? "receipts emailed to the filer" : "receipts not emailed");
   await s.db.insert(s.settings).values({ key: KEY, value, updatedBy: by, updatedAt: new Date() })
     .onConflictDoUpdate({ target: s.settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });

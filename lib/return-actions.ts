@@ -8,6 +8,7 @@ import { gatewayConfig, messageClass, redact, redactLive, liveConfig, maskId, ty
 import { liveModeFor } from "./live-settings";
 import { signInLock, onlineApproval } from "./filing-checks";
 import { receiptEmailText } from "./filing-rules";
+import type { CompaniesHouseForm } from "./accounts/ch-form";
 import { sendEmail } from "./auth";
 import { prepareReturn, type PreparedReturn } from "./filing";
 import { companyNumberProblem } from "./companies-house";
@@ -638,6 +639,8 @@ export interface ReturnPreview {
   /** Who signs the return, for the declaration on the filing screen. */
   declarant: { name: string; status: string };
   director: string;
+  /** The accounts as Companies House's online form asks for them. */
+  companiesHouse: CompaniesHouseForm | null;
 }
 
 async function prepared(id: string) {
@@ -661,7 +664,7 @@ async function original(r: Awaited<ReturnType<typeof getReturn>>): Promise<Prepa
 export async function previewReturn(id: string): Promise<ReturnPreview> {
   const { r, p } = await prepared(id);
   const liveFiling = (await liveModeFor(await currentUser())).mode;
-  if (!p) return { ok: false, problems: [r.error ?? "The return couldn't be opened."], warnings: [], long: false, amended: false, parts: [], accountsHtml: null, filingDue: "", amendBy: "", liveFiling, declarant: { name: "", status: "" }, director: "" };
+  if (!p) return { ok: false, problems: [r.error ?? "The return couldn't be opened."], warnings: [], long: false, amended: false, parts: [], accountsHtml: null, filingDue: "", amendBy: "", liveFiling, declarant: { name: "", status: "" }, director: "", companiesHouse: null };
   const was = p.ok ? await original(r) : null;
   return {
     ok: p.ok, problems: p.problems, warnings: p.warnings, long: p.long, amended: p.returnType === "amended",
@@ -684,6 +687,7 @@ export async function previewReturn(id: string): Promise<ReturnPreview> {
     }),
     accountsHtml: p.accountsHtml, filingDue: p.filingDue, amendBy: p.amendBy,
     liveFiling, declarant: { name: r.data!.declarantName, status: r.data!.declarantStatus }, director: r.data!.director,
+    companiesHouse: p.companiesHouse,
   };
 }
 
@@ -871,7 +875,9 @@ export interface LiveResult extends SendResult {
  *     so a few more wrong passwords can't lock the company's HMRC account;
  *   - when the administrators require it, HMRC's Test in Live check has
  *     passed with these exact figures;
- *   - this exact version of the return has passed HMRC's test service;
+ *   - when the administrators require it, this exact version of the return
+ *     has passed HMRC's test service (otherwise HMRC's live checks are the
+ *     test: a rejected return is simply not filed);
  *   - the director's approval and the declaration have been confirmed;
  *   - the filing can be recorded: a row is written before sending, so a
  *     filing never happens without a record of it;
@@ -913,8 +919,8 @@ export async function fileReturnLive(
   const rec = data.sent?.[String(part)];
   if (rec?.status === "accepted") return stop("This return has already been filed with HMRC.", [rec.receiptText ?? "", "To change it, start an amended return."].filter(Boolean));
   if (rec?.status === "submitted-live") return stop("This return has been sent to HMRC and is waiting for their answer.", ["Use “Ask HMRC again” rather than filing it twice."]);
-  if (rec?.status !== "accepted-test") {
-    return stop("Send this return to HMRC's test service first.", ["Live filing is offered only for a return whose exact figures have passed the test service."]);
+  if (live.settings.requireTest && rec?.status !== "accepted-test") {
+    return stop("Send this return to HMRC's test service first.", ["Your administrator requires these exact figures to pass HMRC's test service before filing."]);
   }
   if (filingUnderWay(data, part)) return stop("This return is being filed right now.", ["Wait a minute for HMRC's answer."]);
   if (!til && live.settings.requireTil && data.til?.[String(part)]?.outcome !== "accepted") {

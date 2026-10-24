@@ -93,17 +93,19 @@ export function Calendar({ deadlines, today, big = false }: { deadlines: Deadlin
 const IN_PROGRESS = new Set(["draft", "rejected-test", "submitted-test"]);
 const TESTED = new Set(["accepted-test", "partly-sent-test"]);
 const FILED = new Set(["accepted", "submitted-live", "partly-filed"]);
+/** Approved by the director online, or already checked by HMRC's test service: only filing is left. */
+export const readyToFile = (r: DashboardReturn) => TESTED.has(r.status) || (IN_PROGRESS.has(r.status) && r.status !== "rejected-test" && r.approval === "approved");
 const STAGE_NOTE: Record<string, string> = {
-  draft: "Draft", "rejected-test": "Test turned down", "submitted-test": "Waiting for the test service",
-  "accepted-test": "Passed", "partly-sent-test": "One of two tested", accepted: "Filed", "submitted-live": "Waiting for HMRC", "partly-filed": "One of two filed",
+  draft: "Draft", "rejected-test": "Test found a problem", "submitted-test": "Being checked",
+  "accepted-test": "Checked by HMRC", "partly-sent-test": "One of two checked", accepted: "Filed", "submitted-live": "Waiting for HMRC", "partly-filed": "One of two filed",
 };
 
 /** Every return by where it has got to, from not started to filed. */
 export function Board({ data }: { data: DashboardData }) {
   const notStarted = data.deadlines.filter((d) => d.kind === "not-started" && d.label === "Return not started");
   const lanes: { cls: string; title: string; items: DashboardReturn[] }[] = [
-    { cls: "l2", title: "In progress", items: data.returns.filter((r) => IN_PROGRESS.has(r.status)) },
-    { cls: "l3", title: "Passed HMRC's test", items: data.returns.filter((r) => TESTED.has(r.status)) },
+    { cls: "l2", title: "In progress", items: data.returns.filter((r) => IN_PROGRESS.has(r.status) && !readyToFile(r)) },
+    { cls: "l3", title: "Ready to file", items: data.returns.filter(readyToFile) },
     { cls: "l4", title: "Filed", items: data.returns.filter((r) => FILED.has(r.status)) },
   ];
   const SHOW = 5;

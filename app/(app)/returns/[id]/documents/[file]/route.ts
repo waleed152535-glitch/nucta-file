@@ -2,6 +2,7 @@ import { returnDocuments } from "@/lib/return-docs";
 import { makePdf, htmlToBlocks, blocksToHtml, type PdfDoc } from "@/lib/pdf";
 import { ct600Blocks, receiptBlocks, longDate } from "@/lib/documents";
 import { approvalPackPdf } from "@/lib/approval-pack";
+import { companiesHouseCopy } from "@/lib/accounts/ch-form";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
  * A return's documents: /returns/<id>/documents/<name>
  *
  *   accounts.html | .pdf | .xhtml          the accounts (iXBRL)
+ *   accounts-ch.html | .pdf                the Companies House copy: balance sheet and notes
  *   computation-1.html | .pdf | .xhtml     each period's computation (iXBRL)
  *   ct600-1.html | .pdf | .xml             each CT600: box by box, or the XML
  *   submission-1.xml                       what was sent to HMRC, password removed
@@ -17,7 +19,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string; file: string }> }) {
   const { id, file } = await ctx.params;
-  const m = file.match(/^(accounts|computation-(\d)|ct600-(\d)|submission-(\d)|receipt-(\d)|approval-pack)\.(html|pdf|xhtml|xml)$/);
+  const m = file.match(/^(accounts-ch|accounts|computation-(\d)|ct600-(\d)|submission-(\d)|receipt-(\d)|approval-pack)\.(html|pdf|xhtml|xml)$/);
   if (!m) return new Response("Not found", { status: 404 });
   const d = await returnDocuments(id);
   if (!d.ok) return new Response(d.error ?? "Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
@@ -37,6 +39,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string; fi
   const pdf = async (docs: PdfDoc[], title: string, fileName: string) => send(await makePdf(docs, { title }), "application/pdf", fileName);
   const html = "text/html; charset=utf-8";
 
+  if (kind === "accounts-ch") {
+    if (!d.accountsHtml) return new Response("No accounts", { status: 404 });
+    const ch = companiesHouseCopy(d.accountsHtml);
+    if (ext === "html") return send(ch, html);
+    if (ext === "pdf") return pdf([{ footer: `${d.company.name} · accounts to ${longDate(d.periodTo)} · Companies House copy`, blocks: htmlToBlocks(ch) }], `${d.company.name} accounts — Companies House copy`, name("accounts-companies-house", "pdf"));
+    return new Response("Not found", { status: 404 });
+  }
   if (kind === "accounts") {
     if (!d.accountsHtml) return new Response("No accounts", { status: 404 });
     if (ext === "html") return send(d.accountsHtml, html);

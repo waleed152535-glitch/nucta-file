@@ -8,8 +8,8 @@ import AddCompany from "./AddCompany";
 import ImportCompanies from "./ImportCompanies";
 
 const STATUS: Record<string, [string, string]> = {
-  draft: ["Draft", "draft"], "accepted-test": ["Passed HMRC's test", "live"], "rejected-test": ["Test turned down", "bad"], "submitted-test": ["With the test service", "warn"],
-  "partly-sent-test": ["One of two tested", "warn"], accepted: ["Filed with HMRC", "ok"], "submitted-live": ["Waiting for HMRC", "warn"], "partly-filed": ["One of two filed", "warn"],
+  draft: ["Not filed yet", "draft"], "accepted-test": ["Ready to file", "live"], "rejected-test": ["Test found a problem", "bad"], "submitted-test": ["Being checked", "warn"],
+  "partly-sent-test": ["One of two checked", "warn"], accepted: ["Filed with HMRC", "ok"], "submitted-live": ["Waiting for HMRC", "warn"], "partly-filed": ["One of two filed", "warn"],
 };
 const short = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 

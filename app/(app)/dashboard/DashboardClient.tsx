@@ -10,7 +10,7 @@ import Link from "next/link";
 import type { DashboardData } from "@/lib/return-actions";
 import AddCompany from "../companies/AddCompany";
 import DeadlineList from "./DeadlineList";
-import { Board, Calendar, CompanyTable, Feed, TaxChart, money, shortDate } from "./parts";
+import { Board, Calendar, CompanyTable, Feed, TaxChart, money, shortDate, readyToFile } from "./parts";
 import { openPalette } from "@/components/AppBar";
 import DashTasks from "./DashTasks";
 
@@ -84,7 +84,7 @@ export default function DashboardClient({ data, chReady, who, supportEmail, toda
                 <li><b>{who.practice ? "Add a client company" : "Add your company"}</b>{chReady ? "Search Companies House by name or number; the address and accounts dates fill in." : "Type its name, number and Corporation Tax reference."}</li>
                 <li><b>Start the return</b>Nucta File suggests the period from the company&apos;s accounts dates.</li>
                 <li><b>Enter the year&apos;s figures</b>From the bookkeeping or last year&apos;s accounts. The tax is worked out as you type.</li>
-                <li><b>Check, then send</b>Download the accounts, computation and CT600, test with HMRC&apos;s test service, then file with HMRC.</li>
+                <li><b>Approve and file</b>The director approves online or on paper, then you file with the company&apos;s HMRC sign-in. The figures for Companies House are on the same screen.</li>
               </ol>
               <button type="button" className="btn" onClick={() => setAdding(true)}>{who.practice ? "Add your first client" : "Add your company"}</button>
               <p className="note" style={{ marginTop: 14 }}>Stuck? Email <a href={`mailto:${supportEmail}`}>{supportEmail}</a> and we&apos;ll help you set up.</p>
@@ -98,7 +98,7 @@ export default function DashboardClient({ data, chReady, who, supportEmail, toda
               <div className={`stat ${c.dueSoon ? "warn" : ""}`}><div className="l">Due in the next 30 days</div><div className="n">{c.dueSoon}</div><div className="s">Returns, tax and accounts</div></div>
               <div className="stat money"><div className="l">Tax due in 90 days</div><div className="n">{money(in90)}</div><div className="s">Corporation Tax and loans tax</div></div>
               <div className={`stat ${c.filed ? "good" : ""}`}><div className="l">Filed with HMRC</div><div className="n">{c.filed}</div><div className="s">Receipts kept with each return</div></div>
-              <div className="stat"><div className="l">Passed HMRC&apos;s test</div><div className="n">{c.passedTest}</div><div className="s">Ready to file with HMRC</div></div>
+              <div className="stat"><div className="l">Ready to file</div><div className="n">{data.returns.filter(readyToFile).length}</div><div className="s">Approved, or checked by HMRC</div></div>
             </div>
 
             <div className="dgrid">

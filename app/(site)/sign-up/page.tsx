@@ -16,7 +16,8 @@ export default async function SignUp() {
             <li>Add a company from Companies House in a few seconds.</li>
             <li>Enter the year&apos;s figures; the tax works itself out.</li>
             <li>Download the accounts, computation and CT600, and an approval pack for the director.</li>
-            <li>Test the return with HMRC&apos;s test service. Then file the same return with HMRC, once live filing is open for your account.</li>
+            <li>File with HMRC using the company&apos;s HMRC sign-in, and get the figures for Companies House in the same place.</li>
+            <li>Free while we launch.</li>
           </ul>
         </div>
         <SignUpForm />

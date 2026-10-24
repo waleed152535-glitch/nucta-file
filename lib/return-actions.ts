@@ -716,10 +716,19 @@ export async function sendReturnToTest(id: string, part = 0): Promise<SendResult
   const { config, missing } = gatewayConfig("test");
   if (!config) return blocked("The HMRC test credentials aren't set up yet.", missing);
 
+  // HMRC's test credentials only work with the test UTR HMRC issued with them: a
+  // company's real UTR is refused as an authentication failure (error 1046). So
+  // the test copy is built with the test UTR; the figures are exactly the same.
+  // Live filing uses the company's own UTR and sign-in.
+  const testUtr = testUtrFor();
+  const tp = testUtr !== r.company!.utr ? prepareReturn(toCompanyReturnInput({ ...r.company!, utr: testUtr }, r.periodStart!, r.periodEnd!, r.data!)) : p;
+  const tpp = tp.parts[part];
+  if (!tp.ok || !tpp?.ct600) return blocked("The test copy of the return couldn't be built.", tp.problems);
+
   const cls = messageClass("test");
   const envelope = buildEnvelope({
-    messageClass: cls, senderId: config.senderId, vendorId: config.vendorId, body: pp.ct600,
-    utr: r.company!.utr ?? "", periodEnd: pp.periodTo, test: true,
+    messageClass: cls, senderId: config.senderId, vendorId: config.vendorId, body: tpp.ct600,
+    utr: testUtr, periodEnd: pp.periodTo, test: true,
     productName: config.productName, productVersion: config.productVersion, email: config.email, markMethod: "spec",
     sender: r.data!.declarantStatus === "Agent" ? "Agent" : "Company",
   });
@@ -772,6 +781,7 @@ export async function sendReturnToTest(id: string, part = 0): Promise<SendResult
     detail: run.errors.length ? run.errors.map(explain)
       : run.outcome === "accepted" ? [
         "This was a test: nothing has been filed for the company. When live filing is open for your account, this same return is filed from this screen.",
+        ...(testUtr !== r.company!.utr ? [`HMRC's test service only accepts the test UTR HMRC issued (${testUtr}), so the test copy carried that; the real filing carries the company's own UTR, ${r.company!.utr}.`] : []),
         ...(other && !otherDone ? [`Now send the other return, for ${other.periodFrom} to ${other.periodTo}.`] : []),
       ]
         : run.outcome === "timeout" ? ["HMRC are still working on it. The Submission log can ask again with the correlation ID."] : [],
@@ -779,6 +789,12 @@ export async function sendReturnToTest(id: string, part = 0): Promise<SendResult
     irmark,
     receipt: Boolean(run.receipt),
   };
+}
+
+/** The UTR HMRC issued with Nucta File's test credentials (HMRC_TEST_UTR). */
+function testUtrFor(): string {
+  const v = (process.env.HMRC_TEST_UTR ?? "").replace(/\s/g, "");
+  return /^\d{10}$/.test(v) ? v : "8596148860";
 }
 
 /**

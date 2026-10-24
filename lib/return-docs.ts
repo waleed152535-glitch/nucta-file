@@ -75,11 +75,15 @@ export async function returnDocumentsFor(id: string, r: LoadedReturn): Promise<R
     const sub = sent?.correlationId ? subs.find((s) => s.correlationId === sent.correlationId && s.outcome === "accepted" && !String(s.cls).endsWith("-TIL") && s.envelope) : undefined;
     const env = sub?.envelope ?? null;
     const source: PartDocs["source"] = env ? (sent?.status === "accepted" ? "filed" : "tested") : "current";
-    if (env && pick(env, "Accounts")) accountsHtml = pick(env, "Accounts");
+    // A real filing is read back exactly as HMRC received it. A test copy carried
+    // HMRC's test UTR, so the documents are built from the same figures instead,
+    // with the company's own UTR; "Submission sent" still shows the test envelope.
+    const asFiled = source === "filed" ? env : null;
+    if (asFiled && pick(asFiled, "Accounts")) accountsHtml = pick(asFiled, "Accounts");
     return {
       n, from: pp.periodFrom, to: pp.periodTo,
-      computationHtml: env ? pick(env, "Computation") : pp.computationHtml,
-      ct600Xml: env ? (env.match(/<CompanyTaxReturn\b[\s\S]*<\/CompanyTaxReturn>/) ?? [])[0] ?? null : pp.ct600,
+      computationHtml: asFiled ? pick(asFiled, "Computation") : pp.computationHtml,
+      ct600Xml: asFiled ? (asFiled.match(/<CompanyTaxReturn\b[\s\S]*<\/CompanyTaxReturn>/) ?? [])[0] ?? null : pp.ct600,
       envelope: env, sent, source,
       tax: pp.computation.taxChargeable, loansTax: pp.loans?.a80 ?? 0, due: pp.taxDue,
     };

@@ -12,7 +12,7 @@ import { markForPeople } from "@/lib/ct600-xml";
  * Bumped by hand with every package. It is on the screen so that an identical
  * rejection twice over can be told apart from a deploy that never landed.
  */
-const BUILD = "47 — email confirmation, filing fee payments by card";
+const BUILD = "48 — the Folded N logo; email confirmation and filing fee payments";
 
 /**
  * The gateway console.

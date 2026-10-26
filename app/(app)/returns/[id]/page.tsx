@@ -1,6 +1,7 @@
 import ReturnWizard from "./ReturnWizard";
 import { getReturn } from "@/lib/return-actions";
 import { checkFilingFee } from "@/lib/billing-actions";
+import { chApiReady } from "@/lib/ch-api";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,6 +28,6 @@ export default async function ReturnPage({ params, searchParams }: { params: Pro
   }
   return (
     <ReturnWizard id={id} periodStart={r.periodStart!} periodEnd={r.periodEnd!} status={r.status!}
-      company={r.company} initial={r.data} submissions={r.submissions ?? []} initialStep={initialStep} feeNotice={feeNotice} />
+      company={r.company} initial={r.data} submissions={r.submissions ?? []} initialStep={initialStep} feeNotice={feeNotice} chReady={chApiReady()} />
   );
 }

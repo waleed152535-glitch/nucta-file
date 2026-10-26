@@ -10,6 +10,8 @@ import Link from "next/link";
 import { useEffect, useRef, type ReactNode } from "react";
 import { ACTORS, CHAPTER_AT, NUMERIC_ROWS, CT_ROWS, SEARCH, SIZES, STILLS, WORLD, frameAt, money, poseCss, type ActorName, type Frame } from "./film-model";
 import { Accounts, Approval, CompaniesHouse, Computation, Ct600, Receipt } from "./Docs";
+import CompanySearch from "./CompanySearch";
+import { PRICES, gbp } from "@/lib/site";
 
 const LIVE = "(min-width: 900px) and (prefers-reduced-motion: no-preference)";
 
@@ -151,7 +153,7 @@ function Still({ at }: { at: number }) {
 
 const STEPS = ["Add the company", "Enter the figures", "Check the documents", "File with HMRC"];
 
-export default function Film() {
+export default function Film({ charging = false }: { charging?: boolean }) {
   const film = useRef<HTMLElement>(null);
   const first = frameAt(0);
 
@@ -239,12 +241,18 @@ export default function Film() {
           <div className="wrap">
             <div className="scene opening">
               <h1>Every figure in the right box.</h1>
+              <p className="price-line">
+                {charging
+                  ? <><b>{gbp(PRICES.company.perReturn)} a return,</b> or {gbp(PRICES.company.dormant)} for a dormant company. No subscription.</>
+                  : <><b>Free while we launch,</b> then {gbp(PRICES.company.perReturn)} a return, or {gbp(PRICES.company.dormant)} for a dormant company. No subscription.</>}
+              </p>
               <p className="lede">Nucta File prepares a small company&apos;s accounts, works out its Corporation Tax and files the CT600 with HMRC, with the accounts and computation attached in iXBRL.</p>
-              <div className="ctas">
-                <Link href="/sign-up" className="s-btn big">Create your account</Link>
-                <a href="#how" className="s-btn quiet big" onClick={go(0)}>See how it works</a>
-              </div>
-              <p className="status">In final testing with HMRC. Prepare and test returns today.</p>
+              <CompanySearch id="hero-q" />
+              <p className="hero-more">
+                <Link href="/sign-up">Create your account</Link>
+                <a href="#how" onClick={go(0)}>See how it works</a>
+              </p>
+              <p className="status">Filing live with HMRC since October 2026</p>
               <Still at={0} />
             </div>
             <div className="scene" id="how">

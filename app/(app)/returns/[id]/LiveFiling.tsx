@@ -144,6 +144,9 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
           <p className="note" style={{ margin: "12px 0 0" }}>{pic.why}</p>
         ) : allFiled ? null : (
           <>
+            {fee?.status === "membership" && !allFiledNow(pic) && (
+              <div className="banner good" style={{ marginTop: 10, marginBottom: 0 }}><span>✓</span><span>{fee.words} <a href="/account#membership">Your membership</a></span></div>
+            )}
             {showFee && fee && (
               <div className={stage(feeOk, true)} id="fee" style={{ marginTop: 10 }}>
                 <h5><span className="n">{feeOk ? "✓" : 1}</span>{feeOk ? "Filing fee paid" : "Pay the filing fee"}</h5>
@@ -159,6 +162,7 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
                     <span className="note" style={{ flex: "1 1 260px" }}>
                       {pic.emailCheckNeeded ? "Confirm your email address first — the payment confirmation goes there." : <>On Stripe&apos;s secure page; Nucta File never sees the card. The fee covers filing this return, sending it again if HMRC find something to fix, and amending it later.{fee.testMode ? " Test mode: use card 4242 4242 4242 4242." : ""}</>}
                     </span>
+                    {/membership/.test(fee.words) && <span className="note" style={{ flexBasis: "100%" }}>{fee.words}</span>}
                   </div>
                 )}
                 {feeMsg && <div className={`banner ${feeMsg.tone}`} style={{ marginTop: 10, marginBottom: 0 }}><span>{feeMsg.tone === "good" ? "✓" : feeMsg.tone === "bad" ? "✕" : "i"}</span><span>{feeMsg.text}</span></div>}

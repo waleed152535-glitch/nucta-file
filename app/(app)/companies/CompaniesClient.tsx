@@ -13,7 +13,7 @@ const STATUS: Record<string, [string, string]> = {
 };
 const short = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-export default function CompaniesClient({ companies, error, chReady, startAdding = false }: { companies: CompanyRow[]; error?: string; chReady: boolean; startAdding?: boolean }) {
+export default function CompaniesClient({ companies, error, chReady, startAdding = false, startNumber }: { companies: CompanyRow[]; error?: string; chReady: boolean; startAdding?: boolean; startNumber?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(companies.length === 0 || startAdding);
   const [importing, setImporting] = useState(false);
@@ -40,7 +40,7 @@ export default function CompaniesClient({ companies, error, chReady, startAdding
         {error && <div className="banner bad"><span>✕</span><span>{error}</span></div>}
 
         {importing && <ImportCompanies chReady={chReady} onClose={() => setImporting(false)} />}
-        {open && !importing && <AddCompany chReady={chReady} onCancel={companies.length > 0 ? () => setOpen(false) : undefined} />}
+        {open && !importing && <AddCompany chReady={chReady} initialNumber={startNumber} onCancel={companies.length > 0 ? () => setOpen(false) : undefined} />}
         {open && !importing && companies.length === 0 && <p className="note" style={{ marginTop: -6, marginBottom: 16 }}>Bringing many clients across? <button type="button" className="btn ghost sm" onClick={() => setImporting(true)}>Import a list instead</button></p>}
 
         <div className="card">

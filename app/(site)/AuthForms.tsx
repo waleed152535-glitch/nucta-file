@@ -28,13 +28,14 @@ export function SignInForm({ next }: { next: string }) {
   );
 }
 
-export function SignUpForm() {
+export function SignUpForm({ company }: { company?: string }) {
   const [s, act, busy] = useActionState(signUpAction, start);
   return (
     <form action={act} className="auth-card">
       <h1>Create your account</h1>
       <p className="sub">Free while we launch — file as many returns as you like.</p>
       <Problems s={s} />
+      {company && <input type="hidden" name="company" value={company} />}
       <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
         <legend className="f" style={{ marginBottom: 6 }}><span style={{ marginBottom: 0 }}>Who is it for?</span></legend>
         <div className="choice">

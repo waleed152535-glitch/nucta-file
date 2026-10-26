@@ -13,7 +13,7 @@ const day = (iso: string | null) => (iso ? new Date(iso + "T12:00:00Z").toLocale
  * Companies House; only the UTR, which Companies House don't hold, is typed.
  * Without a key, everything is typed as before.
  */
-export default function AddCompany({ chReady, onCancel }: { chReady: boolean; onCancel?: () => void }) {
+export default function AddCompany({ chReady, onCancel, initialNumber }: { chReady: boolean; onCancel?: () => void; initialNumber?: string }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<ChSearchHit[]>([]);
@@ -46,6 +46,16 @@ export default function AddCompany({ chReady, onCancel }: { chReady: boolean; on
     setProfile(p); setHits([]);
     setF({ ...f, name: p.name, companyNo: p.number, incorporatedOn: p.incorporatedOn ?? "", registeredOffice: p.registeredOffice });
   });
+
+  // Opened with a company number (from the deadline checker): look it up straight away.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (!initialNumber || opened.current) return;
+    opened.current = true;
+    if (chReady) { pick({ number: initialNumber, name: "", status: "", incorporatedOn: null, address: "" }); }
+    else setF((x) => ({ ...x, companyNo: initialNumber }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialNumber, chReady]);
 
   const add = () => start(async () => {
     const r = await addCompany({ ...f, chProfile: profile });

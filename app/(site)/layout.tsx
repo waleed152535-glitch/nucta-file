@@ -20,6 +20,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <h4>Product</h4>
             <ul>
               <li><Link href="/features">Features</Link></li>
+              <li><Link href="/check">Deadline checker</Link></li>
               <li><Link href="/accountants">For accountants</Link></li>
               <li><Link href="/pricing">Pricing</Link></li>
               <li><Link href="/sign-in">Sign in</Link></li>

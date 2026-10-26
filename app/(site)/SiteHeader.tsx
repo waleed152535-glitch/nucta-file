@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Mark from "@/components/Mark";
 
-const NAV = [
+const NAV: { href: string; label: string; roomy?: boolean }[] = [
   { href: "/features", label: "Features" },
+  { href: "/check", label: "Deadline checker", roomy: true },
   { href: "/accountants", label: "For accountants" },
   { href: "/pricing", label: "Pricing" },
   { href: "/guides", label: "Guides" },
@@ -23,7 +24,7 @@ export default function SiteHeader() {
       <div className="wrap">
         <Link href="/" className="s-brand" aria-label="Nucta File home"><Mark />Nucta File</Link>
         <nav className="s-nav" aria-label="Main">
-          {NAV.map((n) => <Link key={n.href} href={n.href} aria-current={here(n.href)}>{n.label}</Link>)}
+          {NAV.map((n) => <Link key={n.href} href={n.href} aria-current={here(n.href)} className={n.roomy ? "roomy" : undefined}>{n.label}</Link>)}
         </nav>
         <details className="s-menu">
           <summary>Menu</summary>

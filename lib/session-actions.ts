@@ -22,7 +22,9 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
   if (!r.ok) return { problems: r.problems };
   // The link to confirm the email. If it can't go now, the app offers to send it again.
   if (r.userId && emailReady()) await sendEmailCheck(r.userId, await siteOrigin()).catch(() => undefined);
-  redirect("/dashboard");
+  // Came from the deadline checker: go straight on to adding that company.
+  const company = String(f.get("company") ?? "").toUpperCase();
+  redirect(/^[A-Z0-9]{8}$/.test(company) ? `/companies?add=1&number=${company}` : "/dashboard");
 }
 
 /** "Send the link again", from the bar at the top of the software. */

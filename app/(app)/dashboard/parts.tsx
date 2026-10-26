@@ -161,7 +161,7 @@ export function TaxChart({ deadlines, today }: { deadlines: Deadline[]; today: s
         <defs>
           <linearGradient id="taxbar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FF8466" /><stop offset="1" stopColor="#B4230A" /></linearGradient>
         </defs>
-        {[0.25, 0.5, 0.75, 1].map((f) => <line key={f} x1="0" x2={W} y1={H - f * (H - 26)} y2={H - f * (H - 26)} stroke="rgba(196,210,240,.07)" />)}
+        {[0.25, 0.5, 0.75, 1].map((f) => <line key={f} x1="0" x2={W} y1={H - f * (H - 26)} y2={H - f * (H - 26)} style={{ stroke: "var(--border-2)" }} />)}
         {months.map((x, i) => {
           const h = x.total ? Math.max(4, (x.total / max) * (H - 26)) : 3;
           return (

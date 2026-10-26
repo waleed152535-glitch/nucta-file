@@ -3,6 +3,10 @@ import Film from "./_parts/Film";
 import TaxEngine from "./_parts/TaxEngine";
 import DashPreview from "./_parts/DashPreview";
 import { PRICES, SITE, gbp } from "@/lib/site";
+import { chargingOn, getPlans } from "@/lib/billing";
+
+// The page is built once and rebuilt when charging is switched on or off
+// (lib/billing-actions.ts), so its prices follow the switch on the Payments page.
 
 export const metadata = { title: { absolute: "Nucta File — Company Tax Returns and accounts for small companies" } };
 
@@ -18,12 +22,42 @@ const WORKS_OUT: { ref: string; box?: boolean; title: string; text: string }[] =
   { ref: "Amend", title: "Amended returns", text: "Change an accepted return and send it again as an amendment, up to 12 months after the filing deadline." },
 ];
 
+/** What Nucta File files today, and what it doesn't yet: said plainly, before anyone starts. */
+const FILES_NOW = [
+  "Company Tax Returns (CT600) for UK limited companies with one trade",
+  "The CT600A page, for loans to directors and other participators",
+  "Micro-entity accounts and the tax computation, tagged in iXBRL",
+  "Dormant company accounts, and a nil return when HMRC ask for one",
+  "First accounts longer than 12 months, as two returns",
+  "Amended returns, up to 12 months after the filing deadline",
+];
+const NOT_YET = [
+  { t: "Filing accounts at Companies House", d: "Built and waiting for Companies House's approval. Until then Nucta File gives you the figures, box by box, for Companies House's own online form." },
+  { t: "Small-company accounts under FRS 102 Section 1A", d: "For companies above the micro-entity limits." },
+  { t: "VAT returns", d: "Making Tax Digital VAT is next on the list." },
+  { t: "Groups, R&D relief, charities and rental income", d: "Nor companies that sold land or shares. Nucta File says so at the start if a company is one of these." },
+  { t: "Self Assessment and confirmation statements", d: "These still go through HMRC and Companies House directly." },
+];
+
 const Icon = ({ d }: { d: React.ReactNode }) => <svg viewBox="0 0 24 24" aria-hidden>{d}</svg>;
 
-export default function Home() {
+export default async function Home() {
+  const [charging, plans] = await Promise.all([chargingOn(), getPlans()]);
+  const from = plans.filter((p) => p.on).reduce<null | { price: number; returns: number }>((a, b) => (!a || b.price < a.price ? b : a), null);
   return (
     <>
-      <Film />
+      <Film charging={charging} />
+
+      <section className="trust" aria-label="Who makes Nucta File">
+        <div className="wrap">
+          <ul>
+            <li><b>Registered with HMRC</b><span>As a software developer, vendor {SITE.vendorId}</span></li>
+            <li><b>Your HMRC password is never stored</b><span>Typed when you file, and used once</span></li>
+            <li><b>The director approves online</b><span>With a record of who approved, and when</span></li>
+            <li><b>Made by <a href={SITE.parentSite}>{SITE.company}</a></b><span>UK company formations and compliance</span></li>
+          </ul>
+        </div>
+      </section>
 
       <section className="deadline" aria-labelledby="deadline-h">
         <div className="wrap">
@@ -36,7 +70,24 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="s-sec" aria-labelledby="engine-h">
+      <section className="s-sec" aria-labelledby="files-h">
+        <div className="wrap">
+          <h2 id="files-h">What it files today</h2>
+          <p className="intro">So you know before you start. If a company needs something Nucta File doesn&apos;t do yet, it tells you at the beginning, not halfway through.</p>
+          <div className="cover">
+            <div>
+              <h3>Files now</h3>
+              <ul className="ticks">{FILES_NOW.map((t) => <li key={t}>{t}</li>)}</ul>
+            </div>
+            <div className="later">
+              <h3>Not yet</h3>
+              <ul>{NOT_YET.map((x) => <li key={x.t}><b>{x.t}</b><span>{x.d}</span></li>)}</ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="s-sec alt" aria-labelledby="engine-h">
         <div className="wrap">
           <h2 id="engine-h">Try the tax engine</h2>
           <p className="intro">Move the profit and watch the Corporation Tax work itself out: the small profits rate, marginal relief and the main rate, with the limits cut for a short period or shared with associated companies.</p>
@@ -44,7 +95,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="s-sec alt" aria-labelledby="works-h">
+      <section className="s-sec" aria-labelledby="works-h">
         <div className="wrap">
           <h2 id="works-h">What Nucta File works out for you</h2>
           <p className="intro">Each rule is HMRC&apos;s, applied the way HMRC check it. Where a company is outside what Nucta File handles, it says so at the start rather than guessing.</p>
@@ -61,7 +112,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="s-sec" aria-labelledby="practice-h">
+      <section className="s-sec alt" aria-labelledby="practice-h">
         <div className="wrap practice">
           <div>
             <h2 id="practice-h">Every client&apos;s deadline, soonest first</h2>
@@ -78,7 +129,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="s-sec alt" aria-labelledby="safe-h">
+      <section className="s-sec" aria-labelledby="safe-h">
         <div className="wrap">
           <h2 id="safe-h">Careful with what matters</h2>
           <p className="intro">A tax return is evidence. Nucta File treats it that way.</p>
@@ -107,20 +158,26 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="s-sec" aria-labelledby="price-h">
+      <section className="s-sec alt" aria-labelledby="price-h">
         <div className="wrap">
-          <h2 id="price-h">Free while we launch</h2>
-          <p className="intro">Prepare, approve and file as many returns as you like, free. When charging starts we&apos;ll tell you first — nothing is ever charged without your agreement.</p>
+          <h2 id="price-h">{charging ? "One price per return" : "Free while we launch"}</h2>
+          {charging ? (
+            <p className="intro">No subscription. You pay by card when a return is filed, and amending it later costs nothing more.</p>
+          ) : (
+            <p className="intro">Prepare, approve and file as many returns as you like, free. When charging starts we&apos;ll tell you first — nothing is ever charged without your agreement.</p>
+          )}
           <div className="price-row">
-            <div><b>£0</b><p>Now: every return, filed with HMRC, with the accounts for Companies House.</p></div>
-            <div><b>{gbp(PRICES.company.perReturn)}</b><p>Later, per return, for a company filing its own. {gbp(PRICES.company.dormant)} for a dormant company.</p></div>
-            <div><b>{gbp(PRICES.practice.perReturn)}</b><p>Later, per return, for practices filing for clients. {gbp(PRICES.practice.dormant)} for a dormant company.</p></div>
+            {charging
+              ? <div><b>{gbp(PRICES.company.dormant)}</b><p>Per return for a dormant company, filing its own.</p></div>
+              : <div><b>£0</b><p>Now: every return, filed with HMRC, with the accounts for Companies House.</p></div>}
+            <div><b>{gbp(PRICES.company.perReturn)}</b><p>{charging ? "Per return, for a company filing its own." : `Later, per return, for a company filing its own. ${gbp(PRICES.company.dormant)} for a dormant company.`}</p></div>
+            <div><b>{gbp(PRICES.practice.perReturn)}</b><p>{charging ? "Per" : "Later, per"} return, for practices filing for clients. {gbp(PRICES.practice.dormant)} for a dormant company{from ? `, or a yearly membership from ${gbp(from.price)} for ${from.returns} returns` : ""}.</p></div>
           </div>
           <p style={{ marginTop: 28 }}><Link href="/pricing">See pricing in full</Link></p>
         </div>
       </section>
 
-      <section className="s-sec alt" aria-labelledby="faq-h">
+      <section className="s-sec" aria-labelledby="faq-h">
         <div className="wrap">
           <h2 id="faq-h">Questions</h2>
           <div className="faq">

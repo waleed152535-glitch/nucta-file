@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getPaymentsAdmin } from "@/lib/billing-actions";
 import ChargingSwitch from "./ChargingSwitch";
+import PlansEditor from "./PlansEditor";
 import CopyText from "./CopyText";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export default async function PaymentsPage() {
               <div className="banner warn"><span>!</span><span><b>Charging is switched on, but the Stripe key is missing,</b> so filing is free until it&apos;s added back.</span></div>
             )}
             <ChargingSwitch initial={v.settings} ready={v.checks[0].ok} mode={v.mode} prices={v.prices} />
+            <PlansEditor initial={v.plans} />
 
             <div className="grid2" style={{ alignItems: "start" }}>
               <div className="card">
@@ -61,6 +63,29 @@ export default async function PaymentsPage() {
               </div>
             </div>
 
+            {v.memberships.length > 0 && (
+              <div className="card">
+                <div className="hd"><h3>Memberships bought</h3><span className="note">Newest first</span></div>
+                <div className="bd" style={{ paddingTop: 4, overflowX: "auto" }}>
+                  <table className="paytable">
+                    <thead><tr><th>Account</th><th>Plan</th><th className="num">Used</th><th>Runs</th><th className="num">Paid</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {v.memberships.map((m) => (
+                        <tr key={m.id}>
+                          <td>{m.account ?? "—"}</td>
+                          <td>{m.planName}</td>
+                          <td className="num">{m.used} of {m.returnsIncluded}</td>
+                          <td>{m.startsOn} to {m.endsOn}</td>
+                          <td className="num">{gbp(m.amount)}</td>
+                          <td><span className={`pill ${m.status === "active" ? "ok" : "bad"}`}>{m.status === "active" ? "Active" : "Refunded"}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             <div className="card">
               <div className="hd"><h3>Payments</h3><span className="note">Newest first. Refunds are made in Stripe; they show here once Stripe tell Nucta File.</span></div>
               <div className="bd" style={{ paddingTop: 4 }}>
@@ -73,7 +98,7 @@ export default async function PaymentsPage() {
                           <tr key={p.id}>
                             <td>{new Date(p.paidAt ?? p.at).toLocaleString("en-GB")}</td>
                             <td>{p.account ?? "—"}<div className="note">{p.email}</div></td>
-                            <td><Link href={`/returns/${p.returnId}`}>{p.description}</Link></td>
+                            <td>{p.returnId ? <Link href={`/returns/${p.returnId}`}>{p.description}</Link> : p.description}</td>
                             <td className="mono">{p.reference}</td>
                             <td className="num">{gbp(p.amount)}</td>
                             <td><span className={`pill ${TONE[p.status] ?? "draft"}`}>{WORD[p.status] ?? p.status}</span>{p.receiptUrl && <> <a className="note" href={p.receiptUrl} target="_blank" rel="noreferrer">receipt</a></>}</td>

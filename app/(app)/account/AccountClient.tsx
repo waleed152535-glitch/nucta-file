@@ -11,7 +11,7 @@ function Result({ s }: { s: FormState }) {
   return null;
 }
 
-export default function AccountClient({ name, email, firm, kind, team, payments, emailConfirmed = true }: { name: string; email: string; firm: string; kind: string; team?: React.ReactNode; payments?: React.ReactNode; emailConfirmed?: boolean }) {
+export default function AccountClient({ name, email, firm, kind, team, payments, membership, emailConfirmed = true }: { name: string; email: string; firm: string; kind: string; team?: React.ReactNode; payments?: React.ReactNode; membership?: React.ReactNode; emailConfirmed?: boolean }) {
   const [profile, saveProfile, savingProfile] = useActionState(updateProfileAction, start);
   const [pw, savePw, savingPw] = useActionState(changePasswordAction, start);
   return (
@@ -45,6 +45,7 @@ export default function AccountClient({ name, email, firm, kind, team, payments,
             </div>
           </form>
         </div>
+        {membership}
         {team}
         {payments}
         <form className="card" action={signOutEverywhereAction}>

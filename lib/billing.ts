@@ -24,6 +24,10 @@ import { sendEmailChecked, emailReady } from "./auth";
 import { store, siteUrl, type Store } from "./store";
 import { normaliseReturnData, type ReturnData } from "./return-model";
 import { feeAmount, feeEmail, feeReference, stripeForm, stripeKeyMode } from "./billing-rules";
+import {
+  coverWords, currentMembership, membershipDescription, membershipEmail, membershipEnds, plansFrom, returnsLeft,
+  type MembershipLike, type Plan,
+} from "./membership-rules";
 
 export const STRIPE_VERSION = "2024-06-20";
 const stripeBase = () => (process.env.STRIPE_API_BASE ?? "https://api.stripe.com").replace(/\/+$/, "");
@@ -60,11 +64,85 @@ export async function chargingOn(): Promise<boolean> {
   return stripeReady() && (await getBillingSettings()).charging;
 }
 
+// ---- memberships: the plans, and an account's memberships ----
+
+const PLANS_KEY = "plans";
+
+export async function getPlans(): Promise<Plan[]> {
+  try {
+    const s = await store();
+    const [row] = await s.db.select().from(s.settings).where(s.eq(s.settings.key, PLANS_KEY));
+    return plansFrom(row?.value);
+  } catch {
+    return plansFrom(null);
+  }
+}
+
+export async function savePlans(plans: Plan[], by: string): Promise<void> {
+  const s = await store();
+  await s.db.insert(s.settings).values({ key: PLANS_KEY, value: plans, updatedBy: by, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: s.settings.key, set: { value: plans, updatedBy: by, updatedAt: new Date() } });
+}
+
+export interface MembershipRow extends MembershipLike { planKey: string; amount: number; paymentId: string; account?: string }
+
+/** An account's memberships with how many returns each has used, oldest first. */
+export async function accountMemberships(s: Store, accountId: string): Promise<MembershipRow[]> {
+  const rows = await s.db.select().from(s.memberships).where(s.eq(s.memberships.accountId, accountId)).orderBy(s.asc(s.memberships.startsOn));
+  return withUse(s, rows);
+}
+
+async function withUse(s: Store, rows: (typeof import("./schema").memberships.$inferSelect)[], names?: Map<string, string>): Promise<MembershipRow[]> {
+  if (!rows.length) return [];
+  const counts = await s.db.select({ id: s.membershipUses.membershipId, n: s.sql<number>`count(*)::int` }).from(s.membershipUses)
+    .where(s.inArray(s.membershipUses.membershipId, rows.map((r) => r.id))).groupBy(s.membershipUses.membershipId);
+  const used = new Map(counts.map((c) => [c.id, Number(c.n)]));
+  return rows.map((r) => ({
+    id: r.id, planKey: r.planKey, planName: r.planName, returnsIncluded: r.returnsIncluded, used: used.get(r.id) ?? 0,
+    startsOn: r.startsOn, endsOn: r.endsOn, status: r.status, amount: r.amount / 100, paymentId: r.paymentId, account: names?.get(r.accountId),
+  }));
+}
+
+/** Every account's memberships, newest first, for the administrators. */
+export async function recentMemberships(limit = 50): Promise<MembershipRow[]> {
+  const s = await store();
+  const rows = await s.db.select().from(s.memberships).orderBy(s.desc(s.memberships.createdAt)).limit(limit);
+  const accts = rows.length ? await s.db.select({ id: s.accounts.id, name: s.accounts.name }).from(s.accounts).where(s.inArray(s.accounts.id, [...new Set(rows.map((r) => r.accountId))])) : [];
+  return withUse(s, rows, new Map(accts.map((a) => [a.id, a.name])));
+}
+
+/**
+ * Counts a return against a membership, once. Refused when the membership's
+ * returns are all used — unless this return was already counted.
+ */
+export async function useMembership(s: Store, membershipId: string, returnId: string): Promise<boolean> {
+  const [m] = await s.db.select().from(s.memberships).where(s.eq(s.memberships.id, membershipId));
+  if (!m || m.status !== "active") return false;
+  const [already] = await s.db.select().from(s.membershipUses).where(s.eq(s.membershipUses.returnId, returnId));
+  if (already) return already.membershipId === membershipId;
+  const done = await s.db.execute(s.sql`
+    INSERT INTO nf_membership_uses (return_id, membership_id)
+    SELECT ${returnId}, ${membershipId}
+    WHERE (SELECT count(*) FROM nf_membership_uses WHERE membership_id = ${membershipId}) < ${m.returnsIncluded}
+    ON CONFLICT (return_id) DO NOTHING
+    RETURNING return_id`);
+  const rows = (done as unknown as { rows?: unknown[] }).rows ?? (done as unknown as unknown[]);
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+const isoToday = () => new Date().toISOString().slice(0, 10);
+
 // ---- what a return owes ----
 
 export interface FeeState {
-  /** free: not charging. admin: Nucta File's own staff. paid: this return or the one it amends is paid. amendment/before: covered by an earlier filing. due: pay before filing. */
-  status: "free" | "admin" | "paid" | "amendment" | "before" | "due";
+  /**
+   * free: not charging. admin: Nucta File's own staff. paid: this return or the one it amends is paid.
+   * amendment/before: covered by an earlier filing. membership: covered by the practice's membership.
+   * due: pay before filing.
+   */
+  status: "free" | "admin" | "paid" | "amendment" | "before" | "membership" | "due";
+  /** The membership that covers it, when one does. */
+  membershipId?: string;
   /** In pounds. */
   amount: number;
   words: string;
@@ -111,6 +189,16 @@ export async function feeState(s: Store, u: SignedInUser, returnId: string): Pro
   if (u.admin) return { ...base, status: "admin", amount: 0, words: "Nucta File's administrators file without paying." };
   if (me && filedLive(me.data)) return { ...base, status: "before", amount: 0, words: "Part of this return was filed before charging started, so the rest is free too." };
   if (links.slice(1).some((x) => x.status === "accepted" || filedLive(x.data))) return { ...base, status: "amendment", amount: 0, words: "Amendments are included: the original return was filed with HMRC." };
+  // A practice's membership: this return already counted against one, or the one in force with returns left.
+  const mine = await accountMemberships(s, u.accountId);
+  if (mine.length) {
+    const [counted] = await s.db.select().from(s.membershipUses).where(s.inArray(s.membershipUses.returnId, links.map((x) => x.id)));
+    const was = counted && mine.find((m) => m.id === counted.membershipId && m.status === "active");
+    if (was) return { ...base, status: "membership", amount: 0, membershipId: was.id, words: coverWords(was, true) };
+    const cur = currentMembership(mine, isoToday());
+    if (cur && returnsLeft(cur) > 0) return { ...base, status: "membership", amount: 0, membershipId: cur.id, words: coverWords(cur, false) };
+    if (cur) return { ...base, status: "due", amount, words: `Your ${cur.planName} membership's ${cur.returnsIncluded} returns are all used, so this one is £${amount} by card — or buy another membership from Your account.` };
+  }
   return { ...base, status: "due", amount, words: `The filing fee is £${amount}, paid by card before filing.` };
 }
 
@@ -194,7 +282,54 @@ export async function startCheckout(u: SignedInUser, r: { id: string; companyNam
   return { ok: true, url: cs.url };
 }
 
-export interface Synced { status: "paid" | "pending" | "expired" | "refunded" | "ignored"; paymentId?: string; returnId?: string; accountId?: string; emailed?: boolean }
+/** Makes a Stripe Checkout page for a membership. The caller has checked the person may buy it, and when it starts. */
+export async function startMembershipCheckout(u: SignedInUser, plan: Plan, startsOn: string): Promise<StartedCheckout> {
+  const s = await store();
+  // Close any unfinished membership payment first, so two can't both be paid.
+  const open = await s.db.select().from(s.payments).where(s.and(s.eq(s.payments.accountId, u.accountId), s.eq(s.payments.kind, "membership"), s.eq(s.payments.status, "pending")));
+  for (const p of open) {
+    const now = await syncCheckoutSession(p.stripeSessionId).catch(() => null);
+    if (now?.status === "paid") return { ok: false, alreadyPaid: true, problem: "A membership has just been paid for this account." };
+    if (now?.status === "pending") {
+      await stripe("POST", `/v1/checkout/sessions/${encodeURIComponent(p.stripeSessionId)}/expire`).catch(() => undefined);
+      await s.db.update(s.payments).set({ status: "expired" }).where(s.and(s.eq(s.payments.id, p.id), s.eq(s.payments.status, "pending")));
+    }
+  }
+  const paymentId = randomUUID();
+  const description = membershipDescription(plan.name, plan.returns, startsOn);
+  const back = `${siteUrl()}/account`;
+  const meta = { nf_app: "nucta-file", nf_kind: "membership", nf_payment: paymentId, nf_account: u.accountId, nf_user: u.id, nf_plan: plan.key, nf_plan_name: plan.name.slice(0, 40), nf_returns: String(plan.returns), nf_starts: startsOn };
+  const cs = await stripe<CheckoutSession>("POST", "/v1/checkout/sessions", {
+    mode: "payment",
+    line_items: [{ quantity: 1, price_data: { currency: "gbp", unit_amount: Math.round(plan.price * 100), product_data: { name: `Nucta File membership: ${plan.name}`, description } } }],
+    customer_email: u.email,
+    client_reference_id: paymentId,
+    metadata: { ...meta, nf_desc: description.slice(0, 450) },
+    payment_intent_data: { description: description.slice(0, 1000), metadata: meta },
+    success_url: `${back}?membership=back&session_id={CHECKOUT_SESSION_ID}#membership`,
+    cancel_url: `${back}?membership=cancelled#membership`,
+    expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
+  }, paymentId);
+  if (!cs.url) return { ok: false, problem: "Stripe didn't give a payment page. Try again in a moment." };
+  await s.db.insert(s.payments).values({
+    id: paymentId, accountId: u.accountId, returnId: null, kind: "membership", userId: u.id, stripeSessionId: cs.id,
+    amount: cs.amount_total ?? Math.round(plan.price * 100), currency: cs.currency ?? "gbp", description, status: "pending", email: u.email,
+  }).onConflictDoNothing();
+  return { ok: true, url: cs.url };
+}
+
+/** Makes the membership a paid payment bought, once. */
+async function ensureMembership(s: Store, p: typeof import("./schema").payments.$inferSelect, m: Record<string, string>): Promise<void> {
+  const returns = Number(m.nf_returns);
+  const startsOn = /^\d{4}-\d{2}-\d{2}$/.test(m.nf_starts ?? "") ? m.nf_starts : (p.paidAt ?? new Date()).toISOString().slice(0, 10);
+  if (!Number.isInteger(returns) || returns < 1) return;
+  await s.db.insert(s.memberships).values({
+    id: randomUUID(), accountId: p.accountId, paymentId: p.id, planKey: m.nf_plan || "plan", planName: m.nf_plan_name || "Membership",
+    returnsIncluded: returns, amount: p.amount, startsOn, endsOn: membershipEnds(startsOn), status: "active",
+  }).onConflictDoNothing();
+}
+
+export interface Synced { status: "paid" | "pending" | "expired" | "refunded" | "ignored"; kind?: "filing" | "membership"; paymentId?: string; returnId?: string | null; accountId?: string; emailed?: boolean }
 
 /**
  * Reads a Checkout session from Stripe and brings the payment up to date.
@@ -205,7 +340,8 @@ export async function syncCheckoutSession(sessionId: string): Promise<Synced> {
   if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return { status: "ignored" };
   const cs = await stripe<CheckoutSession>("GET", `/v1/checkout/sessions/${encodeURIComponent(sessionId)}?expand[]=payment_intent.latest_charge`);
   const m = cs.metadata ?? {};
-  if (m.nf_app !== "nucta-file" || !m.nf_return || !m.nf_account) return { status: "ignored" };
+  const kind = m.nf_kind === "membership" ? "membership" : "filing";
+  if (m.nf_app !== "nucta-file" || !m.nf_account || (kind === "filing" && !m.nf_return)) return { status: "ignored" };
   const s = await store();
   const pi = cs.payment_intent && typeof cs.payment_intent === "object" ? cs.payment_intent : null;
   const paymentIntent = typeof cs.payment_intent === "string" ? cs.payment_intent : pi?.id ?? null;
@@ -217,38 +353,51 @@ export async function syncCheckoutSession(sessionId: string): Promise<Synced> {
   if (!row) {
     // Paid, but the record wasn't written when the page was made: write it now from what Stripe hold.
     await s.db.insert(s.payments).values({
-      id: m.nf_payment && /^[0-9a-f-]{36}$/.test(m.nf_payment) ? m.nf_payment : randomUUID(), accountId: m.nf_account, returnId: m.nf_return, userId: m.nf_user ?? "",
-      stripeSessionId: cs.id, amount: cs.amount_total ?? 0, currency: cs.currency ?? "gbp", description: m.nf_desc ?? "Company Tax Return filing",
+      id: m.nf_payment && /^[0-9a-f-]{36}$/.test(m.nf_payment) ? m.nf_payment : randomUUID(), accountId: m.nf_account, returnId: kind === "filing" ? m.nf_return : null, kind, userId: m.nf_user ?? "",
+      stripeSessionId: cs.id, amount: cs.amount_total ?? 0, currency: cs.currency ?? "gbp", description: m.nf_desc ?? (kind === "membership" ? "Nucta File membership" : "Company Tax Return filing"),
       status: "pending", email: cs.customer_details?.email ?? cs.customer_email ?? null,
     }).onConflictDoNothing();
     [row] = await s.db.select().from(s.payments).where(s.eq(s.payments.stripeSessionId, cs.id));
     if (!row) return { status: "ignored" };
   }
-  if (row.status === "refunded") return { status: "refunded", paymentId: row.id, returnId: row.returnId, accountId: row.accountId };
+  if (row.status === "refunded") return { status: "refunded", kind, paymentId: row.id, returnId: row.returnId, accountId: row.accountId };
   await s.db.update(s.payments).set({
     status, paymentIntent: paymentIntent ?? row.paymentIntent, receiptUrl: charge?.receipt_url ?? row.receiptUrl,
     amount: cs.amount_total ?? row.amount, paidAt: paid ? row.paidAt ?? new Date() : row.paidAt,
   }).where(s.eq(s.payments.id, row.id));
 
   let emailed = false;
+  if (paid && kind === "membership") {
+    const [now] = await s.db.select().from(s.payments).where(s.eq(s.payments.id, row.id));
+    await ensureMembership(s, now ?? row, m);
+  }
   if (paid) {
     // Only one request can set confirmed_at, so the email goes once.
     const [claimed] = await s.db.update(s.payments).set({ confirmedAt: new Date() })
       .where(s.and(s.eq(s.payments.id, row.id), s.isNull(s.payments.confirmedAt))).returning();
     if (claimed) {
-      emailed = await sendFeeConfirmation(s, claimed);
+      emailed = await sendFeeConfirmation(s, claimed, m);
       // If it couldn't go, the next look at this payment tries again.
       if (!emailed && emailReady()) await s.db.update(s.payments).set({ confirmedAt: null }).where(s.eq(s.payments.id, row.id));
     }
   }
-  return { status, paymentId: row.id, returnId: row.returnId, accountId: row.accountId, emailed };
+  return { status, kind, paymentId: row.id, returnId: row.returnId, accountId: row.accountId, emailed };
 }
 
-async function sendFeeConfirmation(s: Store, p: typeof import("./schema").payments.$inferSelect): Promise<boolean> {
+async function sendFeeConfirmation(s: Store, p: typeof import("./schema").payments.$inferSelect, m: Record<string, string> = {}): Promise<boolean> {
   if (!emailReady()) return false;
   const [u] = p.userId ? await s.db.select({ name: s.users.name, email: s.users.email }).from(s.users).where(s.eq(s.users.id, p.userId)) : [];
   const to = u?.email ?? p.email;
   if (!to) return false;
+  if (p.kind === "membership") {
+    const [ms] = await s.db.select().from(s.memberships).where(s.eq(s.memberships.paymentId, p.id));
+    const mail = membershipEmail({
+      name: u?.name ?? "there", planName: ms?.planName ?? m.nf_plan_name ?? "Membership", returns: ms?.returnsIncluded ?? Number(m.nf_returns || 0),
+      amountPence: p.amount, startsOn: ms?.startsOn ?? m.nf_starts ?? (p.paidAt ?? new Date()).toISOString().slice(0, 10), paidAt: p.paidAt ?? new Date(),
+      paymentId: p.id, receiptUrl: p.receiptUrl, accountUrl: `${siteUrl()}/account#membership`, testMode: stripeMode() === "test",
+    });
+    return (await sendEmailChecked(to, mail.subject, mail.text)).ok;
+  }
   const mail = feeEmail({
     name: u?.name ?? "there", amountPence: p.amount, description: p.description, paidAt: p.paidAt ?? new Date(), paymentId: p.id,
     receiptUrl: p.receiptUrl, returnUrl: `${siteUrl()}/returns/${p.returnId}`, testMode: stripeMode() === "test",
@@ -260,17 +409,19 @@ async function sendFeeConfirmation(s: Store, p: typeof import("./schema").paymen
 export async function markRefunded(paymentIntent: string, fully: boolean): Promise<void> {
   if (!fully || !paymentIntent) return;
   const s = await store();
-  await s.db.update(s.payments).set({ status: "refunded" }).where(s.eq(s.payments.paymentIntent, paymentIntent));
+  const done = await s.db.update(s.payments).set({ status: "refunded" }).where(s.eq(s.payments.paymentIntent, paymentIntent)).returning({ id: s.payments.id });
+  // A refunded membership stops covering returns.
+  if (done.length) await s.db.update(s.memberships).set({ status: "refunded" }).where(s.inArray(s.memberships.paymentId, done.map((d) => d.id)));
 }
 
 export interface PaymentRow {
   id: string; reference: string; at: string; paidAt: string | null; description: string; amount: number; status: string; receiptUrl: string | null;
-  returnId: string; email: string | null; account?: string;
+  returnId: string | null; kind: string; email: string | null; account?: string;
 }
 
 const toRow = (p: typeof import("./schema").payments.$inferSelect, account?: string): PaymentRow => ({
   id: p.id, reference: feeReference(p.id), at: p.createdAt.toISOString(), paidAt: p.paidAt?.toISOString() ?? null, description: p.description,
-  amount: p.amount / 100, status: p.status, receiptUrl: p.receiptUrl, returnId: p.returnId, email: p.email, account,
+  amount: p.amount / 100, status: p.status, receiptUrl: p.receiptUrl, returnId: p.returnId, kind: p.kind, email: p.email, account,
 });
 
 /** An account's payments, newest first — the ones that got as far as Stripe. */

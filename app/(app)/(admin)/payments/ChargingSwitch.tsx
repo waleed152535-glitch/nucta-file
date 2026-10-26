@@ -27,7 +27,7 @@ export default function ChargingSwitch({ initial, ready, mode, prices }: { initi
           <span>Customers pay before filing a return with HMRC
             <small>
               {`${gbp(prices.company.perReturn)} a return for a company filing its own (${gbp(prices.company.dormant)} dormant); ${gbp(prices.practice.perReturn)} for practices (${gbp(prices.practice.dormant)} dormant). `}
-              {"One payment covers the return, sending it again, and amending it. Preparing, checking and HMRC's test service stay free. Administrators never pay."}
+              {"One payment covers the return, sending it again, and amending it. Practices can buy a yearly membership instead (below). Preparing, checking and HMRC's test service stay free. Administrators never pay."}
               {!ready && " Add the Stripe secret key first."}
             </small>
           </span>

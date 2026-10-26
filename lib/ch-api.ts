@@ -10,6 +10,8 @@
  */
 
 export const CH_API_BASE = process.env.CH_API_BASE ?? "https://api.company-information.service.gov.uk";
+/** The document API, which holds the filed documents themselves (accounts as PDF or inline XBRL). Same key. */
+export const CH_DOCUMENT_API_BASE = process.env.CH_DOCUMENT_API_BASE ?? "https://document-api.company-information.service.gov.uk";
 export const chApiReady = (): boolean => Boolean((process.env.CH_API_KEY ?? "").trim());
 
 export interface ChSearchHit {
@@ -35,6 +37,8 @@ export interface ChProfile {
   nextAccountsDue: string | null;
   accountsOverdue: boolean;
   lastAccountsMadeUpTo: string | null;
+  /** The kind of accounts last filed, as Companies House name it: "micro-entity", "dormant", "total-exemption-full"… */
+  lastAccountsType?: string | null;
   confirmationStatementDue: string | null;
   /** When this was read from Companies House. */
   fetchedAt: string;
@@ -69,12 +73,12 @@ function theySaid(body: string): string {
 /** The key described without showing it: its length and last four characters. */
 const keyHint = (k: string) => `The key in CH_API_KEY is ${k.length} characters long, ending "${k.slice(-4)}"${/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k) ? "" : " — Companies House keys are normally 36 characters, like 1a2b3c4d-1a2b-1a2b-1a2b-1a2b3c4d5e6f"}.`;
 
-async function get(path: string): Promise<ChResult<unknown>> {
+async function get(path: string, base = CH_API_BASE): Promise<ChResult<unknown>> {
   const key = apiKey();
   if (!key) return { ok: false, error: "Companies House search isn't set up: add CH_API_KEY to the hosting settings." };
   let res: Response;
   try {
-    res = await fetch(CH_API_BASE + path, {
+    res = await fetch(base + path, {
       headers: { Authorization: `Basic ${Buffer.from(`${key}:`).toString("base64")}`, Accept: "application/json" },
       cache: "no-store",
     });
@@ -137,7 +141,7 @@ export function profileFrom(raw: Raw, fetchedAt = new Date().toISOString()): ChP
     sic: Array.isArray(raw.sic_codes) ? (raw.sic_codes as unknown[]).map(String) : [],
     ard: ard && Number(ard.day) && Number(ard.month) ? { day: Number(ard.day), month: Number(ard.month) } : null,
     nextAccountsMadeUpTo: date(acc.next_made_up_to), nextAccountsDue: date(acc.next_due), accountsOverdue: acc.overdue === true,
-    lastAccountsMadeUpTo: date(last.made_up_to), confirmationStatementDue: date(cs.next_due), fetchedAt,
+    lastAccountsMadeUpTo: date(last.made_up_to), lastAccountsType: str(last.type) || null, confirmationStatementDue: date(cs.next_due), fetchedAt,
   };
 }
 
@@ -147,4 +151,65 @@ export async function companyProfile(number: string): Promise<ChResult<ChProfile
   const r = await get(`/company/${encodeURIComponent(n)}`);
   if (!r.ok) return r;
   return { ok: true, value: profileFrom(r.value as Raw) };
+}
+
+// ---- accounts already filed, for last year's figures ----
+
+export interface ChAccountsFiling {
+  /** When Companies House received them. */
+  date: string;
+  madeUpTo: string | null;
+  /** Companies House's description, like "accounts-with-accounts-type-micro-entity". */
+  description: string;
+  documentId: string | null;
+  paper: boolean;
+}
+
+/** The company's accounts filings, newest first. */
+export async function accountsFilings(number: string): Promise<ChResult<ChAccountsFiling[]>> {
+  const n = chNumber(number);
+  if (!/^[A-Z0-9]{8}$/.test(n)) return { ok: false, error: "A company number is 8 characters, like 15123456 or SC612345." };
+  const r = await get(`/company/${encodeURIComponent(n)}/filing-history?category=accounts&items_per_page=25`);
+  if (!r.ok) return r;
+  const items = (((r.value as Raw).items ?? []) as Raw[]);
+  return {
+    ok: true,
+    value: items.filter((i) => str(i.type) === "AA" || str(i.category) === "accounts").map((i) => {
+      const meta = str(((i.links ?? {}) as Raw).document_metadata);
+      return {
+        date: date(i.date) ?? "", madeUpTo: date(((i.description_values ?? {}) as Raw).made_up_date), description: str(i.description),
+        documentId: /\/document\/([A-Za-z0-9_-]+)/.exec(meta)?.[1] ?? null, paper: i.paper_filed === true,
+      };
+    }).sort((a, b) => b.date.localeCompare(a.date)),
+  };
+}
+
+/**
+ * A filed document as inline XBRL. Companies House keep documents filed
+ * through software in that form as well as PDF; paper filings are PDF only.
+ * The content is sent from storage elsewhere, so the redirect is followed
+ * without the API key.
+ */
+export async function accountsDocument(documentId: string): Promise<ChResult<string>> {
+  if (!/^[A-Za-z0-9_-]{6,120}$/.test(documentId)) return { ok: false, error: "That isn't a Companies House document." };
+  const meta = await get(`/document/${documentId}`, CH_DOCUMENT_API_BASE);
+  if (!meta.ok) return meta;
+  const resources = ((meta.value as Raw).resources ?? {}) as Raw;
+  if (!("application/xhtml+xml" in resources)) return { ok: false, error: "Companies House only have these accounts as a PDF (they were filed on paper or as a scan), so their figures can't be read automatically." };
+  const key = apiKey();
+  try {
+    const first = await fetch(`${CH_DOCUMENT_API_BASE}/document/${documentId}/content`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${key}:`).toString("base64")}`, Accept: "application/xhtml+xml" },
+      redirect: "manual", cache: "no-store",
+    });
+    let res = first;
+    const to = first.headers.get("location");
+    if (first.status >= 300 && first.status < 400 && to) res = await fetch(new URL(to, CH_DOCUMENT_API_BASE).toString(), { cache: "no-store" });
+    if (!res.ok) return { ok: false, error: `Companies House couldn't send the accounts (${res.status}). Try again in a moment.` };
+    const body = await res.text();
+    if (body.length > 15_000_000) return { ok: false, error: "Those accounts are too large to read here." };
+    return { ok: true, value: body };
+  } catch (e) {
+    return { ok: false, error: `Couldn't reach Companies House: ${String((e as Error)?.message ?? e).slice(0, 120)}` };
+  }
 }

@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { quickFind, type FoundItem } from "@/lib/return-actions";
+import { applyTheme, type Theme } from "@/lib/theme";
 
 export type PaletteMode = "find" | "new";
 interface Option { group: string; key: string; title: string; detail?: string; icon: string; href: string; download?: boolean }
@@ -22,6 +23,9 @@ const ACTIONS: Option[] = [
   { group: "Do", key: "a-add", title: "Add a company", detail: "Search Companies House or type the details", icon: "+", href: "/companies?add=1" },
   { group: "Do", key: "a-ics", title: "Add every deadline to your calendar", detail: "A calendar file for Outlook, Google or your phone", icon: "◷", href: "/calendar.ics", download: true },
   { group: "Do", key: "a-csv", title: "Download the company list", detail: "A spreadsheet (CSV) of every company and its next deadline", icon: "⇩", href: "/companies/export", download: true },
+  { group: "Look", key: "t-light", title: "Use the light theme", detail: "White panels, for daylight", icon: "○", href: "#theme=light" },
+  { group: "Look", key: "t-dark", title: "Use the dark theme", detail: "The night-blue look of the website", icon: "●", href: "#theme=dark" },
+  { group: "Look", key: "t-system", title: "Match my device's theme", detail: "Light or dark, as the device is set", icon: "◐", href: "#theme=system" },
 ];
 const ADMIN: Option[] = [
   { group: "Admin", key: "x-live", title: "Live filing", detail: "Switch live filing on or off, and for whom", icon: "⚑", href: "/live-filing" },
@@ -77,6 +81,8 @@ export default function CommandPalette({ mode, admin, onClose }: { mode: Palette
   const go = (o: Option | undefined) => {
     if (!o) return;
     onClose();
+    const t = /^#theme=(dark|light|system)$/.exec(o.href)?.[1] as Theme | undefined;
+    if (t) { applyTheme(t); window.dispatchEvent(new CustomEvent("nf-theme", { detail: t })); return; }
     if (o.download) window.location.href = o.href; else router.push(o.href);
   };
   const onKey = (e: React.KeyboardEvent) => {

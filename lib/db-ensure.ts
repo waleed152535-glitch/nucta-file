@@ -35,6 +35,14 @@ export const LATER_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS "payments_account_idx" ON "nf_payments" USING btree ("account_id")',
   `CREATE TABLE IF NOT EXISTS "nf_settings" ("key" text PRIMARY KEY NOT NULL, "value" jsonb NOT NULL, "updated_by" text, "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS "nf_password_resets" ("id" text PRIMARY KEY NOT NULL, "user_id" text NOT NULL REFERENCES "nf_users"("id") ON DELETE cascade, "expires_at" timestamp with time zone NOT NULL, "used_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  // Memberships (build 49): a payment may be for a membership rather than a return.
+  'ALTER TABLE "nf_payments" ALTER COLUMN "return_id" DROP NOT NULL',
+  `ALTER TABLE "nf_payments" ADD COLUMN IF NOT EXISTS "kind" text DEFAULT 'filing' NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS "nf_memberships" ("id" text PRIMARY KEY NOT NULL, "account_id" text NOT NULL, "payment_id" text NOT NULL, "plan_key" text NOT NULL, "plan_name" text NOT NULL, "returns_included" integer NOT NULL, "amount" integer NOT NULL, "starts_on" text NOT NULL, "ends_on" text NOT NULL, "status" text DEFAULT 'active' NOT NULL, "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  'CREATE INDEX IF NOT EXISTS "memberships_account_idx" ON "nf_memberships" USING btree ("account_id")',
+  'CREATE UNIQUE INDEX IF NOT EXISTS "memberships_payment_unique" ON "nf_memberships" ("payment_id")',
+  `CREATE TABLE IF NOT EXISTS "nf_membership_uses" ("return_id" text PRIMARY KEY NOT NULL, "membership_id" text NOT NULL, "used_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  'CREATE INDEX IF NOT EXISTS "membership_uses_membership_idx" ON "nf_membership_uses" USING btree ("membership_id")',
 ];
 
 let done: Promise<void> | null = null;

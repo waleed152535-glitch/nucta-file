@@ -11,8 +11,10 @@ import { currentUser, emailCheckNeeded, emailReady } from "./auth";
 import { store, ownedReturn, SIGNED_OUT, problem, siteUrl } from "./store";
 import {
   feeState, startCheckout, syncCheckoutSession, accountPayments, recentPayments, getBillingSettings, saveBillingSettings,
-  stripeReady, webhookReady, stripeMode, type FeeState, type PaymentRow, type BillingSettings,
+  stripeReady, webhookReady, stripeMode, chargingOn, getPlans, savePlans, accountMemberships, recentMemberships, startMembershipCheckout,
+  type FeeState, type PaymentRow, type BillingSettings, type MembershipRow,
 } from "./billing";
+import { checkPlans, currentMembership, nextMembership, purchaseWindow, type Plan } from "./membership-rules";
 import { PRICES } from "./site";
 
 export async function payFilingFee(returnId: string): Promise<{ ok: boolean; url?: string; problem?: string; alreadyPaid?: boolean }> {
@@ -64,6 +66,94 @@ export async function myPayments(): Promise<PaymentRow[]> {
   try { return await accountPayments(u.accountId); } catch { return []; }
 }
 
+// ——— Memberships, for practices ———
+
+export interface MembershipView {
+  ok: boolean;
+  problem?: string;
+  /** Whether this account can have one at all: practices only. */
+  forThisAccount: boolean;
+  /** Whether this person may buy one: the account's owner. */
+  canPay: boolean;
+  charging: boolean;
+  testMode: boolean;
+  plans: Plan[];
+  current: MembershipRow | null;
+  next: MembershipRow | null;
+  history: MembershipRow[];
+  window: { canBuy: boolean; startsOn: string; renewal: boolean; why?: string };
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+export async function myMembership(): Promise<MembershipView> {
+  const u = await currentUser();
+  const empty = { forThisAccount: false, canPay: false, charging: false, testMode: false, plans: [], current: null, next: null, history: [], window: { canBuy: false, startsOn: today(), renewal: false } };
+  if (!u) return { ok: false, problem: SIGNED_OUT, ...empty };
+  try {
+    const s = await store();
+    const [plans, charging, list] = await Promise.all([getPlans(), chargingOn(), accountMemberships(s, u.accountId)]);
+    const t = today();
+    return {
+      ok: true, forThisAccount: u.accountKind !== "company", canPay: u.role === "owner", charging, testMode: stripeMode() === "test",
+      plans: plans.filter((p) => p.on), current: currentMembership(list, t) as MembershipRow | null, next: nextMembership(list, t) as MembershipRow | null,
+      history: [...list].reverse(), window: purchaseWindow(list, t),
+    };
+  } catch (e) {
+    return { ok: false, problem: problem(e), ...empty };
+  }
+}
+
+export async function buyMembership(planKey: string): Promise<{ ok: boolean; url?: string; problem?: string }> {
+  const u = await currentUser();
+  if (!u) return { ok: false, problem: SIGNED_OUT };
+  if (u.accountKind === "company") return { ok: false, problem: "Memberships are for practices filing for clients. A company filing its own return pays per return." };
+  if (u.role !== "owner") return { ok: false, problem: "Only the account's owner can buy a membership." };
+  if (emailCheckNeeded(u)) return { ok: false, problem: `Confirm your email address first: open the link we sent to ${u.email}. The payment confirmation goes there.` };
+  if (!(await chargingOn())) return { ok: false, problem: "Filing is free while Nucta File launches, so there's nothing to buy yet." };
+  try {
+    const s = await store();
+    const plan = (await getPlans()).find((p) => p.key === planKey && p.on);
+    if (!plan) return { ok: false, problem: "That plan isn't on offer any more. Reload the page to see the plans." };
+    const w = purchaseWindow(await accountMemberships(s, u.accountId), today());
+    if (!w.canBuy) return { ok: false, problem: w.why ?? "A membership can't be bought right now." };
+    return await startMembershipCheckout(u, plan, w.startsOn);
+  } catch (e) {
+    return { ok: false, problem: `The payment page couldn't be opened. ${problem(e)}` };
+  }
+}
+
+/** Back from Stripe after buying a membership: asks Stripe how it went. Called while the account page loads. */
+export async function checkMembershipPayment(sessionId: string): Promise<{ ok: boolean; status: string; words: string }> {
+  const u = await currentUser();
+  if (!u) return { ok: false, status: "signed-out", words: SIGNED_OUT };
+  try {
+    const synced = await syncCheckoutSession(sessionId);
+    if (synced.status === "ignored" || synced.kind !== "membership" || synced.accountId !== u.accountId) return { ok: false, status: "mismatch", words: "That payment isn't a membership for this account." };
+    if (synced.status === "paid") return { ok: true, status: "paid", words: `Membership paid${emailReady() ? `. A confirmation is on its way to ${u.email}` : ""}. Returns you file with HMRC now use it.` };
+    if (synced.status === "pending") return { ok: false, status: "pending", words: "Stripe haven't confirmed the payment yet. If you paid, it will show here within a minute — reload shortly." };
+    return { ok: false, status: synced.status, words: synced.status === "refunded" ? "This payment was refunded." : "That payment page expired before it was paid. Nothing was charged." };
+  } catch (e) {
+    return { ok: false, status: "error", words: `Couldn't check the payment with Stripe. ${problem(e)}` };
+  }
+}
+
+export async function updatePlans(plans: unknown): Promise<{ ok: boolean; problems: string[]; plans?: Plan[] }> {
+  const u = await currentUser();
+  if (!u?.admin) return { ok: false, problems: ["This is for Nucta File's administrators only."] };
+  const r = checkPlans(plans);
+  if (!r.ok) return { ok: false, problems: r.problems };
+  if (!r.plans.some((p) => p.on)) return { ok: false, problems: ["Keep at least one plan on offer, or practices can only pay per return."] };
+  try {
+    await savePlans(r.plans, u.email);
+    revalidatePath("/payments"); revalidatePath("/account");
+    for (const page of SITE_PRICE_PAGES) revalidatePath(page);
+    return { ok: true, problems: [], plans: r.plans };
+  } catch (e) {
+    return { ok: false, problems: [problem(e)] };
+  }
+}
+
 // ——— The administrators' Payments page ———
 
 export interface PaymentsAdminView {
@@ -75,14 +165,16 @@ export interface PaymentsAdminView {
   webhookUrl: string;
   prices: typeof PRICES;
   payments: PaymentRow[];
+  plans: Plan[];
+  memberships: MembershipRow[];
 }
 
 export async function getPaymentsAdmin(): Promise<PaymentsAdminView> {
   const u = await currentUser();
   const settings = await getBillingSettings();
   const webhookUrl = `${siteUrl()}/api/stripe/webhook`;
-  const base = { settings, mode: stripeMode(), webhookUrl, prices: PRICES };
-  if (!u?.admin) return { ok: false, problem: "This is for Nucta File's administrators only.", ...base, checks: [], payments: [] };
+  const base = { settings, mode: stripeMode(), webhookUrl, prices: PRICES, plans: await getPlans() };
+  if (!u?.admin) return { ok: false, problem: "This is for Nucta File's administrators only.", ...base, checks: [], payments: [], memberships: [] };
   const key = process.env.STRIPE_SECRET_KEY ?? "";
   const mode = stripeMode();
   const checks = [
@@ -100,9 +192,14 @@ export async function getPaymentsAdmin(): Promise<PaymentsAdminView> {
     },
   ];
   let payments: PaymentRow[] = [];
+  let memberships: MembershipRow[] = [];
   try { payments = await recentPayments(); } catch { /* shown as none */ }
-  return { ok: true, ...base, checks, payments };
+  try { memberships = await recentMemberships(); } catch { /* shown as none */ }
+  return { ok: true, ...base, checks, payments, memberships };
 }
+
+/** Website pages whose wording depends on whether charging is on, and on the plans. */
+const SITE_PRICE_PAGES = ["/", "/pricing", "/accountants"];
 
 export async function updateCharging(next: { charging: boolean; confirm?: boolean }): Promise<{ ok: boolean; problem?: string; settings?: BillingSettings }> {
   const u = await currentUser();
@@ -113,6 +210,8 @@ export async function updateCharging(next: { charging: boolean; confirm?: boolea
   try {
     const settings = await saveBillingSettings(Boolean(next.charging), u.email);
     revalidatePath("/payments");
+    // The website's prices say whether filing is free: rebuild the pages that show them.
+    for (const page of SITE_PRICE_PAGES) revalidatePath(page);
     return { ok: true, settings };
   } catch (e) {
     return { ok: false, problem: problem(e) };

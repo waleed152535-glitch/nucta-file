@@ -1,5 +1,5 @@
 import {
-  pgTable, text, timestamp, boolean, integer, numeric, jsonb, index,
+  pgTable, text, timestamp, boolean, integer, numeric, jsonb, index, uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -286,7 +286,10 @@ export const emailChecks = pgTable("nf_email_checks", {
 export const payments = pgTable("nf_payments", {
   id: id(),
   accountId: text("account_id").notNull(),
-  returnId: text("return_id").notNull(),
+  /** The return a filing fee is for; empty for a membership. */
+  returnId: text("return_id"),
+  /** filing | membership */
+  kind: text("kind").notNull().default("filing"),
   userId: text("user_id").notNull(),
   stripeSessionId: text("stripe_session_id").notNull(),
   paymentIntent: text("payment_intent"),
@@ -302,3 +305,31 @@ export const payments = pgTable("nf_payments", {
   paidAt: timestamp("paid_at", { withTimezone: true }),
   createdAt: now(),
 }, (t) => [index("payments_return_idx").on(t.returnId), index("payments_session_idx").on(t.stripeSessionId), index("payments_account_idx").on(t.accountId)]);
+
+/**
+ * A practice's yearly membership: a number of returns to file over twelve
+ * months, paid once (lib/membership-rules.ts). Made when Stripe confirm the
+ * payment, once per payment.
+ */
+export const memberships = pgTable("nf_memberships", {
+  id: id(),
+  accountId: text("account_id").notNull(),
+  paymentId: text("payment_id").notNull(),
+  planKey: text("plan_key").notNull(),
+  planName: text("plan_name").notNull(),
+  returnsIncluded: integer("returns_included").notNull(),
+  /** In pence. */
+  amount: integer("amount").notNull(),
+  startsOn: text("starts_on").notNull(),
+  endsOn: text("ends_on").notNull(),
+  /** active | refunded */
+  status: text("status").notNull().default("active"),
+  createdAt: now(),
+}, (t) => [index("memberships_account_idx").on(t.accountId), uniqueIndex("memberships_payment_unique").on(t.paymentId)]);
+
+/** A return filed under a membership. A return is counted once, whatever happens after. */
+export const membershipUses = pgTable("nf_membership_uses", {
+  returnId: text("return_id").primaryKey(),
+  membershipId: text("membership_id").notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [index("membership_uses_membership_idx").on(t.membershipId)]);

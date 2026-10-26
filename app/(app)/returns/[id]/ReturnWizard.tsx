@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   saveReturn, previewReturn, sendReturnToTest, startAmendment,
-  type ReturnPreview, type SendResult,
+  type ReturnPreview, type SendResult, priorFromCompaniesHouse
 } from "@/lib/return-actions";
 import type { ReturnData } from "@/lib/return-model";
 import { SCOPE_QUESTIONS } from "@/lib/tax/scope";
@@ -50,9 +50,13 @@ export default function ReturnWizard(props: {
   initialStep?: number;
   /** How a card payment went, when coming back from Stripe. */
   feeNotice?: { tone: "good" | "bad" | "info"; text: string };
+  /** Whether Companies House can be asked for the company's filed accounts. */
+  chReady?: boolean;
 }) {
   const router = useRouter();
   const [d, setD] = useState<ReturnData>(props.initial);
+  const [chPrior, setChPrior] = useState<{ tone: "good" | "bad"; text: string; warnings: string[]; equity?: number | null } | null>(null);
+  const [chBusy, setChBusy] = useState(false);
   const [step, setStep] = useState(props.initialStep ?? 0);
   const [saved, setSaved] = useState<string | null>(null);
   const [preview, setPreview] = useState<ReturnPreview | null>(null);
@@ -483,6 +487,30 @@ export default function ReturnWizard(props: {
           <div className="card">
             <div className="hd"><h3>Last year</h3><span className="note">For the comparative column in the accounts</span></div>
             <div className="bd">
+              {props.chReady && props.company.companyNo && (
+                <div className="banner info" style={{ alignItems: "center" }}>
+                  <span>⌂</span>
+                  <span style={{ flex: 1 }}>Already filed last year&apos;s accounts at Companies House? Nucta File can read last year&apos;s figures from them.</span>
+                  <button type="button" className="btn sm" disabled={chBusy} onClick={async () => {
+                    setChBusy(true); setChPrior(null);
+                    const r = await priorFromCompaniesHouse(props.id);
+                    setChBusy(false);
+                    if (!r.ok || !r.prior) { setChPrior({ tone: "bad", text: r.problem ?? "Couldn't read last year's accounts.", warnings: [] }); return; }
+                    set("prior", r.prior);
+                    setChPrior({ tone: "good", text: `Filled in from ${r.source}. Check each figure against those accounts, then save.`, warnings: r.warnings ?? [], equity: r.equity });
+                  }}>{chBusy ? "Reading the accounts…" : "Fill in from Companies House"}</button>
+                </div>
+              )}
+              {chPrior && (
+                <div className={`banner ${chPrior.tone}`}>
+                  <span>{chPrior.tone === "good" ? "✓" : "✕"}</span>
+                  <span>
+                    {chPrior.text}
+                    {chPrior.equity != null && <> Capital and reserves at that date were <b>{gbp(chPrior.equity)}</b>: this year&apos;s reserves at the start are that, less the share capital.</>}
+                    {chPrior.warnings.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{chPrior.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
+                  </span>
+                </div>
+              )}
               <YesNo question="Are these the company's first accounts?" value={d.prior === null}
                 onChange={(first) => set("prior", first ? null : (d.prior ?? { from: "", to: "", figures: { turnover: 0, otherIncome: 0, rawMaterials: 0, staffCosts: 0, depreciation: 0, otherCharges: 0, profitBeforeTax: 0, tax: 0, shareCapitalNotPaid: 0, fixedAssets: 0, currentAssets: 0, prepayments: 0, creditorsWithin: 0, creditorsAfter: 0, provisions: 0, accruals: 0, employees: 0 } }))}
                 why="Accounts show last year's figures beside this year's, except a company's very first accounts." />

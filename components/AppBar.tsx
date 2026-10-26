@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { signOutAction } from "@/lib/session-actions";
 import Mark from "./Mark";
 import CommandPalette, { type PaletteMode } from "./CommandPalette";
+import { THEMES, applyTheme, type Theme } from "@/lib/theme";
 
 export interface BarUser { name: string; email: string; accountName: string; accountKind: string; admin: boolean; live?: "off" | "til" | "on" }
 
@@ -30,8 +31,10 @@ const ADMIN = [
 
 const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "N";
 
-export default function AppBar({ user }: { user: BarUser }) {
+export default function AppBar({ user, theme: initialTheme = "dark" }: { user: BarUser; theme?: Theme }) {
   const path = usePathname() ?? "/";
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const pickTheme = (t: Theme) => { applyTheme(t); setTheme(t); };
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const acct = useRef<HTMLDetailsElement>(null), adm = useRef<HTMLDetailsElement>(null);
   const active = (t: (typeof TABS)[number]) => [t.href, ...t.also].some((h) => path === h || path.startsWith(`${h}/`));
@@ -47,10 +50,12 @@ export default function AppBar({ user }: { user: BarUser }) {
       for (const d of [acct.current, adm.current]) if (d?.open && !d.contains(e.target as Node)) d.open = false;
     };
     const onOpen = (e: Event) => setPalette(((e as CustomEvent).detail as PaletteMode) ?? "find");
+    const onTheme = (e: Event) => setTheme((e as CustomEvent).detail as Theme);
     window.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onDown);
     window.addEventListener("nf-palette", onOpen);
-    return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); window.removeEventListener("nf-palette", onOpen); };
+    window.addEventListener("nf-theme", onTheme);
+    return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); window.removeEventListener("nf-palette", onOpen); window.removeEventListener("nf-theme", onTheme); };
   }, []);
   useEffect(() => { if (acct.current) acct.current.open = false; if (adm.current) adm.current.open = false; }, [path]);
 
@@ -58,7 +63,7 @@ export default function AppBar({ user }: { user: BarUser }) {
     <>
       <header className="appbar">
         <div className="appbar-in">
-          <Link href="/dashboard" className="brand" aria-label="Nucta File dashboard"><Mark size={24} />Nucta File{(user.admin || user.live !== "on") && <small title={user.live === "on" ? "Returns can be filed with HMRC for real" : user.live === "til" ? "HMRC's Test in Live check is open" : "Filing isn't open for this account yet"}>{user.live === "on" ? "Live filing" : user.live === "til" ? "Test in Live" : "Preparing only"}</small>}</Link>
+          <Link href="/dashboard" className="brand" aria-label="Nucta File dashboard"><Mark size={24} tone="theme" />Nucta File{(user.admin || user.live !== "on") && <small title={user.live === "on" ? "Returns can be filed with HMRC for real" : user.live === "til" ? "HMRC's Test in Live check is open" : "Filing isn't open for this account yet"}>{user.live === "on" ? "Live filing" : user.live === "til" ? "Test in Live" : "Preparing only"}</small>}</Link>
           <nav className="tabsnav" aria-label="Main">
             {TABS.map((t) => <Link key={t.href} href={t.href} className={active(t) ? "active" : ""} aria-current={active(t) ? "page" : undefined}>{t.label}</Link>)}
           </nav>
@@ -83,6 +88,14 @@ export default function AppBar({ user }: { user: BarUser }) {
               <div className="who"><b>{user.name}</b><span>{user.accountName}</span><br /><span>{user.email}</span></div>
               <Link href="/account">Your account</Link>
               <a href="/calendar.ics">Add deadlines to your calendar</a>
+              <div className="sec" id="theme-label">Look</div>
+              <div className="themes" role="radiogroup" aria-labelledby="theme-label">
+                {THEMES.map((t) => (
+                  <button key={t.value} type="button" role="radio" aria-checked={theme === t.value} onClick={() => pickTheme(t.value)}>
+                    <i className={`sw ${t.value}`} aria-hidden />{t.label}
+                  </button>
+                ))}
+              </div>
               <Link href="/">Nucta File website</Link>
               <form action={signOutAction}><button type="submit">Sign out</button></form>
             </div>

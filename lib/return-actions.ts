@@ -19,10 +19,12 @@ import {
 } from "./return-model";
 import { exceedsEighteenMonths, fromDay, toDay } from "./tax/dates";
 import { accountingPeriodsOf, amendmentDeadline, computePeriodOfAccount } from "./tax/long-period";
-import { chApiReady, companyProfile, searchCompanies, type ChProfile, type ChSearchHit } from "./ch-api";
+import { accountsDocument, accountsFilings, chApiReady, companyProfile, searchCompanies, type ChProfile, type ChSearchHit } from "./ch-api";
+import { priorFromAccounts } from "./ch-accounts-read";
+import type { PriorYear } from "./ixbrl";
 import { deadlinesFor, type Deadline } from "./deadlines";
 import { ensureSchema } from "./db-ensure";
-import { feeState } from "./billing";
+import { feeState, useMembership } from "./billing";
 import { currentUser, emailCheckNeeded, type SignedInUser } from "./auth";
 
 /**
@@ -107,6 +109,62 @@ export async function lookupCompany(number: string): Promise<{ ok: boolean; erro
   if (!(await currentUser())) return { ok: false, error: SIGNED_OUT };
   const r = await companyProfile(number);
   return r.ok ? { ok: true, profile: r.value } : { ok: false, error: r.error };
+}
+
+export interface PriorFromCh {
+  ok: boolean;
+  problem?: string;
+  prior?: { from: string; to: string; figures: PriorYear };
+  /** What was read, in words, for the screen. */
+  source?: string;
+  found?: (keyof PriorYear)[];
+  warnings?: string[];
+  /** Capital and reserves at the end of those accounts, to help with this year's reserves. */
+  equity?: number | null;
+}
+
+/**
+ * Last year's figures from the accounts the company filed at Companies
+ * House: the ones made up to the day before this return starts, or else the
+ * latest before it. Nothing is saved: the figures come back to the screen to
+ * be checked and saved with the rest of the step.
+ */
+export async function priorFromCompaniesHouse(returnId: string): Promise<PriorFromCh> {
+  const u = await currentUser();
+  if (!u) return { ok: false, problem: SIGNED_OUT };
+  if (!chApiReady()) return { ok: false, problem: "Companies House lookups aren't set up on this site (CH_API_KEY), so copy the figures from last year's accounts." };
+  try {
+    const s = await store();
+    const r = await ownReturn(s, u, returnId);
+    if (!r) return { ok: false, problem: "That return isn't in Nucta File." };
+    const [c] = await s.db.select({ companyNo: s.companies.companyNo }).from(s.companies).where(s.eq(s.companies.id, r.companyId));
+    if (!c?.companyNo) return { ok: false, problem: "Add the company number to the company first, then Nucta File can find its accounts." };
+    const list = await accountsFilings(c.companyNo);
+    if (!list.ok) return { ok: false, problem: list.error };
+    const want = fromDay(toDay(r.periodStart) - 1);
+    const before = list.value.filter((f) => f.madeUpTo && f.madeUpTo <= want);
+    const pick = before.find((f) => f.madeUpTo === want) ?? before.sort((a, b) => (b.madeUpTo ?? "").localeCompare(a.madeUpTo ?? ""))[0];
+    if (!pick) return { ok: false, problem: list.value.length ? "Companies House have no accounts for a year before this one." : "Companies House have no accounts for this company yet — if these are its first accounts, answer Yes above." };
+    if (!pick.documentId) return { ok: false, problem: "Companies House list those accounts but don't offer the document, so copy the figures from a copy of the accounts." };
+    const doc = await accountsDocument(pick.documentId);
+    if (!doc.ok) return { ok: false, problem: doc.error };
+    const read = priorFromAccounts(doc.value, pick.madeUpTo);
+    const day = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const warnings: string[] = [];
+    if (read.prior.to !== want) warnings.push(`These accounts end on ${day(read.prior.to)}, not the day before this return starts (${day(want)}). Check the dates of this return, or whether later accounts are still to be filed.`);
+    const pl: (keyof PriorYear)[] = ["turnover", "profitBeforeTax"];
+    if (!pl.some((k) => read.found!.includes(k))) warnings.push("The profit and loss account wasn't filed at Companies House (small companies can leave it out), so last year's turnover, costs and profit are 0. Copy them from the company's full accounts.");
+    if (!read.found.includes("fixedAssets") && !read.found.includes("currentAssets")) warnings.push("No balance sheet figures could be read from these accounts. Copy them from the accounts instead.");
+    if (read.netAssets !== null && !read.microShape) warnings.push("These accounts aren't laid out as micro-entity accounts, so some lines may be grouped differently. Check each figure against them.");
+    if (/dormant/.test(pick.description)) warnings.push("Those were dormant accounts.");
+    if (read.prior.from && toDay(read.prior.to) - toDay(read.prior.from) > 370) warnings.push("Last year's accounts ran for more than 12 months; the comparative column shows them as filed.");
+    return {
+      ok: true, prior: read.prior, found: read.found, warnings, equity: read.equity ?? read.netAssets,
+      source: `the accounts made up to ${day(read.prior.to)}, filed at Companies House on ${day(pick.date)}`,
+    };
+  } catch (e) {
+    return { ok: false, problem: `Couldn't read last year's accounts: ${msg(e)}` };
+  }
 }
 
 /** Reads the company's record from Companies House again: new accounts dates, address or status. */
@@ -921,9 +979,11 @@ export async function fileReturnLive(
   const rec = data.sent?.[String(part)];
   if (rec?.status === "accepted") return stop("This return has already been filed with HMRC.", [rec.receiptText ?? "", "To change it, start an amended return."].filter(Boolean));
   if (rec?.status === "submitted-live") return stop("This return has been sent to HMRC and is waiting for their answer.", ["Use “Ask HMRC again” rather than filing it twice."]);
+  let coveredBy: string | null = null;
   if (!til) {
     const fee = await feeState(s0, u, id);
-    if (fee.status === "due") return stop(`Pay the £${fee.amount} filing fee first.`, ["Use “Pay by card” on the filing screen. The fee covers filing this return, sending it again if HMRC find something to fix, and amending it later."]);
+    if (fee.status === "due") return stop(`Pay the £${fee.amount} filing fee first.`, [fee.words, "Use “Pay by card” on the filing screen. The fee covers filing this return, sending it again if HMRC find something to fix, and amending it later."]);
+    if (fee.status === "membership" && fee.membershipId) coveredBy = fee.membershipId;
   }
   if (live.settings.requireTest && rec?.status !== "accepted-test") {
     return stop("Send this return to HMRC's test service first.", ["Your administrator requires these exact figures to pass HMRC's test service before filing."]);
@@ -943,6 +1003,11 @@ export async function fileReturnLive(
   });
   const irmark = (envelope.match(/<IRmark[^>]*>([\s\S]*?)<\/IRmark>/) ?? [])[1] ?? null;
   if (!markWasCanonical()) return stop("The return's digital mark couldn't be calculated properly, so it wasn't sent.", ["Report this — it is a software fault."]);
+
+  // Under a membership, this return takes one of its places now: once, however many times it is sent.
+  if (coveredBy && !(await useMembership(s0, coveredBy, id))) {
+    return stop("Your membership's returns have just been used up.", ["Reload the page: the filing screen will show the fee for this return, or buy another membership from Your account."]);
+  }
 
   // Record first. If the record can't be written, nothing is sent.
   const s = await store().catch(() => null);

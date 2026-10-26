@@ -1,10 +1,15 @@
 import Link from "next/link";
 import DashPreview from "../_parts/DashPreview";
 import { PRICES, gbp } from "@/lib/site";
+import { chargingOn, getPlans } from "@/lib/billing";
 
 export const metadata = { title: "For accountants", description: "Nucta File for accountancy practices and formation agents: every client's deadlines, approval packs and filing as agent." };
 
-export default function Accountants() {
+export default async function Accountants() {
+  const [charging, all] = await Promise.all([chargingOn(), getPlans()]);
+  const plans = all.filter((p) => p.on);
+  const from = plans.length ? plans.reduce((a, b) => (a.price <= b.price ? a : b)) : null;
+  const yearly = from ? `, or a yearly membership from £${from.price.toLocaleString("en-GB")} for ${from.returns} returns` : "";
   return (
     <>
       <section className="page-top">
@@ -40,10 +45,15 @@ export default function Accountants() {
           <ol className="steps">
             <li><span className="n">1</span><h3>Start from the dashboard</h3><p>The client&apos;s return appears as not started the day its year ends. One click opens it with the dates filled in.</p></li>
             <li><span className="n">2</span><h3>Enter the figures</h3><p>From the client&apos;s bookkeeping. The tax so far updates as you type.</p></li>
-            <li><span className="n">3</span><h3>Send for approval</h3><p>Download the approval pack and send it to the director.</p></li>
+            <li><span className="n">3</span><h3>Send for approval</h3><p>Send the director a link to approve online, or the approval pack as a PDF.</p></li>
             <li><span className="n">4</span><h3>File</h3><p>Once it&apos;s signed, file the return. HMRC&apos;s receipt is kept with it.</p></li>
           </ol>
-          <p className="small" style={{ marginTop: 32 }}>Free while we launch. Later, practices will pay {gbp(PRICES.practice.perReturn)} per return filed ({gbp(PRICES.practice.dormant)} for a dormant company), with no subscription — and we&apos;ll tell you before any charge starts. <Link href="/pricing">Pricing</Link></p>
+          <p className="small" style={{ marginTop: 32 }}>
+            {charging
+              ? <>Practices pay {gbp(PRICES.practice.perReturn)} per return filed ({gbp(PRICES.practice.dormant)} for a dormant company){yearly}. </>
+              : <>Free while we launch. Later, practices will pay {gbp(PRICES.practice.perReturn)} per return filed ({gbp(PRICES.practice.dormant)} for a dormant company){yearly} — and we&apos;ll tell you before any charge starts. </>}
+            <Link href="/pricing">Pricing</Link>
+          </p>
         </div>
       </section>
     </>

@@ -34,7 +34,7 @@ const FILES_NOW = [
 const NOT_YET = [
   { t: "Filing accounts at Companies House", d: "Built and waiting for Companies House's approval. Until then Nucta File gives you the figures, box by box, for Companies House's own online form." },
   { t: "Small-company accounts under FRS 102 Section 1A", d: "For companies above the micro-entity limits." },
-  { t: "VAT returns", d: "Making Tax Digital VAT is next on the list." },
+  { t: "VAT returns", d: "Built for Making Tax Digital, and waiting for HMRC's approval to file for real." },
   { t: "Groups, R&D relief, charities and rental income", d: "Nor companies that sold land or shares. Nucta File says so at the start if a company is one of these." },
   { t: "Self Assessment and confirmation statements", d: "These still go through HMRC and Companies House directly." },
 ];

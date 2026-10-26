@@ -12,7 +12,7 @@ import { markForPeople } from "@/lib/ct600-xml";
  * Bumped by hand with every package. It is on the screen so that an identical
  * rejection twice over can be told apart from a deploy that never landed.
  */
-const BUILD = "49 — deadline checker and new home page, light theme, practice memberships, last year's figures from Companies House";
+const BUILD = "50 — VAT returns under Making Tax Digital";
 
 /**
  * The gateway console.

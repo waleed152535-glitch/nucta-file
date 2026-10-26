@@ -8,7 +8,7 @@ export default function Privacy() {
       <div className="wrap">
         <div className="paper">
         <h1>Privacy notice</h1>
-        <p className="meta">Last updated 24 October 2026</p>
+        <p className="meta">Last updated 26 October 2026</p>
         <p>This notice explains what information {SITE.product} keeps, why, and your rights. {SITE.company} (&ldquo;we&rdquo;) is the controller of the personal information described here{SITE.companyNumber ? ` (company number ${SITE.companyNumber})` : ""}. Contact us at <a href={`mailto:${SITE.email}`}>{SITE.email}</a>.</p>
 
         <h2>What we keep</h2>
@@ -16,11 +16,13 @@ export default function Privacy() {
           <li><b>Your account:</b> your name, email address, your firm or company name, and a scrambled form of your password (we can&apos;t read it).</li>
           <li><b>Companies and returns you add:</b> company details, the figures you enter, the accounts, computations and returns prepared, and the names of directors and shareholders where a return needs them.</li>
           <li><b>Filings:</b> what was sent to HMRC and what HMRC sent back, including receipts — with the password removed and the Government Gateway user ID hidden.</li>
+          <li><b>VAT returns:</b> the VAT number, the nine boxes of each return sent and HMRC&apos;s receipt. When you connect to HMRC for VAT, HMRC give Nucta File an access token in place of a password; it&apos;s kept encrypted and can be disconnected at any time.</li>
           <li><b>Signing in:</b> a session cookie and the type of browser, so you stay signed in. We don&apos;t use advertising or tracking cookies.</li>
+          <li><b>For HMRC&apos;s fraud checks:</b> when you use VAT returns, HMRC require details of the device with every request — your IP address, a device identifier kept in your browser, screen and window size, time zone and browser type. They&apos;re sent to HMRC with each VAT request and not used for anything else.</li>
         </ul>
 
         <h2>What we never keep</h2>
-        <p>Your HMRC Government Gateway password. It&apos;s used once, at the moment of filing, and isn&apos;t stored or logged.</p>
+        <p>Your HMRC Government Gateway password. For a Company Tax Return it&apos;s used once, at the moment of filing, and isn&apos;t stored or logged. For VAT it&apos;s typed only on HMRC&apos;s own page.</p>
 
         <h2>Why we use it</h2>
         <ul>

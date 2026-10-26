@@ -77,7 +77,10 @@ export default function CompanyClient({ company, returns, deadlines, chReady, su
           <h2>{company.name}</h2>
           <div className="sub">Company {company.companyNo}, {company.utr ? `UTR ${company.utr}` : "no UTR yet"}{company.incorporatedOn ? `, incorporated ${day(company.incorporatedOn)}` : ""}. <Link href="/companies">All companies</Link></div>
         </div>
-        <button type="button" className="btn ghost" onClick={() => setEditing(!editing)}>{editing ? "Close" : "Edit details"}</button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link href={`/companies/${company.id}/vat`} className="btn ghost">VAT returns</Link>
+          <button type="button" className="btn ghost" onClick={() => setEditing(!editing)}>{editing ? "Close" : "Edit details"}</button>
+        </div>
       </div>
       <div className="content">
         {editing && (

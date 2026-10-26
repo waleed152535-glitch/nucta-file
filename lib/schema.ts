@@ -91,6 +91,8 @@ export const companies = pgTable("nf_companies", {
   /** 0 close company, 1 investment, etc. — HMRC's CompanyType box. */
   companyType: text("company_type").default("0"),
   registeredOffice: text("registered_office"),
+  /** The VAT registration number, nine digits, for VAT returns under Making Tax Digital. */
+  vrn: text("vrn"),
   /** Which Nucta Desk client this is, when the two are linked. */
   deskClientId: text("desk_client_id"),
   /** The company's record at Companies House when it was last looked up: accounts dates, address, status. */
@@ -333,3 +335,60 @@ export const membershipUses = pgTable("nf_membership_uses", {
   membershipId: text("membership_id").notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [index("membership_uses_membership_idx").on(t.membershipId)]);
+
+/**
+ * A connection to HMRC's Making Tax Digital APIs, made by signing in on
+ * HMRC's own page (OAuth). Either one company's own HMRC sign-in, or a
+ * practice's agent services account, which reaches every client that has
+ * authorised it. The tokens are stored encrypted (lib/hmrc-mtd.ts).
+ */
+export const vatConnections = pgTable("nf_vat_connections", {
+  id: id(),
+  accountId: text("account_id").notNull(),
+  /** The company's id for its own sign-in, or "agent" for the practice's agent services account. */
+  scopeKey: text("scope_key").notNull(),
+  /** sandbox | production */
+  env: text("env").notNull(),
+  accessEnc: text("access_enc").notNull(),
+  refreshEnc: text("refresh_enc").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  scope: text("scope"),
+  connectedBy: text("connected_by"),
+  connectedByName: text("connected_by_name"),
+  createdAt: now(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [uniqueIndex("vat_connections_unique").on(t.accountId, t.scopeKey, t.env)]);
+
+/** An HMRC sign-in under way: the state sent to HMRC, kept as its SHA-256, for ten minutes. */
+export const oauthStates = pgTable("nf_oauth_states", {
+  id: id(),
+  accountId: text("account_id").notNull(),
+  userId: text("user_id").notNull(),
+  companyId: text("company_id").notNull(),
+  scopeKey: text("scope_key").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: now(),
+});
+
+/** A VAT return sent to HMRC, with what HMRC sent back. Kept for good, like the CT600s. */
+export const vatReturns = pgTable("nf_vat_returns", {
+  id: id(),
+  accountId: text("account_id").notNull(),
+  companyId: text("company_id").notNull(),
+  vrn: text("vrn").notNull(),
+  periodKey: text("period_key").notNull(),
+  periodStart: text("period_start"),
+  periodEnd: text("period_end"),
+  due: text("due"),
+  boxes: jsonb("boxes").$type<import("./vat-rules").VatBoxes>().notNull(),
+  /** import | typed — where the figures came from. */
+  source: text("source").notNull(),
+  sourceName: text("source_name"),
+  receipt: jsonb("receipt").$type<Record<string, unknown>>(),
+  correlationId: text("correlation_id"),
+  env: text("env").notNull(),
+  submittedBy: text("submitted_by"),
+  submittedByName: text("submitted_by_name"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [index("vat_returns_company_idx").on(t.companyId), uniqueIndex("vat_returns_period_unique").on(t.vrn, t.periodKey, t.env)]);

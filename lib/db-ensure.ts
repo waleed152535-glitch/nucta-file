@@ -43,6 +43,14 @@ export const LATER_STATEMENTS = [
   'CREATE UNIQUE INDEX IF NOT EXISTS "memberships_payment_unique" ON "nf_memberships" ("payment_id")',
   `CREATE TABLE IF NOT EXISTS "nf_membership_uses" ("return_id" text PRIMARY KEY NOT NULL, "membership_id" text NOT NULL, "used_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   'CREATE INDEX IF NOT EXISTS "membership_uses_membership_idx" ON "nf_membership_uses" USING btree ("membership_id")',
+  // VAT returns under Making Tax Digital (build 50).
+  'ALTER TABLE "nf_companies" ADD COLUMN IF NOT EXISTS "vrn" text',
+  `CREATE TABLE IF NOT EXISTS "nf_vat_connections" ("id" text PRIMARY KEY NOT NULL, "account_id" text NOT NULL, "scope_key" text NOT NULL, "env" text NOT NULL, "access_enc" text NOT NULL, "refresh_enc" text NOT NULL, "expires_at" timestamp with time zone NOT NULL, "scope" text, "connected_by" text, "connected_by_name" text, "created_at" timestamp with time zone DEFAULT now() NOT NULL, "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS "vat_connections_unique" ON "nf_vat_connections" ("account_id", "scope_key", "env")',
+  `CREATE TABLE IF NOT EXISTS "nf_oauth_states" ("id" text PRIMARY KEY NOT NULL, "account_id" text NOT NULL, "user_id" text NOT NULL, "company_id" text NOT NULL, "scope_key" text NOT NULL, "expires_at" timestamp with time zone NOT NULL, "used_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS "nf_vat_returns" ("id" text PRIMARY KEY NOT NULL, "account_id" text NOT NULL, "company_id" text NOT NULL, "vrn" text NOT NULL, "period_key" text NOT NULL, "period_start" text, "period_end" text, "due" text, "boxes" jsonb NOT NULL, "source" text NOT NULL, "source_name" text, "receipt" jsonb, "correlation_id" text, "env" text NOT NULL, "submitted_by" text, "submitted_by_name" text, "submitted_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  'CREATE INDEX IF NOT EXISTS "vat_returns_company_idx" ON "nf_vat_returns" USING btree ("company_id")',
+  'CREATE UNIQUE INDEX IF NOT EXISTS "vat_returns_period_unique" ON "nf_vat_returns" ("vrn", "period_key", "env")',
 ];
 
 let done: Promise<void> | null = null;

@@ -51,6 +51,21 @@ const VARS = [
     required: false,
   },
   {
+    key: "HMRC_MTD_CLIENT_ID",
+    what: "For VAT returns: the client ID of the application made on HMRC's Developer Hub (developer.service.hmrc.gov.uk) for the VAT (MTD) API. Its redirect URI must be this site's /api/hmrc/callback.",
+    required: false,
+  },
+  {
+    key: "HMRC_MTD_CLIENT_SECRET",
+    what: "That application's client secret. Secret: paste it only here, in the hosting settings. HMRC connections are also encrypted with it, so changing it means connecting to HMRC again.",
+    required: false,
+  },
+  {
+    key: "HMRC_MTD_ENV",
+    what: "\"sandbox\" (the default: HMRC's test service, test businesses only) or \"production\" once HMRC have approved Nucta File for VAT and issued production credentials.",
+    required: false,
+  },
+  {
     key: "DATABASE_URL",
     what: "Where submissions are recorded. Filing works without it, but nothing is kept.",
     required: false,

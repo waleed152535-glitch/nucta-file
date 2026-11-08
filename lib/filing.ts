@@ -16,6 +16,7 @@ import type { ComputationResult, ReturnFigures } from "./tax/computation";
 import { scopeProblems, type ScopeAnswers } from "./tax/scope";
 import { checkMicroAccounts, microAccounts, type BalanceSheet } from "./accounts/micro";
 import { companiesHouseForm, type CompaniesHouseForm } from "./accounts/ch-form";
+import { checkSmallDetail, deferredTaxCharge, grossAssets, sizeAdvice, sizeTest, smallAccounts, type SmallDetail } from "./accounts/small";
 import { buildAccounts, buildFullComputation, type PriorYear } from "./ixbrl";
 import { buildCt600FromComputation } from "./ct600-return";
 import type { LoansResult, ParticipatorAccount } from "./tax/directors-loans";
@@ -33,6 +34,12 @@ export interface CompanyReturnInput {
   figures: ReturnFigures;
   balanceSheet: BalanceSheet;
   prior?: { from: string; to: string; figures: PriorYear };
+  /**
+   * Set for small-company accounts (FRS 102 Section 1A) in place of
+   * micro-entity accounts. The balance sheet must already have its totals
+   * worked out from this (applySmall).
+   */
+  small?: SmallDetail;
   /** The director approving the accounts, and the date the board approved them. */
   director: string;
   approvedOn: string;
@@ -84,8 +91,10 @@ export interface PreparedReturn {
   ct600: string | null;
   /** The accounts, the same for every return of the period. */
   accountsHtml: string | null;
-  /** The same accounts as Companies House's online form asks for them, box by box. */
+  /** The same accounts as Companies House's online form asks for them, box by box. Micro-entity accounts only. */
   companiesHouse: CompaniesHouseForm | null;
+  /** Which accounts were prepared. */
+  accountsFormat: "micro" | "small";
   /** Corporation Tax and tax on director's loans for the whole period. */
   corporationTax: number;
   loansTax: number;
@@ -99,7 +108,9 @@ const longDate = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateStrin
 export function prepareReturn(i: CompanyReturnInput): PreparedReturn {
   const today = i.today ?? new Date().toISOString().slice(0, 10);
   const returnType = i.returnType ?? "new";
-  const base = { long: false, returnType, parts: [] as PreparedPart[], corporationTax: 0, loansTax: 0, filingDue: "", amendBy: "" };
+  const small = i.dormant ? undefined : i.small;
+  const accountsFormat = small ? "small" as const : "micro" as const;
+  const base = { long: false, returnType, parts: [] as PreparedPart[], corporationTax: 0, loansTax: 0, filingDue: "", amendBy: "", accountsFormat };
   const nothing = (problems: string[], warnings: string[] = [], extra: Partial<PreparedReturn> = {}): PreparedReturn => ({
     ok: false, problems, warnings, ...base, computation: null, loans: null, computationHtml: null, ct600: null, accountsHtml: null, companiesHouse: null, ...extra,
   });
@@ -136,13 +147,15 @@ export function prepareReturn(i: CompanyReturnInput): PreparedReturn {
     warnings.push(`The director's loan accounts end £${credit.toLocaleString("en-GB")} in credit — the company owes that to them — but "owed to directors" on the balance sheet is £${i.balanceSheet.owedToDirectors.toLocaleString("en-GB")}. Check it includes them.`);
   }
   // The accounts cover the whole period: their tax charge is both periods'
-  // Corporation Tax, and the loans note runs from the first day to the last.
+  // Corporation Tax — with deferred tax, in small-company accounts — and the
+  // loans note runs from the first day to the last.
   const accountsFigures = {
     companyName: i.company.name, companyNo: i.company.number, utr: i.company.utr,
     periodFrom: i.figures.periodFrom, periodTo: i.figures.periodTo, principalActivities: i.company.activity,
-    pl: i.figures.pl, taxCharge: poa.corporationTax,
+    pl: i.figures.pl, taxCharge: poa.corporationTax + (small ? deferredTaxCharge(small) : 0),
     // Overdrawn loan accounts are money owed to the company: current assets.
-    balanceSheet: { ...i.balanceSheet, owedByParticipators: closing?.a75 ?? 0 },
+    // The Corporation Tax owed is this year's, without the deferred tax.
+    balanceSheet: { ...i.balanceSheet, owedByParticipators: closing?.a75 ?? 0, ...(small ? { corporationTaxOwed: i.balanceSheet.corporationTaxOwed ?? poa.corporationTax } : {}) },
     director: i.director, approvedOn: i.approvedOn, prior: i.prior,
     ...(i.dormant ? { dormant: true, everTraded: i.dormant.everTraded } : {}),
     directorsLoans: closing?.people.map((p, n) => ({ p, src: people[n] })).filter(({ p }) => p.isDirector).map(({ p, src }) => ({
@@ -152,11 +165,20 @@ export function prepareReturn(i: CompanyReturnInput): PreparedReturn {
   };
   const check = checkMicroAccounts(accountsFigures);
   warnings.push(...check.warnings);
-  if (check.problems.length) return nothing(check.problems, warnings, computed);
+  const smallCheck = small ? checkSmallDetail(small, i.figures.pl.depreciation, i.figures.pl.otherCharges, i.prior?.figures) : { problems: [], warnings: [] };
+  warnings.push(...smallCheck.warnings);
+  if (!i.dormant) {
+    const advice = sizeAdvice(accountsFormat, sizeTest(i.figures.periodFrom, i.figures.periodTo, i.figures.pl.turnover, grossAssets(accountsFigures.balanceSheet), i.balanceSheet.employees));
+    if (advice) warnings.push(advice);
+  }
+  if (check.problems.length || smallCheck.problems.length) return nothing([...smallCheck.problems, ...check.problems], warnings, computed);
 
-  const accountsInput = microAccounts(accountsFigures);
+  const accountsInput = small
+    ? smallAccounts({ ...accountsFigures, small, currentTax: poa.corporationTax })
+    : microAccounts(accountsFigures);
   const accountsHtml = buildAccounts(accountsInput);
-  const companiesHouse = companiesHouseForm(accountsInput);
+  // Companies House's online form, box by box, is for micro-entity accounts.
+  const companiesHouse = small ? null : companiesHouseForm(accountsInput);
   const companyNo = i.company.number.trim().toUpperCase();
   const parts = partsWithoutDocs.map((p, n): PreparedPart => {
     // A dormant company sends no computation: there is nothing to compute.
@@ -178,7 +200,7 @@ export function prepareReturn(i: CompanyReturnInput): PreparedReturn {
   });
 
   return {
-    ok: true, problems: [], warnings, returnType, ...computed, parts,
+    ok: true, problems: [], warnings, returnType, accountsFormat, ...computed, parts,
     computation: parts[0].computation, loans: parts[0].loans, computationHtml: parts[0].computationHtml, ct600: parts[0].ct600, accountsHtml, companiesHouse,
   };
 }

@@ -14,12 +14,17 @@ import type { FirstPartLoans, ParticipatorAccount } from "@/lib/tax/directors-lo
 import type { AssetKind, DisposalPool } from "@/lib/tax/capital-allowances";
 import { accountingPeriodsOf, computePeriodOfAccount } from "@/lib/tax/long-period";
 import { monthsIn } from "@/lib/tax/dates";
-import { toPeriodOfAccountInput, toFigures, dormantBalanceSheet } from "@/lib/return-model";
+import { toPeriodOfAccountInput, toFigures, effectiveBalanceSheet, isSmall } from "@/lib/return-model";
+import {
+  blankPriorSmall, checkSmallDetail, deferredTaxCharge, grossAssets, priorSmallFromTotals, shareCapitalOf,
+  sizeAdvice, sizeLimits, sizeTest, syncPriorFromSmall, type AccountsFormat, type SmallDetail,
+} from "@/lib/accounts/small";
 import { Money, Whole, Text, DateField, YesNo, gbp } from "./fields";
+import { PriorSmallFields, SmallBalanceSheet } from "./SmallAccounts";
 import OnlineApproval from "./OnlineApproval";
 import TrialBalanceImport from "./TrialBalanceImport";
 import LiveFiling from "./LiveFiling";
-import CompaniesHouseAccounts from "./CompaniesHouseAccounts";
+import CompaniesHouseAccounts, { SmallCompaniesHouse } from "./CompaniesHouseAccounts";
 
 const STEPS = [
   "The company", "Profit and loss", "Expenses tax doesn't allow", "Equipment and vehicles",
@@ -74,12 +79,46 @@ export default function ReturnWizard(props: {
   const [tbDone, setTbDone] = useState(false);
   const fromTrialBalance = (pl: Partial<ReturnData["pl"]>, bs: Partial<ReturnData["balanceSheet"]>) => {
     const whole = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "number" ? Math.round(v) : v])) as T;
-    setD((p) => ({ ...p, pl: { ...p.pl, ...whole(pl) }, balanceSheet: { ...p.balanceSheet, ...whole(bs) } }));
+    setD((p) => {
+      const next = { ...p, pl: { ...p.pl, ...whole(pl) }, balanceSheet: { ...p.balanceSheet, ...whole(bs) } };
+      if (!isSmall(p)) return next;
+      // Small-company accounts work their totals out from lines: the trial
+      // balance's totals go on the "other" lines, to be split on the balance sheet step.
+      const w = whole(bs);
+      return { ...next, small: {
+        ...p.small,
+        ...(w.debtors !== undefined ? { tradeDebtors: 0, otherDebtors: w.debtors } : {}),
+        ...(w.creditorsWithin !== undefined ? { bankWithin: 0, tradeCreditors: 0, taxationSocialSecurity: 0, accrualsWithin: 0, otherCreditorsWithin: w.creditorsWithin } : {}),
+        ...(w.creditorsAfter !== undefined ? { bankAfter: 0, otherAfter: w.creditorsAfter } : {}),
+        ...(w.shareCapital !== undefined && w.shareCapital > 0 ? { sharesNumber: w.shareCapital, shareNominal: 1 } : {}),
+      } };
+    });
     setSaved(null); setTbOpen(false); setTbDone(true);
   };
   const set = <K extends keyof ReturnData>(k: K, v: ReturnData[K]) => { setD((p) => ({ ...p, [k]: v })); setSaved(null); };
   const setIn = <K extends "pl" | "disallowable" | "balanceSheet">(k: K, f: keyof ReturnData[K], v: number) =>
     { setD((p) => ({ ...p, [k]: { ...p[k], [f]: v } })); setSaved(null); };
+  const setSmall = <K extends keyof SmallDetail>(k: K, v: SmallDetail[K]) => { setD((p) => ({ ...p, small: { ...p.small, [k]: v } })); setSaved(null); };
+  const small = isSmall(d);
+  // Changing the kind of accounts keeps every figure: going to small-company
+  // accounts, the totals typed so far start the detail, and last year's
+  // totals start last year's lines; going back, the totals worked out stay.
+  const chooseFormat = (f: AccountsFormat) => {
+    setD((p) => {
+      if (p.accountsFormat === f) return p;
+      // Micro-entity accounts don't recognise deferred tax, so its provision is left out.
+      if (f === "micro") return { ...p, accountsFormat: "micro", balanceSheet: { ...effectiveBalanceSheet(p), provisions: p.balanceSheet.provisions } };
+      const sd = p.small, b = p.balanceSheet;
+      const untouched = ![sd.tradeDebtors, sd.otherDebtors, sd.bankWithin, sd.tradeCreditors, sd.taxationSocialSecurity, sd.otherCreditorsWithin, sd.accrualsWithin, sd.bankAfter, sd.otherAfter].some(Boolean);
+      const seeded: SmallDetail = untouched ? {
+        ...sd, otherDebtors: b.debtors, otherCreditorsWithin: b.creditorsWithin, otherAfter: b.creditorsAfter,
+        ...(b.shareCapital > 0 && Number.isInteger(b.shareCapital) && shareCapitalOf(sd) !== b.shareCapital ? { sharesNumber: b.shareCapital, shareNominal: 1 } : {}),
+      } : sd;
+      const prior = p.prior && !p.prior.figures.small ? { ...p.prior, figures: syncPriorFromSmall({ ...p.prior.figures, small: priorSmallFromTotals(p.prior.figures) }) } : p.prior;
+      return { ...p, accountsFormat: "small", small: seeded, prior };
+    });
+    setSaved(null);
+  };
 
   // Live figures, worked out in the browser with the same engine the server
   // uses — for both returns when the accounts pass 12 months.
@@ -89,14 +128,22 @@ export default function ReturnWizard(props: {
     const problems = computed ? [] : poa.problems;
     const loanProblems = computed ? poa.problems : [];
     const hasLoans = poa.parts.some((x) => x.loans);
-    const bs = d.dormant ? dormantBalanceSheet(d.balanceSheet) : d.balanceSheet;
+    const sm = isSmall(d);
+    const bs0 = effectiveBalanceSheet(d);
+    const bs = { ...bs0, owedByParticipators: poa.closingLoans?.a75 ?? 0, ...(sm ? { corporationTaxOwed: bs0.corporationTaxOwed ?? poa.corporationTax } : {}) };
     const acc = computed ? checkMicroAccounts({
       companyName: props.company.name, companyNo: props.company.companyNo ?? "", periodFrom: props.periodStart, periodTo: props.periodEnd,
-      principalActivities: d.activity, pl: toFigures(props.periodStart, props.periodEnd, d).pl, taxCharge: poa.corporationTax,
-      balanceSheet: { ...bs, owedByParticipators: poa.closingLoans?.a75 ?? 0 }, director: d.director || "x",
+      principalActivities: d.activity, pl: toFigures(props.periodStart, props.periodEnd, d).pl, taxCharge: poa.corporationTax + (sm ? deferredTaxCharge(d.small) : 0),
+      balanceSheet: bs, director: d.director || "x",
       approvedOn: d.approvedOn || "9999-12-31",
     }) : null;
-    return { poa, computed, problems, loanProblems, hasLoans, acc };
+    const smallCheck = sm ? checkSmallDetail(d.small, d.pl.depreciation, d.pl.otherCharges, d.prior?.figures) : null;
+    // Only once there are figures to test: a blank return is within every limit.
+    const size = !d.dormant && d.pl.turnover > 0 ? sizeTest(props.periodStart, props.periodEnd, d.pl.turnover, grossAssets(bs), d.balanceSheet.employees) : null;
+    const sizeNote = size ? sizeAdvice(d.accountsFormat, size) : null;
+    const lastPart = poa.parts[poa.parts.length - 1];
+    const pools = lastPart ? lastPart.result.carryForward.mainPool + lastPart.result.carryForward.specialPool : 0;
+    return { poa, computed, problems, loanProblems, hasLoans, acc, smallCheck, sizeNote, pools, chargeable: lastPart?.result.chargeableProfits ?? 0 };
   }, [d, props.periodStart, props.periodEnd, props.company]);
 
   const save = (next?: number) => start(async () => {
@@ -224,6 +271,24 @@ export default function ReturnWizard(props: {
                 </>
               ) : (
                 <>
+                  {(() => {
+                    const lim = sizeLimits(props.periodStart);
+                    const within = (l: { turnover: number; balanceSheet: number; employees: number }) => `turnover up to ${gbp(l.turnover)}, a balance sheet total up to ${gbp(l.balanceSheet)}, ${l.employees} employees`;
+                    return (
+                      <div style={{ margin: "14px 0 2px" }}>
+                        <div style={{ fontWeight: 500, marginBottom: 6 }}>Which accounts does the company prepare?</div>
+                        <div className="picks" role="radiogroup" aria-label="Which accounts">
+                          <button type="button" role="radio" aria-checked={d.accountsFormat === "micro"} className="pick" onClick={() => chooseFormat("micro")}>
+                            <span className="dot" aria-hidden /><span><b>Micro-entity accounts</b><small>FRS 105, the simplest. For a company within two of: {within(lim.micro)}.</small></span>
+                          </button>
+                          <button type="button" role="radio" aria-checked={d.accountsFormat === "small"} className="pick" onClick={() => chooseFormat("small")}>
+                            <span className="dot" aria-hidden /><span><b>Small company accounts</b><small>FRS 102 Section 1A, with a directors&apos; report and fuller notes. For a company above the micro-entity limits but within two of: {within(lim.small)}.</small></span>
+                          </button>
+                        </div>
+                        {live.sizeNote && <div className="banner warn" style={{ marginTop: 0 }}><span>⚠</span><span>{live.sizeNote}</span></div>}
+                      </div>
+                    );
+                  })()}
                   <p className="note" style={{ margin: "14px 0 6px" }}>Answer each question. If any answer means Nucta File can&apos;t prepare this return yet, it will say why.</p>
                   {SCOPE_QUESTIONS.map((q) => (
                     <YesNo key={q.key} question={q.ask} value={d.scope[q.key]} onChange={(v) => set("scope", { ...d.scope, [q.key]: v })}
@@ -250,7 +315,7 @@ export default function ReturnWizard(props: {
         {(step === 1 || step === 6) && !d.dormant && !tbOpen && (
           <div className="banner info" style={{ alignItems: "center" }}>
             <span>⇩</span>
-            <span style={{ flex: 1 }}>{tbDone ? <><b>Filled in from the trial balance.</b> Check each figure here and on the balance sheet, then save.</> : <>Keep the books in Xero, QuickBooks, FreeAgent or Sage? Import the trial balance to fill in the profit and loss and the balance sheet at once.</>}</span>
+            <span style={{ flex: 1 }}>{tbDone ? <><b>Filled in from the trial balance.</b> Check each figure here and on the balance sheet, then save.{small && " For small company accounts, split what's owed each way into its lines, and enter equipment's cost and depreciation."}</> : <>Keep the books in Xero, QuickBooks, FreeAgent or Sage? Import the trial balance to fill in the profit and loss and the balance sheet at once.</>}</span>
             <button type="button" className="btn sm" onClick={() => setTbOpen(true)}>{tbDone ? "Import again" : "Import a trial balance"}</button>
           </div>
         )}
@@ -273,6 +338,7 @@ export default function ReturnWizard(props: {
                 <Money label="Depreciation" hint="written off equipment in the accounts" value={d.pl.depreciation} onChange={(v) => setIn("pl", "depreciation", v)} />
               </div>
               <Money label="All other expenses" hint="fees, advertising, software, rent, phone, travel, accountancy…" value={d.pl.otherCharges} onChange={(v) => setIn("pl", "otherCharges", v)} />
+              {small && <Money label="Of which interest paid" hint="on loans and overdrafts — its own line in small company accounts" value={d.small.interestPayable} onChange={(v) => setSmall("interestPayable", v)} />}
               <div className="kv"><span className="k">{pbt < 0 ? "Loss" : "Profit"} before tax</span><span className="v">{gbp(pbt)}</span></div>
             </div>
           </div>
@@ -493,7 +559,7 @@ export default function ReturnWizard(props: {
                   <span style={{ flex: 1 }}>Already filed last year&apos;s accounts at Companies House? Nucta File can read last year&apos;s figures from them.</span>
                   <button type="button" className="btn sm" disabled={chBusy} onClick={async () => {
                     setChBusy(true); setChPrior(null);
-                    const r = await priorFromCompaniesHouse(props.id);
+                    const r = await priorFromCompaniesHouse(props.id, small ? "small" : "micro");
                     setChBusy(false);
                     if (!r.ok || !r.prior) { setChPrior({ tone: "bad", text: r.problem ?? "Couldn't read last year's accounts.", warnings: [] }); return; }
                     set("prior", r.prior);
@@ -512,9 +578,10 @@ export default function ReturnWizard(props: {
                 </div>
               )}
               <YesNo question="Are these the company's first accounts?" value={d.prior === null}
-                onChange={(first) => set("prior", first ? null : (d.prior ?? { from: "", to: "", figures: { turnover: 0, otherIncome: 0, rawMaterials: 0, staffCosts: 0, depreciation: 0, otherCharges: 0, profitBeforeTax: 0, tax: 0, shareCapitalNotPaid: 0, fixedAssets: 0, currentAssets: 0, prepayments: 0, creditorsWithin: 0, creditorsAfter: 0, provisions: 0, accruals: 0, employees: 0 } }))}
+                onChange={(first) => set("prior", first ? null : (d.prior ?? { from: "", to: "", figures: { turnover: 0, otherIncome: 0, rawMaterials: 0, staffCosts: 0, depreciation: 0, otherCharges: 0, profitBeforeTax: 0, tax: 0, shareCapitalNotPaid: 0, fixedAssets: 0, currentAssets: 0, prepayments: 0, creditorsWithin: 0, creditorsAfter: 0, provisions: 0, accruals: 0, employees: 0, ...(small ? { small: blankPriorSmall() } : {}) } }))}
                 why="Accounts show last year's figures beside this year's, except a company's very first accounts." />
-              {d.prior && (() => {
+              {d.prior && small && <PriorSmallFields prior={d.prior} onChange={(v) => set("prior", v)} />}
+              {d.prior && !small && (() => {
                 const p = d.prior!, f = p.figures;
                 const setP = (k: keyof typeof f, v: number) => set("prior", { ...p, figures: { ...f, [k]: v } });
                 return (
@@ -566,7 +633,11 @@ export default function ReturnWizard(props: {
                   if they were paid into the bank, enter the 100 as cash instead.
                 </p>
               )}
-              {d.dormant ? (
+              {small ? (
+                <SmallBalanceSheet d={d} setIn={setIn} setSmall={setSmall} a75={live.poa.closingLoans?.a75 ?? 0} ct={live.computed ? Math.round(live.poa.corporationTax) : 0}
+                  capitalAndReserves={live.acc?.capitalAndReserves ?? null} profitAfterTax={live.acc?.profitAfterTax ?? null}
+                  pools={live.pools} chargeable={live.chargeable} bought={d.additions.reduce((t, x) => t + (x.cost || 0), 0)} problems={live.smallCheck?.problems ?? []} />
+              ) : d.dormant ? (
                 <>
                   <div className="row3">
                     <Money label="Share capital" hint="e.g. 100 shares of £1 = 100" value={d.balanceSheet.shareCapital} onChange={(v) => setIn("balanceSheet", "shareCapital", v)} />
@@ -627,6 +698,7 @@ export default function ReturnWizard(props: {
                 );
               })()}
               <Whole label="Average number of employees" hint="including paid directors" value={d.balanceSheet.employees} onChange={(v) => setIn("balanceSheet", "employees", v)} />
+              {step === 6 && live.sizeNote && <div className="banner warn" style={{ marginTop: 12 }}><span>⚠</span><span>{live.sizeNote}</span></div>}
               {d.dormant && (live.poa.closingLoans?.a75 ?? 0) > 0 && <p className="note">Also counted as owed to the company: {gbp(live.poa.closingLoans!.a75)} from director&apos;s loans (the director&apos;s loans step).</p>}
               {live.computed && live.acc && (() => {
                 const diff = live.acc.netAssets - live.acc.capitalAndReserves;
@@ -637,7 +709,7 @@ export default function ReturnWizard(props: {
                       {Math.abs(diff) < 1
                         ? <b>The balance sheet balances: net assets {gbp(live.acc.netAssets)}.</b>
                         : <><b>Out by {gbp(Math.abs(diff))}.</b> What the company has, less what it owes, comes to {gbp(live.acc.netAssets)}; shares and reserves come to {gbp(live.acc.capitalAndReserves)}.
-                          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{balanceHints(diff, d.balanceSheet, live.acc.profitBeforeTax).map((h, i) => <li key={i}>{h}</li>)}</ul></>}
+                          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{balanceHints(diff, d.balanceSheet, live.acc.profitBeforeTax, small).map((h, i) => <li key={i}>{h}</li>)}</ul></>}
                     </span>
                   </div>
                 );
@@ -734,6 +806,7 @@ export default function ReturnWizard(props: {
                   refreshKey={`${props.status}|${preview.parts.map((x) => x.sent?.status ?? "").join(",")}|${Object.entries(sent).map(([k, v]) => `${k}:${v.outcome}`).join(",")}`} />
               )}
               {preview?.ok && preview.companiesHouse && <CompaniesHouseAccounts returnId={props.id} form={preview.companiesHouse} />}
+              {preview?.ok && preview.accountsFormat === "small" && <SmallCompaniesHouse returnId={props.id} periodTo={props.periodEnd} hasPrior={Boolean(d.prior)} director={d.director} approvedOn={d.approvedOn} />}
               {preview?.ok && (() => {
                 const base = `/returns/${props.id}/documents`;
                 const many = preview.parts.length > 1;
@@ -745,11 +818,11 @@ export default function ReturnWizard(props: {
                       <a className="btn sm" href={`${base}/approval-pack.pdf`} target="_blank" rel="noreferrer">Download PDF</a>
                     </div>
                     <div className="row">
-                      <div className="what"><div className="t">Accounts</div><div className="d">Micro-entity accounts, {longDate(props.periodStart)} to {longDate(props.periodEnd)}</div></div>
+                      <div className="what"><div className="t">Accounts</div><div className="d">{preview.accountsFormat === "small" ? "Small company accounts (FRS 102 Section 1A)" : "Micro-entity accounts"}, {longDate(props.periodStart)} to {longDate(props.periodEnd)}</div></div>
                       {link("accounts.html", "View")}{link("accounts.pdf", "PDF")}{link("accounts.xhtml", "iXBRL")}
                     </div>
                     <div className="row">
-                      <div className="what"><div className="t">Accounts for Companies House</div><div className="d">Balance sheet and notes, without the profit and loss account</div></div>
+                      <div className="what"><div className="t">Accounts for Companies House</div><div className="d">Balance sheet and notes, without the profit and loss account{preview.accountsFormat === "small" ? " or the directors' report" : ""}</div></div>
                       {link("accounts-ch.html", "View")}{link("accounts-ch.pdf", "PDF")}
                     </div>
                     {preview.parts.map((pt, n) => (
@@ -823,10 +896,17 @@ function shortDate(iso: string): string {
  * Likely reasons the balance sheet is out, from the size of the difference:
  * a figure on the wrong side shows up as exactly twice that figure.
  */
-function balanceHints(diff: number, b: ReturnData["balanceSheet"], profit: number): string[] {
+function balanceHints(diff: number, b: ReturnData["balanceSheet"], profit: number, small = false): string[] {
   const near = (x: number) => Math.abs(diff - x) < 1.5;
   const money = (n: number) => `£${Math.abs(n).toLocaleString("en-GB")}`;
   const hints: string[] = [];
+  if (small) {
+    if (Math.abs(diff) <= 2) hints.push("A difference this small is usually rounding: make sure every figure is in whole pounds.");
+    else hints.push(`A figure on the wrong side — something the company owes entered as something it has, or the other way round — puts it out by twice that figure. Look for £${Math.abs(diff / 2).toLocaleString("en-GB", { maximumFractionDigits: 0 })} in the wrong box.`);
+    hints.push("Check equipment too: its cost and depreciation at the start of the year should match last year's fixed assets note.");
+    hints.push(`The reserves include the ${profit < 0 ? "loss" : "profit"} from the profit and loss step (${money(profit)} before tax), less tax and deferred tax.`);
+    return hints;
+  }
   if (b.debtors > 0 && near(2 * b.debtors)) hints.push(`Is the ${money(b.debtors)} in “Owed to the company” really money the company owes? If so, move it to “Owed by the company”.`);
   if (b.creditorsWithin > 0 && near(-2 * b.creditorsWithin)) hints.push(`Is the ${money(b.creditorsWithin)} in “Owed by the company” really money owed to the company? If so, move it to “Owed to the company”.`);
   if (b.reservesBroughtForward && near(-2 * b.reservesBroughtForward)) hints.push(`Check the sign of “Reserves at the start of the year”: a loss from earlier years is a minus number, like -${money(b.reservesBroughtForward).slice(1)}.`);

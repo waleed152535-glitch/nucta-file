@@ -8,6 +8,7 @@ import type { Disallowable, ProfitAndLoss, ReturnFigures } from "./tax/computati
 import type { Addition, Disposal } from "./tax/capital-allowances";
 import { SCOPE_QUESTIONS, type ScopeAnswers } from "./tax/scope";
 import type { BalanceSheet } from "./accounts/micro";
+import { applySmall, normaliseSmall, blankSmallDetail, type AccountsFormat, type SmallDetail } from "./accounts/small";
 import type { PriorYear } from "./ixbrl";
 import type { CompanyReturnInput } from "./filing";
 import type { ParticipatorAccount } from "./tax/directors-loans";
@@ -44,6 +45,17 @@ export interface ReturnData {
   /** Directors' and shareholders' loan accounts. */
   participators: ParticipatorAccount[];
   balanceSheet: BalanceSheet;
+  /**
+   * Which accounts: micro-entity (FRS 105) or small company (FRS 102 Section
+   * 1A). A dormant company's accounts are always the dormant micro-entity kind.
+   */
+  accountsFormat: AccountsFormat;
+  /**
+   * The extra detail small-company accounts need. With "small", the balance
+   * sheet's fixed assets, debtors, creditors and share capital are worked out
+   * from it (see effectiveBalanceSheet) rather than typed in.
+   */
+  small: SmallDetail;
   /** Last year's figures; absent for a company's first accounts. */
   prior: { from: string; to: string; figures: PriorYear } | null;
   director: string;
@@ -136,7 +148,7 @@ export function blankReturnData(): ReturnData {
     pl: blankPL(), disallowable: blankDisallowable(), profitOnDisposals: 0,
     additions: [], disposals: [], mainPoolBroughtForward: 0, specialPoolBroughtForward: 0, aiaAvailable: null,
     tradingLossesBroughtForward: 0, qualifyingDonations: 0, participators: [],
-    balanceSheet: blankBalanceSheet(), prior: null,
+    balanceSheet: blankBalanceSheet(), accountsFormat: "micro", small: blankSmallDetail(), prior: null,
     director: "", approvedOn: "", declarantName: "", declarantStatus: "Director",
     donationsInFirstPart: 0,
   };
@@ -151,6 +163,8 @@ export function normaliseReturnData(d: Partial<ReturnData> | null | undefined): 
     pl: { ...b.pl, ...(d.pl ?? {}) },
     disallowable: { ...b.disallowable, ...(d.disallowable ?? {}) },
     balanceSheet: { ...b.balanceSheet, ...(d.balanceSheet ?? {}) },
+    accountsFormat: d.accountsFormat === "small" ? "small" : "micro",
+    small: normaliseSmall(d.small),
     scope: { ...(d.scope ?? {}) },
     additions: d.additions ?? [],
     disposals: d.disposals ?? [],
@@ -199,6 +213,20 @@ export function dormantBalanceSheet(b: BalanceSheet): BalanceSheet {
   return { ...b, fixedAssets: 0, stock: 0, prepayments: 0, creditorsAfter: 0, provisions: 0, dividendsPaid: 0 };
 }
 
+/** Whether these are small-company accounts: chosen, and the company not dormant. */
+export const isSmall = (d: Pick<ReturnData, "accountsFormat" | "dormant">): boolean => d.accountsFormat === "small" && !d.dormant;
+
+/**
+ * The balance sheet the accounts use: as typed for micro-entity accounts;
+ * with fixed assets, debtors, creditors, provisions and share capital worked
+ * out from the detail for small-company accounts; and only what a dormant
+ * company can have when dormant.
+ */
+export function effectiveBalanceSheet(d: ReturnData): BalanceSheet {
+  if (d.dormant) return dormantBalanceSheet(d.balanceSheet);
+  return isSmall(d) ? applySmall(d.balanceSheet, d.small, d.pl.depreciation) : d.balanceSheet;
+}
+
 /** Every scope question answered the way that keeps a company in scope: a dormant company has no trade, gains or income to ask about. */
 export const dormantScope = (): Partial<ScopeAnswers> =>
   Object.fromEntries(SCOPE_QUESTIONS.map((q) => [q.key, q.expect])) as Partial<ScopeAnswers>;
@@ -210,8 +238,9 @@ export function toCompanyReturnInput(
   return {
     company: { name: company.name, number: company.companyNo ?? "", utr: company.utr ?? "", activity: d.activity.trim() || (d.dormant ? "Dormant company" : "") },
     figures: toFigures(periodFrom, periodTo, d),
-    balanceSheet: d.dormant ? dormantBalanceSheet(d.balanceSheet) : d.balanceSheet,
+    balanceSheet: effectiveBalanceSheet(d),
     prior: d.prior ?? undefined,
+    ...(isSmall(d) ? { small: d.small } : {}),
     director: d.director,
     approvedOn: d.approvedOn,
     declarant: { name: d.declarantName, status: d.declarantStatus },

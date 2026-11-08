@@ -270,7 +270,7 @@ export default function Film({ charging = false }: { charging?: boolean }) {
             <div className="scene">
               <span className="n">3 of 4</span>
               <h2>Check every document</h2>
-              <p className="lede">Micro-entity accounts and the tax computation, tagged in iXBRL, the CT600 itself, and an approval pack for the director to sign.</p>
+              <p className="lede">Micro-entity or small company accounts and the tax computation, tagged in iXBRL, the CT600 itself, and an approval pack for the director to sign.</p>
               <Still at={3} />
             </div>
             <div className="scene">

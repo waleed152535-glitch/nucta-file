@@ -26,7 +26,7 @@ import { fraudHeaders, hmrcVatError, type ClientInfo } from "./vat-rules";
 export type MtdEnv = "sandbox" | "production";
 export const mtdEnv = (): MtdEnv => (process.env.HMRC_MTD_ENV === "production" ? "production" : "sandbox");
 export const mtdReady = () => Boolean((process.env.HMRC_MTD_CLIENT_ID ?? "").trim() && (process.env.HMRC_MTD_CLIENT_SECRET ?? "").trim());
-export const PRODUCT_VERSION = "50";
+export const PRODUCT_VERSION = "51";
 
 const BASES: Record<MtdEnv, { api: string; authorize: string }> = {
   sandbox: { api: "https://test-api.service.hmrc.gov.uk", authorize: "https://test-www.tax.service.gov.uk/oauth/authorize" },

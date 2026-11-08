@@ -19,6 +19,7 @@ const GROUPS: { heading: string; intro: string; items: [string, string][] }[] = 
     intro: "Both in iXBRL, tagged with the taxonomies HMRC and Companies House use, and checked against them.",
     items: [
       ["Micro-entity accounts", "Profit and loss account, balance sheet, the audit exemption statements and the notes, with last year's figures alongside and the balance sheet checked to the pound."],
+      ["Small company accounts", "FRS 102 Section 1A for companies above the micro-entity limits: a directors' report, the profit and loss account by function, a fuller balance sheet, deferred tax, and the notes on policies, equipment, debtors, creditors, shares and commitments. A filleted copy for Companies House comes with it."],
       ["Tax computation", "From profit per the accounts to taxable profit: expenses tax doesn't allow, capital allowances by pool, losses, interest and donations, line by line."],
       ["Capital allowances", "Annual Investment Allowance, full expensing, 100% allowances for new electric cars, main and special rate pools, small pools written off, and the hybrid rate when a year crosses 1 April 2026."],
     ],

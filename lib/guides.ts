@@ -45,7 +45,7 @@ export const GUIDES: Guide[] = [
       {
         heading: "Using Nucta File",
         paragraphs: [
-          "You enter the year's figures once. Nucta File prepares micro-entity accounts, works out the computation and the tax, builds the CT600 and attaches the accounts and computation in iXBRL. Each return is checked by HMRC's test service before it can be filed for real.",
+          "You enter the year's figures once. Nucta File prepares micro-entity or small company accounts, works out the computation and the tax, builds the CT600 and attaches the accounts and computation in iXBRL. Each return is checked by HMRC's test service before it can be filed for real.",
         ],
       },
     ],
@@ -166,6 +166,7 @@ export const GUIDES: Guide[] = [
         heading: "What it means with Nucta File",
         paragraphs: [
           "Nucta File already prepares the accounts in iXBRL for HMRC. Filing them with Companies House from the same screen is built and waiting for Companies House's test approval.",
+          "Small company accounts in Nucta File already include the profit and loss account and the directors' report. Until the change, the copy for Companies House leaves them out, as the law allows, and says so on the balance sheet.",
         ],
       },
     ],

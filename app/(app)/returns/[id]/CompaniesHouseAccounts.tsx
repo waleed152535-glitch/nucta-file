@@ -62,3 +62,32 @@ export default function CompaniesHouseAccounts({ returnId, form }: { returnId: s
     </div>
   );
 }
+
+/**
+ * For small-company accounts there's no box-by-box form to copy: a small
+ * company delivers the balance sheet and notes (the "filleted" copy), and may
+ * leave out the profit and loss account and the directors' report.
+ */
+export function SmallCompaniesHouse({ returnId, periodTo, hasPrior, director, approvedOn }: { returnId: string; periodTo: string; hasPrior: boolean; director: string; approvedOn: string }) {
+  return (
+    <div className="card" id="companies-house" style={{ padding: "16px 18px", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+        <h4 style={{ margin: 0, fontFamily: "var(--display)", fontSize: 19, fontWeight: 600 }}>Accounts for Companies House</h4>
+        <span className="note">{hasPrior ? <>Due by <b>{day(addMonths(periodTo, 9))}</b></> : "First accounts: due 21 months after the company was set up"}</span>
+      </div>
+      <p className="note" style={{ margin: "6px 0 10px" }}>
+        Companies House need the accounts separately from HMRC. A small company may deliver just the balance sheet and notes, leaving out the
+        profit and loss account and the directors&apos; report: that&apos;s the Companies House copy below, and it says so on the balance sheet as the law requires.
+      </p>
+      <ul className="chsteps">
+        <li><b>Online:</b> on Companies House&apos;s online service, choose full accounts and enter the balance sheet and notes from the copy. You&apos;ll need the company&apos;s 6-character authentication code.</li>
+        <li><b>Or</b> deliver the copy through accounts filing software, or by post.</li>
+        <li><b>Approval:</b> date <b>{approvedOn ? day(approvedOn) : "the day the director approves"}</b>, by <b>{director || "the director"}</b> — the same as the accounts sent to HMRC.</li>
+      </ul>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        <a className="btn sm" href={`/returns/${returnId}/documents/accounts-ch.pdf`} target="_blank" rel="noreferrer">Companies House copy (PDF)</a>
+        <a className="btn ghost sm" href="https://find-and-update.company-information.service.gov.uk/" target="_blank" rel="noreferrer">Companies House&apos;s online service</a>
+      </div>
+    </div>
+  );
+}

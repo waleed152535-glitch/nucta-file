@@ -13,7 +13,7 @@ export const metadata = { title: { absolute: "Nucta File — Company Tax Returns
 /** What Nucta File works out, keyed by the CT600 box it ends up in where there is one. */
 const WORKS_OUT: { ref: string; box?: boolean; title: string; text: string }[] = [
   { ref: "430", box: true, title: "Corporation Tax at 19% and 25%", text: "The small profits rate, the main rate and marginal relief, with the limits shared across associated companies, cut for a short period and split when the year crosses 1 April." },
-  { ref: "Accounts", title: "Micro-entity accounts in iXBRL", text: "Profit and loss, balance sheet and notes, tagged for HMRC and Companies House, with last year's figures alongside and the balance sheet checked to the pound." },
+  { ref: "Accounts", title: "Micro-entity and small company accounts in iXBRL", text: "FRS 105 for micro-entities, or FRS 102 Section 1A with a directors' report and the full notes for larger companies: tagged for HMRC, with last year's figures alongside and the balance sheet checked to the pound." },
   { ref: "690", box: true, title: "Capital allowances", text: "Annual Investment Allowance, full expensing, electric cars, the main and special rate pools, and the 2026 change to the writing down rate." },
   { ref: "A80", box: true, title: "Director's loans", text: "The CT600A page and the section 455 charge, with relief for repayments within nine months and the higher rate on loans from 6 April 2026." },
   { ref: "50", box: true, title: "First accounts over 12 months", text: "Split into two returns automatically: profit by days, purchases by date, each period with its own limits, tax and deadline." },
@@ -26,14 +26,14 @@ const WORKS_OUT: { ref: string; box?: boolean; title: string; text: string }[] =
 const FILES_NOW = [
   "Company Tax Returns (CT600) for UK limited companies with one trade",
   "The CT600A page, for loans to directors and other participators",
-  "Micro-entity accounts and the tax computation, tagged in iXBRL",
+  "Micro-entity accounts (FRS 105) and small company accounts (FRS 102 Section 1A), with the tax computation, tagged in iXBRL",
   "Dormant company accounts, and a nil return when HMRC ask for one",
   "First accounts longer than 12 months, as two returns",
   "Amended returns, up to 12 months after the filing deadline",
 ];
 const NOT_YET = [
   { t: "Filing accounts at Companies House", d: "Built and waiting for Companies House's approval. Until then Nucta File gives you the figures, box by box, for Companies House's own online form." },
-  { t: "Small-company accounts under FRS 102 Section 1A", d: "For companies above the micro-entity limits." },
+  { t: "Medium-sized and audited companies", d: "Companies above the small company limits need full FRS 102 accounts, and an audit." },
   { t: "VAT returns", d: "Built for Making Tax Digital, and waiting for HMRC's approval to file for real." },
   { t: "Groups, R&D relief, charities and rental income", d: "Nor companies that sold land or shares. Nucta File says so at the start if a company is one of these." },
   { t: "Self Assessment and confirmation statements", d: "These still go through HMRC and Companies House directly." },
@@ -183,7 +183,7 @@ export default async function Home() {
           <div className="faq">
             <details><summary>Can I file with HMRC through Nucta File now?</summary><p>Yes. Nucta File files Company Tax Returns directly with HMRC, with the accounts and computation attached in iXBRL. You type the company&apos;s HMRC sign-in — or your agent sign-in — at the moment of filing; it is used once and never stored, and HMRC&apos;s receipt is kept with the return. Nucta File is registered with HMRC as a software developer (vendor {SITE.vendorId}). HMRC&apos;s recognition of software is optional — HMRC say so themselves.</p></details>
             <details><summary>Can I still use HMRC&apos;s own free filing service?</summary><p>No. HMRC closed its free Company Accounts and Tax Online service on 31 March 2026, so a company&apos;s return now has to be filed with commercial software such as Nucta File.</p></details>
-            <details><summary>Which companies can use it?</summary><p>UK limited companies with one trade, filing micro-entity accounts, which is most small companies, and dormant companies. Groups, research and development relief, rental income and companies that sold land or shares aren&apos;t handled yet; Nucta File tells you at the start if a company is one of them.</p></details>
+            <details><summary>Which companies can use it?</summary><p>UK limited companies with one trade that file micro-entity or small company accounts — companies within two of turnover up to £15 million, a balance sheet up to £7.5 million and 50 employees — and dormant companies. Groups, research and development relief, rental income and companies that sold land or shares aren&apos;t handled yet; Nucta File tells you at the start if a company is one of them.</p></details>
             <details><summary>What does HMRC need with the return?</summary><p>The CT600, the company&apos;s accounts and a tax computation, both in iXBRL. Nucta File prepares all three from the figures you enter and sends them together.</p></details>
             <details><summary>Does it file the accounts with Companies House?</summary><p>Filing with Companies House is built and waiting for Companies House&apos;s test approval. Until then, download the accounts from Nucta File and file them as you do now.</p></details>
             <details><summary>What if a return needs correcting?</summary><p>Open it and press Amend. You get a copy to change, sent to HMRC marked as an amendment, which HMRC put in place of the original. Amendments can be made up to 12 months after the filing deadline.</p></details>

@@ -10,7 +10,7 @@
  * Plain logic, no network: lib/ch-api.ts fetches the document.
  */
 import { DOMParser } from "@xmldom/xmldom";
-import type { PriorYear } from "./ixbrl";
+import type { PriorSmall, PriorYear } from "./ixbrl";
 
 export interface Fact { name: string; context: string; value: number }
 interface Context { id: string; instant: string | null; start: string | null; end: string | null; dims: Record<string, string> }
@@ -63,7 +63,8 @@ type Want = { names: string[]; dims?: Record<string, string>; when: "instant" | 
 const W = (when: Want["when"], names: string[], dims?: Record<string, string>): Want => ({ when, names, dims });
 
 /** Where each of last year's figures is found, in order of preference. */
-const WANT: Record<keyof PriorYear, Want> = {
+type Totals = Exclude<keyof PriorYear, "small">;
+const WANT: Record<Totals, Want> = {
   turnover: W("duration", ["TurnoverRevenue"]),
   otherIncome: W("duration", ["OtherOperatingIncomeFormat2", "OtherOperatingIncomeFormat1", "OtherIncome"]),
   rawMaterials: W("duration", ["RawMaterialsConsumablesUsed", "CostSales"]),
@@ -82,6 +83,44 @@ const WANT: Record<keyof PriorYear, Want> = {
   accruals: W("instant", ["AccruedLiabilitiesDeferredIncome"]),
   employees: W("duration", ["AverageNumberEmployeesDuringPeriod"]),
 };
+const WITHIN = { MaturitiesOrExpirationPeriodsDimension: "WithinOneYear" };
+const AFTER = { MaturitiesOrExpirationPeriodsDimension: "AfterOneYear" };
+
+/**
+ * Where each line of small-company accounts is found. Lines inside creditors
+ * are usually tagged with their maturity; within-a-year lines are also
+ * looked for without it, as some software leaves it off.
+ */
+const WANT_SMALL: Partial<Record<keyof PriorSmall, Want>> = {
+  costOfSales: W("duration", ["CostSales", "RawMaterialsConsumablesUsed"]),
+  administrativeExpenses: W("duration", ["AdministrativeExpenses"]),
+  otherOperatingIncome: W("duration", ["OtherOperatingIncomeFormat1", "OtherOperatingIncomeFormat2"]),
+  interestReceivable: W("duration", ["OtherInterestReceivableSimilarIncomeFinanceIncome"]),
+  interestPayable: W("duration", ["InterestPayableSimilarChargesFinanceCosts"]),
+  currentTax: W("duration", ["CurrentTaxForPeriod", "TotalCurrentTaxExpenseCredit"]),
+  deferredTax: W("duration", ["DeferredTaxExpenseCreditRelatingToOriginationReversalTimingDifferences"]),
+  tangibleAssets: W("instant", ["PropertyPlantEquipment"]),
+  investments: W("instant", ["InvestmentsFixedAssets"]),
+  stocks: W("instant", ["TotalInventories"]),
+  tradeDebtors: W("instant", ["TradeDebtorsTradeReceivables"]),
+  owedByDirectors: W("instant", ["AmountsOwedByDirectors"]),
+  otherDebtors: W("instant", ["OtherDebtors"]),
+  prepayments: W("instant", ["PrepaymentsAccruedIncome"]),
+  cash: W("instant", ["CashBankOnHand"]),
+  bankWithin: W("instant", ["BankBorrowingsOverdrafts", "BankBorrowings", "BankOverdrafts"], WITHIN),
+  tradeCreditors: W("instant", ["TradeCreditorsTradePayables"], WITHIN),
+  corporationTax: W("instant", ["CorporationTaxPayable"], WITHIN),
+  otherTaxation: W("instant", ["OtherTaxationSocialSecurityPayable", "TaxationSocialSecurityPayable"], WITHIN),
+  owedToDirectors: W("instant", ["AmountsOwedToDirectors"], WITHIN),
+  otherCreditorsWithin: W("instant", ["OtherCreditors"], WITHIN),
+  accrualsWithin: W("instant", ["AccruedLiabilitiesDeferredIncome"], WITHIN),
+  bankAfter: W("instant", ["BankBorrowingsOverdrafts", "BankBorrowings"], AFTER),
+  otherAfter: W("instant", ["OtherCreditors"], AFTER),
+  deferredTaxProvision: W("instant", ["NetDeferredTaxLiabilityAsset", "DeferredTaxLiabilities", "ProvisionsForLiabilitiesDeferredTax"]),
+  dividendsPaid: W("duration", ["DividendsPaidOnShares", "DividendsPaid"]),
+};
+const r0 = (v: number) => Math.round(v);
+
 const OLD_CREDITORS: Partial<Record<keyof PriorYear, string>> = { creditorsWithin: "CreditorsDueWithinOneYear", creditorsAfter: "CreditorsDueAfterOneYear" };
 
 export interface PriorRead {
@@ -94,6 +133,14 @@ export interface PriorRead {
   shareCapital: number | null;
   /** Whether the accounts look like micro-entity accounts: their total adds up the way FRS 105 lays it out. */
   microShape: boolean;
+  /**
+   * Last year line by line, for small-company accounts, made to add up to the
+   * totals filed. What couldn't be found line by line is put on an "other"
+   * line, and `smallNotes` says so.
+   */
+  small: PriorSmall;
+  smallFound: (keyof PriorSmall)[];
+  smallNotes: string[];
 }
 
 const sameDims = (a: Record<string, string>, b: Record<string, string> = {}) => {
@@ -123,7 +170,7 @@ export function priorFromAccounts(xhtml: string, madeUpTo: string | null): Prior
   };
   const figures = {} as PriorYear;
   const found: (keyof PriorYear)[] = [];
-  for (const [k, w] of Object.entries(WANT) as [keyof PriorYear, Want][]) {
+  for (const [k, w] of Object.entries(WANT) as [Totals, Want][]) {
     let v = find(w.names, w.when, w.dims);
     if (v === null && OLD_CREDITORS[k]) v = find([OLD_CREDITORS[k]!], "instant");
     if (v !== null) found.push(k);
@@ -146,5 +193,59 @@ export function priorFromAccounts(xhtml: string, madeUpTo: string | null): Prior
     figures.prepayments = 0; figures.accruals = 0;
   }
   const start = [...contexts.values()].filter((c) => c.end === to && c.start).map((c) => c.start!).sort()[0] ?? "";
-  return { prior: { from: start, to, figures }, found, netAssets, equity, shareCapital, microShape };
+
+  // Line by line, for small-company accounts.
+  const lines = {} as Record<keyof PriorSmall, number>;
+  const smallFound: (keyof PriorSmall)[] = [];
+  for (const [k, w] of Object.entries(WANT_SMALL) as [keyof PriorSmall, Want][]) {
+    let v = find(w.names, w.when, w.dims);
+    if (v === null && w.dims === WITHIN) v = find(w.names, w.when);
+    if (v !== null) smallFound.push(k);
+    lines[k] = Math.abs(v ?? 0);
+  }
+  if (smallFound.includes("deferredTax")) lines.deferredTax = find(WANT_SMALL.deferredTax!.names, "duration") ?? 0;
+  const { small, notes } = reconcileSmall(figures, lines, smallFound, microShape, shareCapital);
+  return { prior: { from: start, to, figures }, found, netAssets, equity, shareCapital, microShape, small, smallFound, smallNotes: notes };
+}
+
+const pounds = (n: number) => `£${Math.abs(Math.round(n)).toLocaleString("en-GB")}`;
+
+/**
+ * Makes last year's lines add up to the totals filed. Micro-entity accounts
+ * have totals only, so the whole of each goes on one line to be split by hand;
+ * fuller accounts usually reconcile exactly.
+ */
+function reconcileSmall(f: PriorYear, l: Record<keyof PriorSmall, number>, found: (keyof PriorSmall)[], microShape: boolean, shareCapital: number | null): { small: PriorSmall; notes: string[] } {
+  const notes: string[] = [];
+  const s: PriorSmall = { ...l, otherProvisions: 0, shareCapital: r0(shareCapital ?? 0) };
+  const put = <K extends keyof PriorSmall>(k: K, diff: number, what: string, line: string) => {
+    if (Math.abs(diff) < 1) return;
+    s[k] = r0(s[k] + diff) as PriorSmall[K];
+    notes.push(`${pounds(diff)} of last year's ${what} couldn't be matched to a line, so it's shown as ${line}. Split it if the accounts show more detail.`);
+  };
+  // Profit and loss: micro-entity accounts have no administrative expenses line.
+  if (!found.includes("administrativeExpenses")) s.administrativeExpenses = r0(f.staffCosts + f.depreciation + f.otherCharges);
+  if (!found.includes("costOfSales")) s.costOfSales = r0(f.rawMaterials);
+  if (!found.includes("otherOperatingIncome") && !found.includes("interestReceivable")) s.otherOperatingIncome = r0(f.otherIncome);
+  if (!found.includes("currentTax")) s.currentTax = r0(f.tax - s.deferredTax);
+  const profit = r0(f.turnover - s.costOfSales - s.administrativeExpenses + s.otherOperatingIncome + s.interestReceivable - s.interestPayable);
+  if (Math.abs(profit - f.profitBeforeTax) >= 1) {
+    s.administrativeExpenses = r0(s.administrativeExpenses + profit - f.profitBeforeTax);
+    notes.push(`Last year's expenses were adjusted by ${pounds(profit - f.profitBeforeTax)} so the profit before tax matches the ${pounds(f.profitBeforeTax)} filed. Check them against the profit and loss account.`);
+  }
+  // Fixed assets.
+  if (!found.includes("tangibleAssets") && !found.includes("investments")) s.tangibleAssets = r0(f.fixedAssets);
+  else put("tangibleAssets", f.fixedAssets - s.tangibleAssets - s.investments, "fixed assets", "equipment");
+  // Current assets: in micro-entity accounts prepayments are a line of their own.
+  const current = f.currentAssets + (microShape ? f.prepayments : 0);
+  if (microShape) s.prepayments = r0(f.prepayments);
+  put("otherDebtors", current - s.stocks - s.tradeDebtors - s.owedByDirectors - s.otherDebtors - s.prepayments - s.cash, "current assets", "other debtors");
+  // Creditors: micro-entity accruals move inside creditors due within a year.
+  if (microShape && f.accruals) s.accrualsWithin = r0(f.accruals);
+  const within = f.creditorsWithin + (microShape ? f.accruals : 0);
+  put("otherCreditorsWithin", within - s.bankWithin - s.tradeCreditors - s.corporationTax - s.otherTaxation - s.owedToDirectors - s.otherCreditorsWithin - s.accrualsWithin, "creditors due within a year", "other creditors");
+  put("otherAfter", f.creditorsAfter - s.bankAfter - s.otherAfter, "creditors due after a year", "other creditors due after a year");
+  s.otherProvisions = r0(f.provisions - s.deferredTaxProvision);
+  if (s.otherProvisions < 0) { s.deferredTaxProvision = r0(f.provisions); s.otherProvisions = 0; }
+  return { small: s, notes };
 }

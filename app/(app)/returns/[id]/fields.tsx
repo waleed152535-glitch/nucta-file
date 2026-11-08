@@ -64,6 +64,30 @@ export function Text({ label, hint, value, onChange, placeholder }: { label: str
   );
 }
 
+/** A small amount that can have pence or less, like a share's nominal value of £0.01. */
+export function Pence({ label, hint, value, onChange }: { label: string; hint?: string; value: number; onChange: (n: number) => void }) {
+  const [text, setText] = useState(value ? String(value) : "");
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setText(value ? String(value) : ""); }, [value, focused]);
+  return (
+    <div className="field">
+      <label>{label}{hint && <span className="hint">{hint}</span>}</label>
+      <input inputMode="decimal" value={text} placeholder="0.00" onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        onChange={(e) => { setText(e.target.value); const n = Math.abs(parseMoney(e.target.value)); onChange(Math.round(n * 10000) / 10000); }}
+        style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }} />
+    </div>
+  );
+}
+
+export function TextArea({ label, hint, value, onChange, placeholder, rows = 3 }: { label: string; hint?: string; value: string; onChange: (s: string) => void; placeholder?: string; rows?: number }) {
+  return (
+    <div className="field">
+      <label>{label}{hint && <span className="hint">{hint}</span>}</label>
+      <textarea rows={rows} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={{ resize: "vertical", lineHeight: 1.5 }} />
+    </div>
+  );
+}
+
 export function DateField({ label, hint, value, onChange }: { label: string; hint?: string; value: string; onChange: (s: string) => void }) {
   return (
     <div className="field">

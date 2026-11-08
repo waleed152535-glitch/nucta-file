@@ -12,15 +12,16 @@ import type { CompaniesHouseForm } from "./accounts/ch-form";
 import { sendEmail } from "./auth";
 import { prepareReturn, type PreparedReturn } from "./filing";
 import { companyNumberProblem } from "./companies-house";
-import { checkMicroAccounts } from "./accounts/micro";
 import {
-  normaliseReturnData, toCompanyReturnInput, toPeriodOfAccountInput, toFigures, dormantBalanceSheet, blankReturnData, SERVER_KEYS,
+  normaliseReturnData, toCompanyReturnInput, toPeriodOfAccountInput, blankReturnData, isSmall, SERVER_KEYS,
   type ReturnData, type SentRecord,
 } from "./return-model";
 import { exceedsEighteenMonths, fromDay, toDay } from "./tax/dates";
 import { accountingPeriodsOf, amendmentDeadline, computePeriodOfAccount } from "./tax/long-period";
 import { accountsDocument, accountsFilings, chApiReady, companyProfile, searchCompanies, type ChProfile, type ChSearchHit } from "./ch-api";
 import { priorFromAccounts } from "./ch-accounts-read";
+import { carryForward } from "./carry-forward";
+import { syncPriorFromSmall } from "./accounts/small";
 import type { PriorYear } from "./ixbrl";
 import { deadlinesFor, type Deadline } from "./deadlines";
 import { ensureSchema } from "./db-ensure";
@@ -129,7 +130,7 @@ export interface PriorFromCh {
  * latest before it. Nothing is saved: the figures come back to the screen to
  * be checked and saved with the rest of the step.
  */
-export async function priorFromCompaniesHouse(returnId: string): Promise<PriorFromCh> {
+export async function priorFromCompaniesHouse(returnId: string, format: "micro" | "small" = "micro"): Promise<PriorFromCh> {
   const u = await currentUser();
   if (!u) return { ok: false, problem: SIGNED_OUT };
   if (!chApiReady()) return { ok: false, problem: "Companies House lookups aren't set up on this site (CH_API_KEY), so copy the figures from last year's accounts." };
@@ -155,11 +156,13 @@ export async function priorFromCompaniesHouse(returnId: string): Promise<PriorFr
     const pl: (keyof PriorYear)[] = ["turnover", "profitBeforeTax"];
     if (!pl.some((k) => read.found!.includes(k))) warnings.push("The profit and loss account wasn't filed at Companies House (small companies can leave it out), so last year's turnover, costs and profit are 0. Copy them from the company's full accounts.");
     if (!read.found.includes("fixedAssets") && !read.found.includes("currentAssets")) warnings.push("No balance sheet figures could be read from these accounts. Copy them from the accounts instead.");
-    if (read.netAssets !== null && !read.microShape) warnings.push("These accounts aren't laid out as micro-entity accounts, so some lines may be grouped differently. Check each figure against them.");
+    if (format === "small") warnings.push(...read.smallNotes);
+    else if (read.netAssets !== null && !read.microShape) warnings.push("These accounts aren't laid out as micro-entity accounts, so some lines may be grouped differently. Check each figure against them.");
     if (/dormant/.test(pick.description)) warnings.push("Those were dormant accounts.");
     if (read.prior.from && toDay(read.prior.to) - toDay(read.prior.from) > 370) warnings.push("Last year's accounts ran for more than 12 months; the comparative column shows them as filed.");
     return {
-      ok: true, prior: read.prior, found: read.found, warnings, equity: read.equity ?? read.netAssets,
+      ok: true, warnings, equity: read.equity ?? read.netAssets, found: read.found,
+      prior: format === "small" ? { ...read.prior, figures: syncPriorFromSmall({ ...read.prior.figures, small: read.small }) } : read.prior,
       source: `the accounts made up to ${day(read.prior.to)}, filed at Companies House on ${day(pick.date)}`,
     };
   } catch (e) {
@@ -532,62 +535,10 @@ export async function startReturn(companyId: string, periodStart: string, period
     const before = candidates.find((r) => accepted(r.status)) ?? candidates[0];
     if (before) {
       const prev = normaliseReturnData(before.data as Partial<ReturnData>);
-      // For accounts longer than 12 months, what carries forward is what the second period ends with.
-      const poa = computePeriodOfAccount(toPeriodOfAccountInput(before.periodStart, before.periodEnd, prev));
-      const last = poa.parts[poa.parts.length - 1];
-      // A dormant year has no trade, so pools and losses pass through it unchanged.
-      const unchanged = { mainPool: prev.mainPoolBroughtForward, specialPool: prev.specialPoolBroughtForward, tradingLosses: prev.tradingLossesBroughtForward };
-      const carry = prev.dormant ? unchanged : last?.result.carryForward ?? unchanged;
-      // What last year's accounts actually showed: a dormant year's profit and loss is nothing.
-      const prevPl = toFigures(before.periodStart, before.periodEnd, prev).pl;
-      const b = prev.dormant ? dormantBalanceSheet(prev.balanceSheet) : prev.balanceSheet;
-      const acc = checkMicroAccounts({
-        companyName: "", companyNo: "", periodFrom: before.periodStart, periodTo: before.periodEnd, principalActivities: prev.activity,
-        pl: prevPl, taxCharge: poa.corporationTax, balanceSheet: b, director: prev.director, approvedOn: prev.approvedOn,
-      });
-      const prevLoans = poa.closingLoans;
-      Object.assign(data, {
-        // Each loan account opens where it closed; repayments made after last
-        // year end happened in this year, so they start as this year's repayments.
-        participators: prev.participators.map((x, n) => {
-          const res = prevLoans?.people[n];
-          return {
-            ...x, openingOwed: res?.closingOwed ?? 0, openingCredit: res?.closingCredit ?? 0,
-            advances: 0, advancesFrom6April2026: 0, repaid: x.later.reduce((t, l) => t + (l.amount || 0), 0), later: [],
-            firstPart: undefined,
-          };
-        }),
-        activity: prev.activity,
-        dormant: prev.dormant, everTraded: prev.everTraded || !prev.dormant,
-        scope: prev.scope,
-        associatedCompanies: prev.associatedCompanies,
-        mainPoolBroughtForward: carry.mainPool,
-        specialPoolBroughtForward: carry.specialPool,
-        tradingLossesBroughtForward: carry.tradingLosses,
-        director: prev.director,
-        declarantName: prev.declarantName,
-        declarantStatus: prev.declarantStatus,
-        balanceSheet: {
-          ...data.balanceSheet, shareCapital: b.shareCapital, shareCapitalNotPaid: b.shareCapitalNotPaid, reservesBroughtForward: acc.reservesCarriedForward, employees: b.employees,
-          // A dormant company's balance sheet doesn't move from one year to the next.
-          ...(prev.dormant ? { cash: b.cash, debtors: b.debtors, creditorsWithin: b.creditorsWithin, owedToDirectors: b.owedToDirectors } : {}),
-        },
-        prior: {
-          from: before.periodStart, to: before.periodEnd,
-          figures: {
-            turnover: prevPl.turnover, otherIncome: prevPl.otherIncome + prevPl.interestReceived, rawMaterials: prevPl.costOfSales,
-            staffCosts: prevPl.staffCosts, depreciation: prevPl.depreciation, otherCharges: prevPl.otherCharges,
-            profitBeforeTax: acc.profitBeforeTax, tax: Math.round(poa.corporationTax),
-            shareCapitalNotPaid: b.shareCapitalNotPaid, fixedAssets: b.fixedAssets, currentAssets: b.stock + b.debtors + b.cash,
-            prepayments: b.prepayments, creditorsWithin: b.creditorsWithin + b.owedToDirectors + Math.round(b.corporationTaxOwed ?? poa.corporationTax),
-            creditorsAfter: b.creditorsAfter, provisions: b.provisions, accruals: 0, employees: b.employees,
-          },
-        },
-        carriedFrom: `${before.periodStart} to ${before.periodEnd}`,
-      } satisfies Partial<ReturnData>);
+      Object.assign(data, carryForward(prev, before.periodStart, before.periodEnd));
     }
     const id = randomUUID();
-    await s.db.insert(s.returns).values({ id, companyId, kind: "ct600", periodStart, periodEnd, status: "draft", basis: "frs105", data: data as unknown as Record<string, unknown> });
+    await s.db.insert(s.returns).values({ id, companyId, kind: "ct600", periodStart, periodEnd, status: "draft", basis: isSmall(data) ? "frs102-1a" : "frs105", data: data as unknown as Record<string, unknown> });
     revalidatePath(`/companies/${companyId}`);
     return { ok: true, id, problems: [] };
   } catch (e) {
@@ -651,7 +602,7 @@ export async function saveReturn(id: string, data: ReturnData): Promise<{ ok: bo
     if (filedLive(old)) return { ok: false, error: "This return has been filed with HMRC, so it can't be changed. Start an amended return instead." };
     if (filingUnderWay(old)) return { ok: false, error: "This return is being filed with HMRC right now. Wait for HMRC's answer before changing it." };
     const next = { ...incoming, amends: old.amends ?? null, sent: {}, ...(old.paid ? { paid: old.paid } : {}) };
-    await s.db.update(s.returns).set({ data: next as unknown as Record<string, unknown>, updatedAt: new Date(), status: "draft" }).where(s.eq(s.returns.id, id));
+    await s.db.update(s.returns).set({ data: next as unknown as Record<string, unknown>, basis: isSmall(normaliseReturnData(data)) ? "frs102-1a" : "frs105", updatedAt: new Date(), status: "draft" }).where(s.eq(s.returns.id, id));
     return { ok: true, changed: true };
   } catch (e) {
     return { ok: false, error: msg(e) };
@@ -700,6 +651,8 @@ export interface ReturnPreview {
   director: string;
   /** The accounts as Companies House's online form asks for them. */
   companiesHouse: CompaniesHouseForm | null;
+  /** Micro-entity or small-company accounts. */
+  accountsFormat: "micro" | "small";
 }
 
 async function prepared(id: string) {
@@ -723,7 +676,7 @@ async function original(r: Awaited<ReturnType<typeof getReturn>>): Promise<Prepa
 export async function previewReturn(id: string): Promise<ReturnPreview> {
   const { r, p } = await prepared(id);
   const liveFiling = (await liveModeFor(await currentUser())).mode;
-  if (!p) return { ok: false, problems: [r.error ?? "The return couldn't be opened."], warnings: [], long: false, amended: false, parts: [], accountsHtml: null, filingDue: "", amendBy: "", liveFiling, declarant: { name: "", status: "" }, director: "", companiesHouse: null };
+  if (!p) return { ok: false, problems: [r.error ?? "The return couldn't be opened."], warnings: [], long: false, amended: false, parts: [], accountsHtml: null, filingDue: "", amendBy: "", liveFiling, declarant: { name: "", status: "" }, director: "", companiesHouse: null, accountsFormat: "micro" };
   const was = p.ok ? await original(r) : null;
   return {
     ok: p.ok, problems: p.problems, warnings: p.warnings, long: p.long, amended: p.returnType === "amended",
@@ -746,7 +699,7 @@ export async function previewReturn(id: string): Promise<ReturnPreview> {
     }),
     accountsHtml: p.accountsHtml, filingDue: p.filingDue, amendBy: p.amendBy,
     liveFiling, declarant: { name: r.data!.declarantName, status: r.data!.declarantStatus }, director: r.data!.director,
-    companiesHouse: p.companiesHouse,
+    companiesHouse: p.companiesHouse, accountsFormat: p.accountsFormat,
   };
 }
 

@@ -240,6 +240,12 @@ export interface AccountsInput {
    * company's first accounts leave this out and have no comparative column.
    */
   prior?: PriorYear;
+  /**
+   * Small-company accounts under FRS 102 Section 1A in place of micro-entity
+   * accounts: a Format 1 profit and loss account, a fuller balance sheet, a
+   * directors' report and the Section 1A notes. Uses prior.small for last year.
+   */
+  small?: SmallAccountsBlock;
   /** Directors' loan accounts, shown in the note s413 Companies Act 2006 requires. */
   directorsLoans?: { name: string; opening: number; advanced: number; repaid: number; closing: number; terms: string }[];
   accountsStatus?: "AuditExemptWithAccountantsReport" | "AuditExempt-NoAccountantsReport" | "Audited";
@@ -261,6 +267,42 @@ export interface PriorYear {
   shareCapitalNotPaid: number; fixedAssets: number; currentAssets: number; prepayments: number;
   creditorsWithin: number; creditorsAfter: number; provisions: number; accruals: number;
   employees: number;
+  /**
+   * Last year line by line, for small-company accounts. The totals above are
+   * worked out from these (see syncPriorFromSmall), so both agree.
+   */
+  small?: PriorSmall;
+}
+
+/** Last year's lines in small-company accounts: the comparative column of each statement and note. */
+export interface PriorSmall {
+  costOfSales: number; administrativeExpenses: number; otherOperatingIncome: number;
+  interestReceivable: number; interestPayable: number; currentTax: number; deferredTax: number;
+  tangibleAssets: number; investments: number; stocks: number;
+  tradeDebtors: number; owedByDirectors: number; otherDebtors: number; prepayments: number; cash: number;
+  bankWithin: number; tradeCreditors: number; corporationTax: number; otherTaxation: number;
+  owedToDirectors: number; otherCreditorsWithin: number; accrualsWithin: number;
+  bankAfter: number; otherAfter: number; deferredTaxProvision: number; otherProvisions: number;
+  shareCapital: number; dividendsPaid: number;
+}
+
+/**
+ * This year's small-company accounts line by line (FRS 102 Section 1A). The
+ * totals in AccountsInput — fixed assets, creditors and so on — are the sums
+ * of these, worked out by smallAccounts().
+ */
+export interface SmallAccountsBlock extends Omit<PriorSmall, "deferredTaxProvision"> {
+  staffCosts: number;
+  deferredTaxBroughtForward: number;
+  deferredTaxProvision: number;
+  sharesNumber: number;
+  shareNominal: number;
+  tangible: { costBf: number; additions: number; disposals: number; costCf: number; depBf: number; charge: number; depDisposals: number; depCf: number; nbvBf: number; nbvCf: number };
+  depreciationPolicy: string;
+  /** Blank means none. */
+  commitments: string;
+  /** Every director who served in the year, the one signing first. */
+  directors: string[];
 }
 
 const esc = (v: string): string =>
@@ -533,14 +575,14 @@ function microBalanceSheet(i: AccountsInput): string {
  * the FRC directors' report concepts for advances made, repaid and
  * outstanding.
  */
-function directorsLoanNote(loans: NonNullable<AccountsInput["directorsLoans"]>): string {
+function directorsLoanNote(loans: NonNullable<AccountsInput["directorsLoans"]>, n = 3): string {
   const sum = (k: "advanced" | "repaid" | "closing") => loans.reduce((s, l) => s + Math.round(l[k]), 0);
   const words = loans.map((l) =>
     `${l.name} owed the company £${show(l.opening)} at the start of the period; £${show(l.advanced)} was advanced and £${show(l.repaid)} repaid during the period, leaving £${show(l.closing)} owed at the end. ${l.terms.trim() || "The loan is unsecured, interest free and repayable on demand."}`,
   ).join(" ");
   return `
 <p class="note">
-  <b>3. Advances to directors.</b>
+  <b>${n}. Advances to directors.</b>
   ${textFact("direp:GeneralDescriptionAdvancesCreditsToDirectorsIncludingTermsInterestRates", words, "D")}
   In total £${fact("direp:AdvancesCreditsMadeInPeriodDirectors", sum("advanced"), "D")} was advanced and
   £${fact("direp:AdvancesCreditsRepaidInPeriodDirectors", sum("repaid"), "D")} repaid during the period, and
@@ -552,6 +594,306 @@ function directorsLoanNote(loans: NonNullable<AccountsInput["directorsLoans"]>):
 const yearHeader = (i: AccountsInput, hasPrior: boolean): string =>
   `<tr class="hd"><td class="lbl"></td><td class="num">${esc(i.periodTo.slice(0, 4))}<br/>£</td>${
     hasPrior ? `<td class="num">${esc((i.priorTo ?? "").slice(0, 4))}<br/>£</td>` : ""}</tr>`;
+
+// ---- small-company accounts (FRS 102 Section 1A) ----
+
+/** The day before an ISO date: the instant an opening balance is stated at. */
+const dayBefore = (iso: string): string => {
+  const d = new Date(iso + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
+
+/** "year" for twelve months, otherwise "period" — accounts say which they cover. */
+const spanWord = (from: string, to: string): "year" | "period" => {
+  const days = Math.round((Date.parse(to + "T12:00:00Z") - Date.parse(from + "T12:00:00Z")) / 86_400_000) + 1;
+  return days >= 364 && days <= 367 ? "year" : "period";
+};
+
+/** A number tagged with a unit other than pounds: shares, or pounds per share. */
+const unitFact = (name: string, value: number, ctx: string, unit: string, decimals: number): string =>
+  `<ix:nonFraction name="${name}" contextRef="${ctx}" unitRef="${unit}" decimals="${decimals}"${value < 0 ? ` sign="-"` : ""} format="ixt2:numdotdecimal">${grouped(value, decimals)}</ix:nonFraction>`;
+
+/** Whether small-company accounts have last year's column, and its lines. */
+const smallPrior = (i: AccountsInput): PriorSmall | null =>
+  i.prior?.small && i.priorFrom && i.priorTo ? i.prior.small : null;
+
+/** The opening instant's context: last year's end when it's the day before, otherwise one of its own. */
+const openingContext = (i: AccountsInput): string =>
+  smallPrior(i) && i.priorTo === dayBefore(i.periodFrom) ? "PE" : "SB";
+
+/**
+ * Lines of a statement with this year and last year side by side. A line is
+ * left out when both years are nothing, unless it's a total.
+ */
+function statementLines(hasPrior: boolean, ctxNow: string, ctxThen: string) {
+  const cell = (concept: string, v: number, ctx: string, kind: "plain" | "cost") =>
+    kind === "cost" ? deduction(v, fact(concept, v, ctx)) : bracket(v, fact(concept, v, ctx));
+  return (label: string, concept: string, now: number, then: number | undefined, kind: "plain" | "cost" = "plain",
+    opts: { always?: boolean; bold?: boolean; ctx?: [string, string] } = {}): string => {
+    if (!opts.always && !now && !(hasPrior && then)) return "";
+    const [a, b] = opts.ctx ?? [ctxNow, ctxThen];
+    return row(label, cell(concept, now, a, kind), hasPrior ? cell(concept, then ?? 0, b, kind) : null, opts.bold);
+  };
+}
+
+/** A heading inside a statement, with no figures. */
+const subhead = (label: string, hasPrior: boolean): string =>
+  `<tr class="sh"><td class="lbl">${esc(label)}</td><td class="num"></td>${hasPrior ? `<td class="num"></td>` : ""}</tr>`;
+
+/** The profit and loss account in Format 1, every figure tagged. */
+function smallProfitAndLoss(i: AccountsInput): string {
+  const s = i.small!, ps = smallPrior(i), hasPrior = Boolean(ps), p = i.prior;
+  const line = statementLines(hasPrior, "D", "PD");
+  const gross = i.turnover - s.costOfSales;
+  const operating = gross - s.administrativeExpenses + s.otherOperatingIncome;
+  const pGross = ps ? p!.turnover - ps.costOfSales : 0;
+  const pOperating = ps ? pGross - ps.administrativeExpenses + ps.otherOperatingIncome : 0;
+  const profit = i.profitBeforeTax - i.taxCharge;
+  const pProfit = p ? p.profitBeforeTax - p.tax : undefined;
+  return `<table>
+  ${yearHeader(i, hasPrior)}
+  ${line("Turnover", "core:TurnoverRevenue", i.turnover, p?.turnover, "plain", { always: true })}
+  ${line("Cost of sales", "core:CostSales", s.costOfSales, ps?.costOfSales, "cost")}
+  ${line(gross < 0 ? "Gross loss" : "Gross profit", "core:GrossProfitLoss", gross, pGross, "plain", { always: true, bold: true })}
+  ${line("Administrative expenses", "core:AdministrativeExpenses", s.administrativeExpenses, ps?.administrativeExpenses, "cost")}
+  ${line("Other operating income", "core:OtherOperatingIncomeFormat1", s.otherOperatingIncome, ps?.otherOperatingIncome)}
+  ${line(operating < 0 ? "Operating loss" : "Operating profit", "core:OperatingProfitLoss", operating, pOperating, "plain", { always: true, bold: true })}
+  ${line("Interest receivable and similar income", "core:OtherInterestReceivableSimilarIncomeFinanceIncome", s.interestReceivable, ps?.interestReceivable)}
+  ${line("Interest payable and similar expenses", "core:InterestPayableSimilarChargesFinanceCosts", s.interestPayable, ps?.interestPayable, "cost")}
+  ${line(i.profitBeforeTax < 0 ? "Loss before taxation" : "Profit before taxation", "core:ProfitLossOnOrdinaryActivitiesBeforeTax", i.profitBeforeTax, p?.profitBeforeTax, "plain", { always: true, bold: true })}
+  ${line(i.profitBeforeTax < 0 ? "Tax on loss" : "Tax on profit", "core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", i.taxCharge, p?.tax, "cost", { always: true })}
+  ${line(profit < 0 ? `Loss for the financial ${spanWord(i.periodFrom, i.periodTo)}` : `Profit for the financial ${spanWord(i.periodFrom, i.periodTo)}`, "core:ProfitLoss", profit, pProfit, "plain", { always: true, bold: true })}
+</table>`;
+}
+
+/** The small-company balance sheet (Companies Act Format 1), every figure tagged. */
+function smallBalanceSheet(i: AccountsInput): string {
+  const s = i.small!, ps = smallPrior(i), hasPrior = Boolean(ps), p = i.prior;
+  const line = statementLines(hasPrior, "E", "PE");
+  const debtors = (x: { tradeDebtors: number; owedByDirectors: number; otherDebtors: number; prepayments: number }) =>
+    x.tradeDebtors + x.owedByDirectors + x.otherDebtors + x.prepayments;
+  const totals = (x: PriorSmall, notPaid: number) => {
+    const fixed = x.tangibleAssets + x.investments;
+    const current = x.stocks + debtors(x) + x.cash;
+    const within = x.bankWithin + x.tradeCreditors + x.corporationTax + x.otherTaxation + x.owedToDirectors + x.otherCreditorsWithin + x.accrualsWithin;
+    const netCurrent = current - within;
+    const totalLessCurrent = notPaid + fixed + netCurrent;
+    const after = x.bankAfter + x.otherAfter;
+    const provisions = x.deferredTaxProvision + x.otherProvisions;
+    const net = totalLessCurrent - after - provisions;
+    return { fixed, current, within, netCurrent, totalLessCurrent, after, provisions, net, reserves: net - x.shareCapital };
+  };
+  const now = totals(s, i.shareCapitalNotPaid), then = ps ? totals(ps, p!.shareCapitalNotPaid) : undefined;
+  const anyFixed = now.fixed || then?.fixed;
+  return `<table>
+  ${yearHeader(i, hasPrior)}
+  ${line("Called up share capital not paid", "core:CalledUpShareCapitalNotPaidNotExpressedAsCurrentAsset", i.shareCapitalNotPaid, p?.shareCapitalNotPaid)}
+  ${anyFixed ? subhead("Fixed assets", hasPrior) : ""}
+  ${line("Tangible assets", "core:PropertyPlantEquipment", s.tangibleAssets, ps?.tangibleAssets)}
+  ${line("Investments", "core:InvestmentsFixedAssets", s.investments, ps?.investments)}
+  ${anyFixed ? line("", "core:FixedAssets", now.fixed, then?.fixed, "plain", { always: true, bold: true }) : ""}
+  ${subhead("Current assets", hasPrior)}
+  ${line("Stocks", "core:TotalInventories", s.stocks, ps?.stocks)}
+  ${line("Debtors", "core:Debtors", debtors(s), ps ? debtors(ps) : undefined)}
+  ${line("Cash at bank and in hand", "core:CashBankOnHand", s.cash, ps?.cash)}
+  ${line("", "core:CurrentAssets", now.current, then?.current, "plain", { always: true, bold: true })}
+  ${line("Creditors: amounts falling due within one year", "core:Creditors", now.within, then?.within, "cost", { always: true, ctx: ["EW1", "PEW1"] })}
+  ${line(now.netCurrent < 0 ? "Net current liabilities" : "Net current assets", "core:NetCurrentAssetsLiabilities", now.netCurrent, then?.netCurrent, "plain", { always: true, bold: true })}
+  ${line("Total assets less current liabilities", "core:TotalAssetsLessCurrentLiabilities", now.totalLessCurrent, then?.totalLessCurrent, "plain", { always: true, bold: true })}
+  ${line("Creditors: amounts falling due after more than one year", "core:Creditors", now.after, then?.after, "cost", { ctx: ["EA1", "PEA1"] })}
+  ${line("Provisions for liabilities", "core:ProvisionsForLiabilitiesBalanceSheetSubtotal", now.provisions, then?.provisions, "cost")}
+  ${line(now.net < 0 ? "Net liabilities" : "Net assets", "core:NetAssetsLiabilities", now.net, then?.net, "plain", { always: true, bold: true })}
+  ${subhead("Capital and reserves", hasPrior)}
+  ${line("Called up share capital", "core:Equity", s.shareCapital, ps?.shareCapital, "plain", { always: true, ctx: ["ESC", "PESC"] })}
+  ${line("Profit and loss account", "core:Equity", now.reserves, then?.reserves, "plain", { always: true, ctx: ["ERE", "PERE"] })}
+  ${line(now.net < 0 ? "Shareholders' deficit" : "Shareholders' funds", "core:Equity", now.net, then?.net, "plain", { always: true, bold: true })}
+</table>`;
+}
+
+/** The directors' report a small company prepares for its members (Companies Act 2006 s415 to s419). */
+function smallDirectorsReport(i: AccountsInput): string {
+  const s = i.small!, span = spanWord(i.periodFrom, i.periodTo);
+  // The taxonomy names 40 directors; beyond that they're listed without a tag of their own.
+  const names = s.directors.map((d, n) => n >= 40 ? esc(d) : textFact("bus:NameEntityOfficer", d, n === 0 ? "DDir" : `DDir${n + 1}`));
+  const list = names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `<h2>Directors' report</h2>
+<p class="stmt">The directors present their report and the financial statements for the ${span} ended ${esc(longDate(i.periodTo))}.</p>
+<p class="stmt"><b>Principal activity.</b> ${textFact("bus:DescriptionPrincipalActivities", i.principalActivities ?? "Online retail", "D")}${/[.!?]$/.test((i.principalActivities ?? "").trim()) ? "" : "."}</p>
+<p class="stmt"><b>Directors.</b> The director${s.directors.length === 1 ? " who served during the " + span + " was" : "s who served during the " + span + " were"} ${list}.</p>
+<p class="stmt">${textFact("direp:StatementThatDirectorsReportHasBeenPreparedInAccordanceWithProvisionsSmallCompaniesRegime",
+    "This report has been prepared in accordance with the provisions applicable to companies entitled to the small companies exemption.", "D")}</p>
+<p class="stmt">Approved by the board on ${esc(longDate(i.approvedOn))} and signed on its behalf by ${esc(s.directors[0] ?? i.approvedBy)}, director.</p>`;
+}
+
+/** The notes Section 1A and the Companies Act require of a small company. */
+function smallNotes(i: AccountsInput): string {
+  const s = i.small!, ps = smallPrior(i), hasPrior = Boolean(ps), span = spanWord(i.periodFrom, i.periodTo);
+  const open = openingContext(i);
+  const lastSpan = ps ? spanWord(i.priorFrom!, i.priorTo!) : "year";
+  let n = 0;
+  const out: string[] = [];
+  const para = (title: string, body: string) => out.push(`<p class="note"><b>${++n}. ${esc(title)}.</b> ${body}</p>`);
+  // The heading and its table sit side by side, not one inside the other, so the PDF lays the table out as rows.
+  const table = (title: string, body: string) => out.push(`<p class="note"><b>${++n}. ${esc(title)}.</b></p>\n<table class="nt">${body}</table>`);
+  const plainRow = (label: string, now: number, then: number | null, bold = false) => row(label, shown(now), then === null ? null : shown(then), bold);
+
+  // 1. About the company
+  para("Company information", `${esc(i.companyName)} is a private company limited by shares, registered in ${esc(jurisdiction(i.companyNo))} under number ${esc(i.companyNo.trim().toUpperCase())}.`);
+
+  // 2. Accounting policies
+  const hasStock = s.stocks > 0 || (ps?.stocks ?? 0) > 0;
+  const hasEquipment = s.tangible.costBf > 0 || s.tangible.costCf > 0 || s.tangible.depBf > 0;
+  const hasInvestments = s.investments > 0 || (ps?.investments ?? 0) > 0;
+  const hasDeferred = s.deferredTaxBroughtForward > 0 || s.deferredTaxProvision > 0 || (ps?.deferredTaxProvision ?? 0) > 0;
+  const policy = (title: string, concept: string, text: string, more = "") => `<p class="note"><i>${esc(title)}.</i> ${textFact(concept, text, "D")}${more}</p>`;
+  out.push(`<p class="note"><b>${++n}. Accounting policies.</b></p>
+  ${policy("Basis of preparation", "core:StatementComplianceWithApplicableReportingFramework",
+    "These financial statements have been prepared in accordance with FRS 102 'The Financial Reporting Standard applicable in the UK and Republic of Ireland', including the provisions of Section 1A for small entities, and the Companies Act 2006.",
+    ` ${textFact("core:GeneralDescriptionBasisMeasurementUsedInPreparingFinancialStatements", "They have been prepared under the historical cost convention.", "D")}
+  ${textFact("core:FunctionalPresentationCurrencyPolicy", "They are presented in pounds sterling, the company's functional currency, rounded to the nearest pound.", "D")}`)}
+  ${policy("Turnover", "core:RevenueRecognitionPolicy",
+    "Turnover is the value of goods sold and services provided in the period, excluding VAT and after discounts and refunds. Sales of goods are recognised when the goods are delivered; services when they are performed.")}
+  ${hasEquipment ? policy("Tangible fixed assets", "core:PropertyPlantEquipmentPolicy", `Tangible fixed assets are stated at cost less accumulated depreciation and any impairment. ${s.depreciationPolicy}`) : ""}
+  ${hasInvestments ? policy("Investments", "core:FixedAssetsInvestmentPolicy", "Investments held as fixed assets are stated at cost less any impairment.") : ""}
+  ${hasStock ? policy("Stocks", "core:InventoriesPolicy", "Stocks are valued at the lower of cost and estimated selling price less costs to complete and sell.") : ""}
+  ${policy("Taxation", "core:CurrentIncomeTaxPolicy", "The tax charge is the Corporation Tax payable on the taxable profit for the period, at the rates in force.",
+    hasDeferred ? ` ${textFact("core:DeferredTaxPolicy", "Deferred tax is provided on timing differences between profits in the accounts and taxable profits, mainly from capital allowances claimed ahead of depreciation, at the rate expected to apply when they reverse.", "D")}` : "")}
+  ${policy("Financial instruments", "core:FinancialInstrumentsRecognitionMeasurementPolicy",
+    "The company has only basic financial instruments: cash, trade and other debtors and creditors, and loans. They are measured at transaction price; debtors less any amount not expected to be recovered.")}`);
+
+  // Employees
+  para("Employees", `The average number of people employed by the company during the ${span}, including directors, was
+  <ix:nonFraction name="core:AverageNumberEmployeesDuringPeriod" contextRef="D" unitRef="pure" decimals="0">${plain(i.employees)}</ix:nonFraction>${i.prior && hasPrior ? ` (last ${lastSpan}:
+  <ix:nonFraction name="core:AverageNumberEmployeesDuringPeriod" contextRef="PD" unitRef="pure" decimals="0">${plain(i.prior.employees)}</ix:nonFraction>)` : ""}.`);
+
+  // Tax on profit
+  const pCurrent = ps?.currentTax ?? 0, pDeferred = ps?.deferredTax ?? 0;
+  if (s.currentTax || s.deferredTax || pCurrent || pDeferred) {
+    const tline = statementLines(hasPrior, "D", "PD");
+    table(`Tax on ${i.profitBeforeTax < 0 ? "loss" : "profit"}`, `${yearHeader(i, hasPrior)}
+  ${tline("UK Corporation Tax on profits for the " + span, "core:CurrentTaxForPeriod", s.currentTax, pCurrent, "plain", { always: true })}
+  ${tline("Deferred tax: origination and reversal of timing differences", "core:DeferredTaxExpenseCreditRelatingToOriginationReversalTimingDifferences", s.deferredTax, pDeferred)}
+  ${plainRow("Tax charge for the " + span, s.currentTax + s.deferredTax, hasPrior ? pCurrent + pDeferred : null, true)}`);
+  }
+
+  // Tangible fixed assets
+  if (hasEquipment) {
+    const t = s.tangible;
+    const one = (label: string, cell: string, bold = false) => row(label, cell, null, bold);
+    const at = (iso: string) => `At ${longDate(iso)}`;
+    const start = dayBefore(i.periodFrom);
+    table("Tangible fixed assets", `<tr class="hd"><td class="lbl"></td><td class="num">Equipment<br/>£</td></tr>
+  ${subhead("Cost", false)}
+  ${one(at(start), fact("core:PropertyPlantEquipmentGrossCost", t.costBf, open))}
+  ${t.additions ? one("Additions", fact("core:AdditionsOtherThanThroughBusinessCombinationsPropertyPlantEquipment", t.additions, "D")) : ""}
+  ${t.disposals ? one("Disposals", deduction(t.disposals, fact("core:DisposalsPropertyPlantEquipment", t.disposals, "D"))) : ""}
+  ${one(at(i.periodTo), fact("core:PropertyPlantEquipmentGrossCost", t.costCf, "E"), true)}
+  ${subhead("Depreciation", false)}
+  ${one(at(start), fact("core:AccumulatedDepreciationImpairmentPropertyPlantEquipment", t.depBf, open))}
+  ${t.charge ? one(`Charge for the ${span}`, fact("core:IncreaseFromDepreciationChargeForYearPropertyPlantEquipment", t.charge, "D")) : ""}
+  ${t.depDisposals ? one("On disposals", deduction(t.depDisposals, fact("core:DisposalsDecreaseInDepreciationImpairmentPropertyPlantEquipment", t.depDisposals, "D"))) : ""}
+  ${one(at(i.periodTo), fact("core:AccumulatedDepreciationImpairmentPropertyPlantEquipment", t.depCf, "E"), true)}
+  ${subhead("Net book value", false)}
+  ${one(at(i.periodTo), shown(t.nbvCf), true)}
+  ${one(at(start), shown(t.nbvBf))}`);
+  }
+
+  if (hasInvestments) {
+    para("Fixed asset investments", `The company's investments held for the long term, at cost, were £${show(s.investments)} at ${esc(longDate(i.periodTo))}${ps ? ` (£${show(ps.investments)} at ${esc(longDate(i.priorTo!))})` : ""}.`);
+  }
+
+  // Debtors
+  const dNow = s.tradeDebtors + s.owedByDirectors + s.otherDebtors + s.prepayments;
+  const dThen = ps ? ps.tradeDebtors + ps.owedByDirectors + ps.otherDebtors + ps.prepayments : 0;
+  if (dNow || dThen) {
+    const l = statementLines(hasPrior, "E", "PE");
+    table("Debtors: amounts falling due within one year", `${yearHeader(i, hasPrior)}
+  ${l("Trade debtors", "core:TradeDebtorsTradeReceivables", s.tradeDebtors, ps?.tradeDebtors)}
+  ${l("Amounts owed by directors", "core:AmountsOwedByDirectors", s.owedByDirectors, ps?.owedByDirectors)}
+  ${l("Other debtors", "core:OtherDebtors", s.otherDebtors, ps?.otherDebtors)}
+  ${l("Prepayments and accrued income", "core:PrepaymentsAccruedIncome", s.prepayments, ps?.prepayments)}
+  ${plainRow("", dNow, hasPrior ? dThen : null, true)}`);
+  }
+
+  // Creditors within one year
+  const w = (x: PriorSmall | SmallAccountsBlock) => x.bankWithin + x.tradeCreditors + x.corporationTax + x.otherTaxation + x.owedToDirectors + x.otherCreditorsWithin + x.accrualsWithin;
+  if (w(s) || (ps && w(ps))) {
+    const l = statementLines(hasPrior, "EW1", "PEW1");
+    table("Creditors: amounts falling due within one year", `${yearHeader(i, hasPrior)}
+  ${l("Bank loans and overdrafts", "core:BankBorrowingsOverdrafts", s.bankWithin, ps?.bankWithin)}
+  ${l("Trade creditors", "core:TradeCreditorsTradePayables", s.tradeCreditors, ps?.tradeCreditors)}
+  ${l("Corporation Tax", "core:CorporationTaxPayable", s.corporationTax, ps?.corporationTax)}
+  ${l("Other taxation and social security", "core:OtherTaxationSocialSecurityPayable", s.otherTaxation, ps?.otherTaxation)}
+  ${l("Amounts owed to directors", "core:AmountsOwedToDirectors", s.owedToDirectors, ps?.owedToDirectors)}
+  ${l("Other creditors", "core:OtherCreditors", s.otherCreditorsWithin, ps?.otherCreditorsWithin)}
+  ${l("Accruals and deferred income", "core:AccruedLiabilitiesDeferredIncome", s.accrualsWithin, ps?.accrualsWithin)}
+  ${plainRow("", w(s), hasPrior ? w(ps!) : null, true)}`);
+  }
+
+  // Creditors after one year
+  const a = (x: PriorSmall | SmallAccountsBlock) => x.bankAfter + x.otherAfter;
+  if (a(s) || (ps && a(ps))) {
+    const l = statementLines(hasPrior, "EA1", "PEA1");
+    table("Creditors: amounts falling due after more than one year", `${yearHeader(i, hasPrior)}
+  ${l("Bank loans", "core:BankBorrowingsOverdrafts", s.bankAfter, ps?.bankAfter)}
+  ${l("Other creditors", "core:OtherCreditors", s.otherAfter, ps?.otherAfter)}
+  ${plainRow("", a(s), hasPrior ? a(ps!) : null, true)}`);
+  }
+
+  // Deferred tax
+  if (hasDeferred) {
+    para("Deferred tax", `The provision for deferred tax was £${fact("core:NetDeferredTaxLiabilityAsset", s.deferredTaxBroughtForward, open)} at the start of the ${span}.
+  £${show(s.deferredTax)} was ${s.deferredTax < 0 ? "credited" : "charged"} to the profit and loss account, leaving a provision of
+  £${fact("core:NetDeferredTaxLiabilityAsset", s.deferredTaxProvision, "E")} at ${esc(longDate(i.periodTo))}. It arises from capital allowances claimed ahead of depreciation.`);
+  }
+
+  // Share capital
+  const nominalDp = Math.round(s.shareNominal * 100) === s.shareNominal * 100 ? 2 : 4;
+  para("Called up share capital", `Allotted, called up and fully paid:
+  ${unitFact("core:NumberSharesIssuedFullyPaid", s.sharesNumber, "EOrd1", "shares", 0)} ordinary shares of
+  £${unitFact("core:ParValueShare", s.shareNominal, "DOrd1", "GBPperShare", nominalDp)} each, £${grouped(s.shareCapital, Number.isInteger(s.shareCapital) ? 0 : 2)} in total.`);
+
+  // Dividends
+  if (s.dividendsPaid || (ps?.dividendsPaid ?? 0)) {
+    para("Dividends", `Dividends paid on ordinary shares during the ${span} came to £${fact("core:DividendsPaidOnShares", s.dividendsPaid, "D")}${ps ? ` (last ${lastSpan}: £${fact("core:DividendsPaidOnShares", ps.dividendsPaid, "PD")})` : ""}.`);
+  }
+
+  // Commitments
+  para("Financial commitments, guarantees and contingencies", textFact("core:DescriptionFinancialCommitmentsOtherThanCapitalCommitments",
+    s.commitments || "The company had no financial commitments, guarantees or contingencies that are not included in the balance sheet.", "D"));
+
+  if (i.directorsLoans?.length) out.push(directorsLoanNote(i.directorsLoans, ++n));
+  return out.join("\n");
+}
+
+/** Contexts and units only small-company accounts use. */
+function smallResources(i: AccountsInput): string {
+  const s = i.small!, ps = smallPrior(i);
+  const at = (id: string, dim: string, member: string, instant: string) => dimContext(id, i.companyNo, dim, member, { at: instant });
+  const eq = "core:EquityClassesDimension";
+  const parts = [
+    at("ESC", eq, "core:ShareCapital", i.periodTo),
+    at("ERE", eq, "core:RetainedEarningsAccumulatedLosses", i.periodTo),
+    ...(ps ? [at("PESC", eq, "core:ShareCapital", i.priorTo!), at("PERE", eq, "core:RetainedEarningsAccumulatedLosses", i.priorTo!)] : []),
+    at("EOrd1", "bus:EntityShareClassesDimension", "bus:OrdinaryShareClass1", i.periodTo),
+    dimContext("DOrd1", i.companyNo, "bus:EntityShareClassesDimension", "bus:OrdinaryShareClass1", { from: i.periodFrom, to: i.periodTo }),
+    ...s.directors.slice(1, 40).map((_, n) => dimContext(`DDir${n + 2}`, i.companyNo, "bus:EntityOfficersDimension", `bus:Director${n + 2}`, { from: i.periodFrom, to: i.periodTo })),
+  ];
+  // An opening instant of its own, only where a note uses one: equipment or deferred tax brought forward.
+  const opens = s.tangible.costBf || s.tangible.costCf || s.tangible.depBf || s.deferredTaxBroughtForward || s.deferredTaxProvision || (ps?.deferredTaxProvision ?? 0);
+  if (openingContext(i) === "SB" && opens) {
+    parts.push(`<xbrli:context id="SB">
+        <xbrli:entity>
+          <xbrli:identifier scheme="http://www.companieshouse.gov.uk/">${esc(i.companyNo)}</xbrli:identifier>
+        </xbrli:entity>
+        <xbrli:period><xbrli:instant>${esc(dayBefore(i.periodFrom))}</xbrli:instant></xbrli:period>
+      </xbrli:context>`);
+  }
+  parts.push(`<xbrli:unit id="shares"><xbrli:measure>xbrli:shares</xbrli:measure></xbrli:unit>`,
+    `<xbrli:unit id="GBPperShare"><xbrli:divide><xbrli:unitNumerator><xbrli:measure>iso4217:GBP</xbrli:measure></xbrli:unitNumerator><xbrli:unitDenominator><xbrli:measure>xbrli:shares</xbrli:measure></xbrli:unitDenominator></xbrli:divide></xbrli:unit>`);
+  return parts.join("\n      ");
+}
 
 export function buildAccounts(i: AccountsInput): string {
   const tx = i.taxonomy ?? ACCOUNT_TAXONOMIES[0];
@@ -591,7 +933,9 @@ export function buildAccounts(i: AccountsInput): string {
     tr.b td{font-weight:bold;border-top:1px solid #bbb;}
     .hd td{font-size:9pt;color:#666;border-bottom:1px solid #999;font-weight:normal;}
     .note{font-size:9.5pt;color:#444;margin:8px 0;}
-    .stmt{font-size:9.5pt;color:#333;margin:14px 0;line-height:1.6;}
+    .stmt{font-size:9.5pt;color:#333;margin:14px 0;line-height:1.6;}${i.small ? `
+    tr.sh td{font-style:italic;padding-top:8px;}
+    table.nt{margin:2px 0 12px;font-size:9.5pt;}` : ""}
   </style>
 </head>
 <body>
@@ -601,7 +945,7 @@ export function buildAccounts(i: AccountsInput): string {
     <ix:hidden>
       ${textFact("bus:EntityCurrentLegalOrRegisteredName", i.companyName, D)}
       ${textFact("bus:UKCompaniesHouseRegisteredNumber", i.companyNo.trim().toUpperCase(), D)}
-      ${textFact("bus:DescriptionPrincipalActivities", i.principalActivities ?? "Online retail", D)}
+      ${i.small ? "" : textFact("bus:DescriptionPrincipalActivities", i.principalActivities ?? "Online retail", D)}
       ${boolFact("bus:EntityDormantTruefalse", i.dormant, D)}
       ${dateFact("bus:StartDateForPeriodCoveredByReport", i.periodFrom, E)}
       ${dateFact("bus:EndDateForPeriodCoveredByReport", i.periodTo, E)}
@@ -612,7 +956,9 @@ export function buildAccounts(i: AccountsInput): string {
       ${fixedFact("bus:AccountsStatusAuditedOrUnaudited", "DStat")}
       ${fixedFact("bus:EntityTradingStatus", (i.tradingStatus ?? "trading") === "trading" ? D : "DTrade")}
       ${fixedFact("bus:LegalFormEntity", "DLegal")}
-      ${fixedFact("core:DirectorSigningFinancialStatements", "DDir")}
+      ${fixedFact("core:DirectorSigningFinancialStatements", "DDir")}${i.small ? `
+      ${fixedFact("direp:DirectorSigningDirectorsReport", "DDir")}
+      ${dateFact("direp:DateSigningDirectorsReport", i.approvedOn, E)}` : ""}
       ${textFact("bus:NameProductionSoftware", "Nucta File", D)}
     </ix:hidden>
     <ix:references>
@@ -654,11 +1000,12 @@ export function buildAccounts(i: AccountsInput): string {
       ${dimContext("DStat", i.companyNo, "bus:AccountsStatusDimension", `bus:${i.accountsStatus ?? "AuditExempt-NoAccountantsReport"}`, { from: i.periodFrom, to: i.periodTo })}
       ${(i.tradingStatus ?? "trading") === "trading" ? "" : dimContext("DTrade", i.companyNo, "bus:EntityTradingStatusDimension", i.tradingStatus === "neverTraded" ? "bus:EntityHasNeverTraded" : "bus:EntityNoLongerTradingButTradedInPast", { from: i.periodFrom, to: i.periodTo })}
       ${dimContext("DLegal", i.companyNo, "bus:LegalFormEntityDimension", `bus:${i.legalForm ?? "PrivateLimitedCompanyLtd"}`, { from: i.periodFrom, to: i.periodTo })}
-      ${dimContext("DDir", i.companyNo, "bus:EntityOfficersDimension", "bus:Director1", { from: i.periodFrom, to: i.periodTo })}${i.micro ? `
+      ${dimContext("DDir", i.companyNo, "bus:EntityOfficersDimension", "bus:Director1", { from: i.periodFrom, to: i.periodTo })}${i.micro || i.small ? `
       ${dimContext("EW1", i.companyNo, "core:MaturitiesOrExpirationPeriodsDimension", "core:WithinOneYear", { at: i.periodTo })}
       ${dimContext("EA1", i.companyNo, "core:MaturitiesOrExpirationPeriodsDimension", "core:AfterOneYear", { at: i.periodTo })}${i.prior && i.priorTo ? `
       ${dimContext("PEW1", i.companyNo, "core:MaturitiesOrExpirationPeriodsDimension", "core:WithinOneYear", { at: i.priorTo })}
-      ${dimContext("PEA1", i.companyNo, "core:MaturitiesOrExpirationPeriodsDimension", "core:AfterOneYear", { at: i.priorTo })}` : ""}` : ""}
+      ${dimContext("PEA1", i.companyNo, "core:MaturitiesOrExpirationPeriodsDimension", "core:AfterOneYear", { at: i.priorTo })}` : ""}` : ""}${i.small ? `
+      ${smallResources(i)}` : ""}
       <xbrli:unit id="GBP"><xbrli:measure>iso4217:GBP</xbrli:measure></xbrli:unit>
       <xbrli:unit id="pure"><xbrli:measure>xbrli:pure</xbrli:measure></xbrli:unit>
     </ix:resources>
@@ -668,13 +1015,16 @@ export function buildAccounts(i: AccountsInput): string {
 <h1>${esc(i.companyName)}</h1>
 <div class="sub">
   Company registration number ${esc(i.companyNo)} (${esc(jurisdiction(i.companyNo))})<br/>
-  Unaudited micro-entity accounts for the period ended ${esc(longDate(i.periodTo))}${i.dormant ? " (dormant)" : ""}
+  ${i.small
+    ? `Unaudited financial statements for the ${spanWord(i.periodFrom, i.periodTo)} ended ${esc(longDate(i.periodTo))}<br/>Prepared under FRS 102 Section 1A, for small entities`
+    : `Unaudited micro-entity accounts for the period ended ${esc(longDate(i.periodTo))}${i.dormant ? " (dormant)" : ""}`}
 </div>
-
+${i.small ? smallDirectorsReport(i) + "\n" : ""}
 <h2>Profit and loss account</h2>
 ${i.dormant
   ? `<p class="stmt">The company was dormant throughout the period. It received no income and incurred no
      expenditure, and therefore made neither a profit nor a loss.</p>`
+  : i.small ? smallProfitAndLoss(i)
   : i.micro ? microProfitAndLoss(i)
   : `<table>
   ${yearHead}
@@ -690,7 +1040,7 @@ ${i.dormant
 </table>`}
 
 <h2>Balance sheet as at ${esc(longDate(i.periodTo))}</h2>
-${i.micro ? microBalanceSheet(i) : `<table>
+${i.small ? smallBalanceSheet(i) : i.micro ? microBalanceSheet(i) : `<table>
   ${yearHead}
   ${row("Called up share capital not paid",
       fact("core:CalledUpShareCapitalNotPaidNotExpressedAsCurrentAsset", i.shareCapitalNotPaid, E), py(undefined))}
@@ -728,22 +1078,24 @@ ${i.micro ? microBalanceSheet(i) : `<table>
   D)}</p>
 <p class="stmt">${textFact(
   "direp:StatementThatAccountsHaveBeenPreparedInAccordanceWithProvisionsSmallCompaniesRegime",
-  "These accounts have been prepared and delivered in accordance with the provisions applicable to companies subject to the micro-entity provisions.",
+  i.small
+    ? "These financial statements have been prepared and delivered in accordance with the provisions applicable to companies subject to the small companies regime."
+    : "These accounts have been prepared and delivered in accordance with the provisions applicable to companies subject to the micro-entity provisions.",
   D)}</p>
 
 <h2>Notes to the financial statements</h2>
-<p class="note">
+${i.small ? smallNotes(i) : `<p class="note">
   <b>1. Employee information.</b> Average number of employees during the period:
   <ix:nonFraction name="core:AverageNumberEmployeesDuringPeriod" contextRef="${D}"
     unitRef="pure" decimals="0">${plain(i.employees)}</ix:nonFraction>${i.micro && i.prior && i.priorFrom ? ` (last period:
   <ix:nonFraction name="core:AverageNumberEmployeesDuringPeriod" contextRef="${PD}"
     unitRef="pure" decimals="0">${plain(i.prior.employees)}</ix:nonFraction>)` : ""}.
 </p>
-<p class="note"><b>2. Off balance sheet arrangements.</b> None.</p>${i.directorsLoans?.length ? directorsLoanNote(i.directorsLoans) : ""}
+<p class="note"><b>2. Off balance sheet arrangements.</b> None.</p>${i.directorsLoans?.length ? directorsLoanNote(i.directorsLoans) : ""}`}
 
 <p class="stmt">
   Approved by the board on ${esc(longDate(i.approvedOn))} and signed on its behalf by
-  ${textFact("bus:NameEntityOfficer", i.approvedBy, "DDir")}.
+  ${i.small ? esc(i.approvedBy) : textFact("bus:NameEntityOfficer", i.approvedBy, "DDir")}.
 </p>
 
 </body>

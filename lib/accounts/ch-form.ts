@@ -64,15 +64,21 @@ export function companiesHouseForm(a: AccountsInput): CompaniesHouseForm {
 }
 
 /**
- * The accounts as delivered to Companies House: a micro-entity may leave out
- * the profit and loss account (Companies Act 2006, s444), and must say so.
+ * The accounts as delivered to Companies House. A micro-entity may leave out
+ * the profit and loss account, and a small company the profit and loss
+ * account and the directors' report (Companies Act 2006, s444) — "filleted"
+ * accounts — and each must say so on the balance sheet.
  */
 export function companiesHouseCopy(accountsHtml: string): string {
-  const start = accountsHtml.indexOf("<h2>Profit and loss account</h2>");
+  const report = accountsHtml.indexOf("<h2>Directors' report</h2>");
+  const pl = accountsHtml.indexOf("<h2>Profit and loss account</h2>");
+  const start = report >= 0 ? report : pl;
   const end = accountsHtml.indexOf("<h2>Balance sheet as at");
-  const body = start >= 0 && end > start ? accountsHtml.slice(0, start) + accountsHtml.slice(end) : accountsHtml;
-  const said = "These accounts have been prepared and delivered in accordance with the provisions applicable to companies subject to the micro-entity provisions.";
-  return start >= 0 && end > start
-    ? body.replace(said, `${said} In accordance with section 444 of the Companies Act 2006, the profit and loss account has not been delivered to the Registrar of Companies.`)
-    : body;
+  if (!(start >= 0 && end > start)) return accountsHtml;
+  const body = accountsHtml.slice(0, start) + accountsHtml.slice(end);
+  const micro = "These accounts have been prepared and delivered in accordance with the provisions applicable to companies subject to the micro-entity provisions.";
+  const small = "These financial statements have been prepared and delivered in accordance with the provisions applicable to companies subject to the small companies regime.";
+  return body
+    .replace(micro, `${micro} In accordance with section 444 of the Companies Act 2006, the profit and loss account has not been delivered to the Registrar of Companies.`)
+    .replace(small, `${small} In accordance with section 444 of the Companies Act 2006, the profit and loss account and the directors' report have not been delivered to the Registrar of Companies.`);
 }

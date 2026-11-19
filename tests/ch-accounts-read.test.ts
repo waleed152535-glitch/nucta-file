@@ -23,7 +23,7 @@ eq("signed", factValue("500", null, null, "-"), -500);
 eq("comma decimals", factValue("1.234,50", "ixt2:numcommadecimal", null, null), 1234.5);
 eq("words aren't numbers", factValue("n/a", "ixt2:numdotdecimal", null, null), null);
 
-console.log("— Nucta File's own accounts, read back");
+console.log("— Nucta Filings' own accounts, read back");
 const figures: ReturnFigures = {
   periodFrom: "2024-04-01", periodTo: "2025-03-31", associatedCompanies: 0,
   pl: { turnover: 182_400, otherIncome: 1_250, interestReceived: 140, costOfSales: 104_300, staffCosts: 12_570, depreciation: 900, otherCharges: 38_620 },

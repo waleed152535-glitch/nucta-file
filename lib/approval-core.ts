@@ -5,7 +5,7 @@
  *
  * What is recorded on approval: the name typed, the time, the IP address and
  * browser, and a fingerprint of the figures as they were sent. If the figures
- * change afterwards, the approval no longer matches and Nucta File says so.
+ * change afterwards, the approval no longer matches and Nucta Filings says so.
  */
 import { createHash } from "crypto";
 import { sha256, sendEmail } from "./auth";
@@ -122,7 +122,7 @@ export async function approveByToken(token: string, typedName: string, agreed: b
     }
   }
   await tellPreparer(a, `${v.company}: approved by ${name}`,
-    `${name} approved the accounts and Company Tax Return for ${v.company} (${v.periodFrom} to ${v.periodTo}) on ${now.toUTCString()}.\n\nThe approval is recorded with the return in Nucta File.`).catch(() => undefined);
+    `${name} approved the accounts and Company Tax Return for ${v.company} (${v.periodFrom} to ${v.periodTo}) on ${now.toUTCString()}.\n\nThe approval is recorded with the return in Nucta Filings.`).catch(() => undefined);
   return { ok: true };
 }
 
@@ -136,6 +136,6 @@ export async function queryByToken(token: string, message: string): Promise<{ ok
   const s = await store();
   await s.db.update(s.approvals).set({ status: "query", query: text.slice(0, 2000) }).where(s.eq(s.approvals.id, a.id));
   await tellPreparer(a, `${v.company}: a question from ${v.directorName}`,
-    `${v.directorName} has a question about the accounts and return for ${v.company} before approving:\n\n${text}\n\nOpen the return in Nucta File to reply and send a new link.`).catch(() => undefined);
+    `${v.directorName} has a question about the accounts and return for ${v.company} before approving:\n\n${text}\n\nOpen the return in Nucta Filings to reply and send a new link.`).catch(() => undefined);
   return { ok: true };
 }

@@ -57,7 +57,7 @@ export default async function Status() {
     <>
       <div className="topbar">
         <div>
-          <h2>Nucta File</h2>
+          <h2>Nucta Filings</h2>
           <div className="sub">Corporation Tax, statutory accounts and VAT, filed directly.</div>
         </div>
       </div>
@@ -67,7 +67,7 @@ export default async function Status() {
           <h3>A filing engine of our own</h3>
           <p>
             HMRC closed its free Corporation Tax service in March 2026, which left every small
-            company buying filing software. Nucta File is that software — built to file for our own
+            company buying filing software. Nucta Filings is that software — built to file for our own
             62 clients first, and sold to everyone else second. It is deliberately separate from
             Nucta Desk: the desk runs the practice, this files the returns, and the two meet only
             at the moment of submission.
@@ -127,13 +127,13 @@ export default async function Status() {
             <div className="bd">
               <p className="note" style={{ marginTop: 0 }}>
                 Nothing is duplicated. When a return is ready to file, Nucta Desk hands over the
-                company details, the accounting period and the figures it already holds; Nucta File
+                company details, the accounting period and the figures it already holds; Nucta Filings
                 builds and signs the submission and hands back the receipt and the IRmark, which the
                 desk stores against the client.
               </p>
               <p className="note">
                 That keeps the filing record clean enough to stand up years later, and it means
-                Nucta File can be sold to accountants who have never seen Nucta Desk.
+                Nucta Filings can be sold to accountants who have never seen Nucta Desk.
               </p>
             </div>
           </div>

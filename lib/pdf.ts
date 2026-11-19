@@ -2,7 +2,7 @@
  * PDFs of the accounts, computations and returns — real files to send a
  * client for approval, not a print of the screen.
  *
- * Nucta File's documents are built from a small set of parts (a title, a
+ * Nucta Filings' documents are built from a small set of parts (a title, a
  * subtitle, headings, paragraphs, and tables of a label with one to three
  * amounts), so they are laid out here directly on A4 pages with the PDF
  * standard fonts. `htmlToBlocks` reads those parts back out of the iXBRL
@@ -47,7 +47,7 @@ export function pdfText(s: string): string {
   return out;
 }
 
-// ---- reading Nucta File's own HTML documents ----
+// ---- reading Nucta Filings' own HTML documents ----
 
 type El = { nodeType: number; localName?: string; nodeName: string; childNodes: ArrayLike<El>; data?: string; getAttribute?: (n: string) => string | null };
 
@@ -66,7 +66,7 @@ const children = (n: El): El[] => Array.from({ length: n.childNodes.length }, (_
 const tagOf = (n: El) => (n.localName ?? n.nodeName).toLowerCase().replace(/^.*:/, "");
 const cls = (n: El) => (n.getAttribute?.("class") ?? "").split(/\s+/);
 
-/** The headings, paragraphs and tables of one of Nucta File's documents, as PDF blocks. */
+/** The headings, paragraphs and tables of one of Nucta Filings' documents, as PDF blocks. */
 export function htmlToBlocks(html: string): Block[] {
   const doc = new DOMParser({ onError: () => undefined }).parseFromString(html.replace(/^\s*<\?xml[^>]*\?>\s*/, ""), "text/html") as unknown as { getElementsByTagName(n: string): ArrayLike<El> };
   const body = doc.getElementsByTagName("body")[0];
@@ -132,7 +132,7 @@ function wrap(text: string, font: PDFFont, size: number, width: number): string[
 
 export async function makePdf(docs: PdfDoc[], meta: { title: string; author?: string }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  pdf.setTitle(pdfText(meta.title)); pdf.setAuthor(pdfText(meta.author ?? "Nucta File")); pdf.setCreator("Nucta File"); pdf.setProducer("Nucta File");
+  pdf.setTitle(pdfText(meta.title)); pdf.setAuthor(pdfText(meta.author ?? "Nucta Filings")); pdf.setCreator("Nucta Filings"); pdf.setProducer("Nucta Filings");
   const fonts = {
     serif: { r: await pdf.embedFont(StandardFonts.TimesRoman), b: await pdf.embedFont(StandardFonts.TimesRomanBold) },
     sans: { r: await pdf.embedFont(StandardFonts.Helvetica), b: await pdf.embedFont(StandardFonts.HelveticaBold) },

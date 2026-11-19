@@ -6,7 +6,7 @@ import { rawSql, rootCause, connectionTarget } from "@/lib/db";
 import { SETUP_STATEMENTS } from "@/lib/setup-sql";
 
 /**
- * Creates Nucta File's tables in the database this deployment connects to.
+ * Creates Nucta Filings' tables in the database this deployment connects to.
  *
  * Running the setup script by hand in Neon's SQL editor depends on the editor
  * being open on the same project and branch as DATABASE_URL — and Neon opens
@@ -25,7 +25,7 @@ export async function createTables(): Promise<{ ok: boolean; message: string }> 
       select count(*)::int as n from information_schema.tables
       where table_schema = 'public' and table_name like 'nf\\_%'`;
     revalidatePath("/log");
-    return { ok: true, message: `Done — ${found[0]?.n ?? 0} Nucta File tables now exist in ${target}.` };
+    return { ok: true, message: `Done — ${found[0]?.n ?? 0} Nucta Filings tables now exist in ${target}.` };
   } catch (e) {
     return { ok: false, message: `Couldn't create the tables in ${target}: ${rootCause(e)}` };
   }

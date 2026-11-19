@@ -61,7 +61,7 @@ export default function OnlineApproval({ returnId, director, saveFirst }: { retu
             </span>
           </div>
         )}
-        {!emailReady && <p className="note">Emailing links needs RESEND_API_KEY and EMAIL_FROM in the settings. Until then, copy the link and send it yourself.</p>}
+        {!emailReady && <p className="note">Nucta Filings can&apos;t send emails on this site yet, so copy the link and send it to the director yourself.</p>}
         {rows.length > 0 && (
           <table style={{ marginTop: 10 }}>
             <thead><tr><th>Director</th><th>Status</th><th>Sent</th><th>Approved</th><th /></tr></thead>

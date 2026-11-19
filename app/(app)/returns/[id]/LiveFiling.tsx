@@ -160,7 +160,7 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
                     <span className="amt">{gbp(fee.amount)}</span>
                     <button type="button" className="btn" disabled={pending || paying || pic.emailCheckNeeded} onClick={pay}>{paying ? "Opening the payment page…" : "Pay by card"}</button>
                     <span className="note" style={{ flex: "1 1 260px" }}>
-                      {pic.emailCheckNeeded ? "Confirm your email address first — the payment confirmation goes there." : <>On Stripe&apos;s secure page; Nucta File never sees the card. The fee covers filing this return, sending it again if HMRC find something to fix, and amending it later.{fee.testMode ? " Test mode: use card 4242 4242 4242 4242." : ""}</>}
+                      {pic.emailCheckNeeded ? "Confirm your email address first — the payment confirmation goes there." : <>On Stripe&apos;s secure page; Nucta Filings never sees the card. The fee covers filing this return, sending it again if HMRC find something to fix, and amending it later.{fee.testMode ? " Test mode: use card 4242 4242 4242 4242." : ""}</>}
                     </span>
                     {/membership/.test(fee.words) && <span className="note" style={{ flexBasis: "100%" }}>{fee.words}</span>}
                   </div>
@@ -211,7 +211,7 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
                   <input type="password" autoComplete="new-password" value={signIn.password} onChange={(e) => setSignIn({ ...signIn, password: e.target.value })} />
                 </div>
               </div>
-              <p className="note" style={{ marginTop: -6 }}>Nucta File uses it once, for this filing, and never keeps it. Several wrong passwords can lock a Government Gateway account, so Nucta File stops after two failed sign-ins in an hour.</p>
+              <p className="note" style={{ marginTop: -6 }}>Nucta Filings uses it once, for this filing, and never keeps it. Several wrong passwords can lock a Government Gateway account, so Nucta Filings stops after two failed sign-ins in an hour.</p>
               <details className="more-opts">
                 <summary>HMRC&apos;s own confirmation email: {notify === "account" ? "the email on this HMRC account" : notify === "me" ? pic.userEmail : notifyOther || "another address"}</summary>
                 <div className="picks" role="radiogroup" aria-label="HMRC's confirmation email">
@@ -230,7 +230,7 @@ export default function LiveFiling({ returnId, preview, refreshKey, onFiled, onT
                     <input type="email" value={notifyOther} onChange={(e) => setNotifyOther(e.target.value)} placeholder="name@example.co.uk" />
                   </div>
                 )}
-                <p className="note" style={{ marginTop: 0 }}>Nucta File keeps HMRC&apos;s receipt with the return{pic.emailReady ? " and emails it to you" : ""} either way.</p>
+                <p className="note" style={{ marginTop: 0 }}>Nucta Filings keeps HMRC&apos;s receipt with the return{pic.emailReady ? " and emails it to you" : ""} either way.</p>
               </details>
               </>)}
             </div>

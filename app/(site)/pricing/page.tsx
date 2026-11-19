@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PRICES, gbp } from "@/lib/site";
 import { chargingOn, getPlans } from "@/lib/billing";
 
-export const metadata = pageMeta({ title: "Pricing", path: "/pricing", description: "What it costs to file a Company Tax Return with HMRC using Nucta File: a price per return with no subscription, or a yearly membership for accountancy practices." });
+export const metadata = pageMeta({ title: "Pricing", path: "/pricing", description: "What it costs to file a Company Tax Return with HMRC using Nucta Filings: a price per return with no subscription, or a yearly membership for accountancy practices." });
 
 // Built once, and rebuilt when charging is switched on or off or the plans change (lib/billing-actions.ts).
 
@@ -33,7 +33,7 @@ export default async function Pricing() {
               <ul>
                 <li>Unlimited companies and returns</li>
                 <li>Accounts, computations and CT600s, filed with HMRC</li>
-                <li>The figures for Companies House, box by box</li>
+                <li>Accounts filed with Companies House, at no extra cost</li>
                 <li>Online approval by the director, and PDF packs</li>
               </ul>
               <Link href="/sign-up" className="s-btn">Create your account</Link>
@@ -104,7 +104,7 @@ export default async function Pricing() {
           </div>
         )}
 
-        <p className="small" style={{ marginTop: 28 }}>{charging ? "" : "Prices after launch. "}Accounts longer than 12 months make two returns and are charged as one. Filing with Companies House directly from Nucta File will be included when it opens.</p>
+        <p className="small" style={{ marginTop: 28 }}>{charging ? "" : "Prices after launch. "}Accounts longer than 12 months make two returns and are charged as one. Filing with Companies House directly from Nucta Filings will be included when it opens.</p>
       </div>
     </section>
   );

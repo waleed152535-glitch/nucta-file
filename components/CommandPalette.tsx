@@ -96,7 +96,7 @@ export default function CommandPalette({ mode, admin, onClose }: { mode: Palette
   let lastGroup = "";
   return (
     <div className="palette-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="palette" role="dialog" aria-modal="true" aria-label={mode === "new" ? "Start a return" : "Search Nucta File"}>
+      <div className="palette" role="dialog" aria-modal="true" aria-label={mode === "new" ? "Start a return" : "Search Nucta Filings"}>
         <div className="q">
           <span aria-hidden style={{ color: "var(--faint)" }}>⌕</span>
           <input ref={input} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} role="combobox" aria-expanded="true" aria-controls="palette-list"

@@ -65,7 +65,7 @@ export async function vatView(companyId: string, client: unknown): Promise<VatVi
   try {
     const s = await store();
     const c = await ownCompany(s, u, companyId);
-    if (!c) return { ok: false, problem: "That company isn't in Nucta File.", ...base };
+    if (!c) return { ok: false, problem: "That company isn't in Nucta Filings.", ...base };
     const rows = await s.db.select().from(s.vatReturns).where(s.eq(s.vatReturns.companyId, c.id)).orderBy(s.desc(s.vatReturns.submittedAt));
     const submitted: SubmittedVat[] = rows.map((r) => ({
       id: r.id, periodKey: r.periodKey, periodStart: r.periodStart, periodEnd: r.periodEnd, boxes: r.boxes, source: r.source, sourceName: r.sourceName,
@@ -101,7 +101,7 @@ export async function saveVrn(companyId: string, raw: string): Promise<{ ok: boo
   try {
     const s = await store();
     const c = await ownCompany(s, u, companyId);
-    if (!c) return { ok: false, problem: "That company isn't in Nucta File." };
+    if (!c) return { ok: false, problem: "That company isn't in Nucta Filings." };
     await s.db.update(s.companies).set({ vrn }).where(s.eq(s.companies.id, c.id));
     revalidatePath(`/companies/${c.id}/vat`); revalidatePath(`/companies/${c.id}`);
     return { ok: true, vrn };
@@ -161,7 +161,7 @@ export async function submitVatReturn(i: SubmitVatInput): Promise<{ ok: boolean;
   try {
     const s = await store();
     const c = await ownCompany(s, u, i.companyId);
-    if (!c) return { ok: false, problems: ["That company isn't in Nucta File."] };
+    if (!c) return { ok: false, problems: ["That company isn't in Nucta Filings."] };
     if (!c.vrn) return { ok: false, problems: ["Add the company's VAT number first."] };
     const conn = await connectionFor(s, u.accountId, c.id);
     if (!conn) return { ok: false, problems: ["Connect to HMRC first."] };
@@ -195,7 +195,7 @@ export async function disconnectVat(companyId: string, kind: "company" | "agent"
   try {
     const s = await store();
     const c = await ownCompany(s, u, companyId);
-    if (!c) return { ok: false, problem: "That company isn't in Nucta File." };
+    if (!c) return { ok: false, problem: "That company isn't in Nucta Filings." };
     await s.db.delete(s.vatConnections).where(s.and(s.eq(s.vatConnections.accountId, u.accountId), s.eq(s.vatConnections.scopeKey, kind === "agent" ? "agent" : c.id), s.eq(s.vatConnections.env, mtdEnv())));
     revalidatePath(`/companies/${c.id}/vat`);
     return { ok: true };
@@ -207,7 +207,7 @@ export async function disconnectVat(companyId: string, kind: "company" | "agent"
 /** For the administrators: HMRC's own check of the fraud prevention headers (sandbox only). */
 export async function checkFraudHeaders(client: unknown): Promise<{ ok: boolean; text: string[] }> {
   const u = await currentUser();
-  if (!u?.admin) return { ok: false, text: ["This is for Nucta File's administrators only."] };
+  if (!u?.admin) return { ok: false, text: ["This is for Nucta Filings' administrators only."] };
   if (!mtdReady()) return { ok: false, text: ["Add HMRC_MTD_CLIENT_ID and HMRC_MTD_CLIENT_SECRET first."] };
   if (mtdEnv() !== "sandbox") return { ok: false, text: ["HMRC's header check only works in the sandbox."] };
   const who = await caller(u, client);

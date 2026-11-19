@@ -50,14 +50,14 @@ export async function inviteColleague(nameRaw: string, emailRaw: string): Promis
   try {
     const s = await store();
     const [existing] = await s.db.select({ accountId: s.users.accountId }).from(s.users).where(s.eq(s.users.email, email));
-    if (existing) return { ok: false, problem: existing.accountId === u.accountId ? "They're already on this account." : "That email already has its own Nucta File account. Use a different email for them." };
+    if (existing) return { ok: false, problem: existing.accountId === u.accountId ? "They're already on this account." : "That email already has its own Nucta Filings account. Use a different email for them." };
     // A fresh invitation replaces any earlier one to the same person.
     await s.db.delete(s.invites).where(s.and(s.eq(s.invites.accountId, u.accountId), s.eq(s.invites.email, email), s.isNull(s.invites.acceptedAt)));
     const token = randomBytes(32).toString("base64url");
     await s.db.insert(s.invites).values({ id: sha256(token), accountId: u.accountId, email, name, role: "member", invitedBy: u.name, expiresAt: new Date(Date.now() + 7 * 86_400_000) });
     const link = `${siteUrl((await headers()).get("host"))}/join?token=${token}`;
-    const emailed = await sendEmail(email, `${u.name} has invited you to Nucta File`,
-      `Hello ${name},\n\n${u.name} has invited you to join ${u.accountName} on Nucta File, to prepare and file Company Tax Returns together.\n\nTo accept, open this link within 7 days and choose a password:\n\n${link}\n\nIf you weren't expecting this, ignore this email.\n\nNucta File`);
+    const emailed = await sendEmail(email, `${u.name} has invited you to Nucta Filings`,
+      `Hello ${name},\n\n${u.name} has invited you to join ${u.accountName} on Nucta Filings, to prepare and file Company Tax Returns together.\n\nTo accept, open this link within 7 days and choose a password:\n\n${link}\n\nIf you weren't expecting this, ignore this email.\n\nNucta Filings`);
     return { ok: true, link, emailed };
   } catch (e) {
     return { ok: false, problem: problem(e) };

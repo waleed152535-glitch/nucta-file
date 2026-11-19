@@ -12,12 +12,12 @@ import { markForPeople } from "@/lib/ct600-xml";
  * Bumped by hand with every package. It is on the screen so that an identical
  * rejection twice over can be told apart from a deploy that never landed.
  */
-const BUILD = "53 — accounts filed with Companies House for real";
+const BUILD = "54 — Nucta Filings: guided start, help, Amazon/eBay import, bulk dormant filing";
 
 /**
  * The gateway console.
  *
- * Everything else in Nucta File depends on one question being answered:
+ * Everything else in Nucta Filings depends on one question being answered:
  * does HMRC accept what we build? This screen asks them. It shows the exact
  * XML that goes out, the IRmark we calculated, and every word that comes
  * back — because when HMRC refuses a submission, their own wording is the
@@ -251,7 +251,7 @@ export default function GatewayConsole({
                   <input type="number" value={f.marginalRelief ?? 0} onChange={num("marginalRelief")} />
                   <span className="note" style={{ fontSize: 11.5 }}>
                     Only when profits fall between £50,000 and £250,000. Tax payable is then tax
-                    charged minus this. Nucta File checks the figure and won&apos;t build the return
+                    charged minus this. Nucta Filings checks the figure and won&apos;t build the return
                     if it&apos;s wrong.
                   </span>
                 </div>

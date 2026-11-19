@@ -1,5 +1,5 @@
 /**
- * Nucta File's mark: the N of Nucta made from one folded strip of paper —
+ * Nucta Filings' mark: the N of Nucta made from one folded strip of paper —
  * two red stems, and the fold between them showing the paper's lighter back.
  *
  * `tone="light"` is for light backgrounds (emails, printed pages): a deeper

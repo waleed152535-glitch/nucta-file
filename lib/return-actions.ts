@@ -133,13 +133,13 @@ export interface PriorFromCh {
 export async function priorFromCompaniesHouse(returnId: string, format: "micro" | "small" = "micro"): Promise<PriorFromCh> {
   const u = await currentUser();
   if (!u) return { ok: false, problem: SIGNED_OUT };
-  if (!chApiReady()) return { ok: false, problem: "Companies House lookups aren't set up on this site (CH_API_KEY), so copy the figures from last year's accounts." };
+  if (!chApiReady()) return { ok: false, problem: "Companies House's records can't be read on this site yet, so copy the figures from last year's accounts." };
   try {
     const s = await store();
     const r = await ownReturn(s, u, returnId);
-    if (!r) return { ok: false, problem: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, problem: "That return isn't in Nucta Filings." };
     const [c] = await s.db.select({ companyNo: s.companies.companyNo }).from(s.companies).where(s.eq(s.companies.id, r.companyId));
-    if (!c?.companyNo) return { ok: false, problem: "Add the company number to the company first, then Nucta File can find its accounts." };
+    if (!c?.companyNo) return { ok: false, problem: "Add the company number to the company first, then Nucta Filings can find its accounts." };
     const list = await accountsFilings(c.companyNo);
     if (!list.ok) return { ok: false, problem: list.error };
     const want = fromDay(toDay(r.periodStart) - 1);
@@ -204,7 +204,7 @@ export async function addCompany(c: NewCompany): Promise<{ ok: boolean; id?: str
   try {
     const s = await store();
     const dup = await s.db.select({ id: s.companies.id }).from(s.companies).where(s.and(s.eq(s.companies.companyNo, no), s.eq(s.companies.accountId, u.accountId)));
-    if (dup.length) return { ok: false, problems: [`Company ${no} is already in Nucta File.`] };
+    if (dup.length) return { ok: false, problems: [`Company ${no} is already in Nucta Filings.`] };
     const id = randomUUID();
     await s.db.insert(s.companies).values({
       id, accountId: u.accountId, name, companyNo: no, utr, incorporatedOn: c.incorporatedOn || null,
@@ -280,7 +280,7 @@ export async function updateCompany(id: string, c: { name: string; utr: string; 
   try {
     const s = await store();
     const co = await ownCompany(s, u, id);
-    if (!co) return { ok: false, problems: ["That company isn't in Nucta File."] };
+    if (!co) return { ok: false, problems: ["That company isn't in Nucta Filings."] };
     await s.db.update(s.companies).set({ name, utr: utr || null, incorporatedOn: c.incorporatedOn || null, registeredOffice: c.registeredOffice.trim() || null }).where(s.eq(s.companies.id, id));
     revalidatePath(`/companies/${id}`);
     return { ok: true, problems: [] };
@@ -342,7 +342,7 @@ export async function getCompany(id: string): Promise<{ ok: boolean; error?: str
   try {
     const s = await store();
     const c = await ownCompany(s, u, id);
-    if (!c) return { ok: false, error: "That company isn't in Nucta File.", returns: [], deadlines: [], chReady: chApiReady() };
+    if (!c) return { ok: false, error: "That company isn't in Nucta Filings.", returns: [], deadlines: [], chReady: chApiReady() };
     const rets = await s.db.select().from(s.returns).where(s.eq(s.returns.companyId, id)).orderBy(s.desc(s.returns.periodEnd));
     const today = new Date().toISOString().slice(0, 10);
     return {
@@ -401,6 +401,21 @@ export interface DashboardData {
   /** What happened lately: tests and filings with HMRC, newest first. */
   activity: ActivityItem[];
   companies: { id: string; name: string; companyNo: string | null; next: Deadline | null; returns: number }[];
+  /** How far a new account has got, for the getting-started guide. */
+  started?: GettingStarted;
+}
+
+export interface GettingStarted {
+  companies: number;
+  returns: number;
+  /** Returns with the director's approval recorded. */
+  approved: number;
+  filedHmrc: number;
+  /** Accounts sent to Companies House that weren't turned away. */
+  filedCh: number;
+  /** Where each next step happens. */
+  latestReturnId: string | null;
+  latestCompanyId: string | null;
 }
 
 export interface FoundItem { kind: "company" | "return"; id: string; title: string; detail: string; href: string }
@@ -484,6 +499,23 @@ export async function getDashboard(today = new Date().toISOString().slice(0, 10)
     })].sort((a, b) => b.at.localeCompare(a.at));
     return {
       ok: true,
+      started: await (async (): Promise<GettingStarted> => {
+        const latest = [...rets].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+        let filedCh = 0;
+        try {
+          const ch = await s.db.select({ status: s.chFilings.status }).from(s.chFilings).where(s.eq(s.chFilings.accountId, u.accountId));
+          filedCh = ch.filter((x) => ["received", "pending", "parked", "accepted"].includes(x.status)).length;
+        } catch { /* none yet */ }
+        return {
+          companies: cos.length,
+          returns: rets.length,
+          approved: rets.filter((r) => { const d = (r.data ?? {}) as Partial<ReturnData>; return Boolean(d.director && d.approvedOn); }).length,
+          filedHmrc: rets.filter((r) => r.status === "accepted").length,
+          filedCh,
+          latestReturnId: latest?.id ?? null,
+          latestCompanyId: latest?.companyId ?? cos[0]?.id ?? null,
+        };
+      })(),
       counts: {
         companies: cos.length,
         filed: rets.filter((r) => r.status === "accepted").length,
@@ -521,7 +553,7 @@ export async function startReturn(companyId: string, periodStart: string, period
   if (!u) return { ok: false, problems: [SIGNED_OUT] };
   try {
     const s = await store();
-    if (!(await ownCompany(s, u, companyId))) return { ok: false, problems: ["That company isn't in Nucta File."] };
+    if (!(await ownCompany(s, u, companyId))) return { ok: false, problems: ["That company isn't in Nucta Filings."] };
     const existing = await s.db.select().from(s.returns).where(s.eq(s.returns.companyId, companyId));
     if (existing.some((r) => r.periodStart === periodStart && r.periodEnd === periodEnd)) {
       return { ok: false, problems: ["There's already a return for exactly this period. Open that one instead."] };
@@ -560,7 +592,7 @@ export async function getReturn(id: string): Promise<LoadedReturn> {
   try {
     const s = await store();
     const r = await ownReturn(s, u, id);
-    if (!r) return { ok: false, error: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, error: "That return isn't in Nucta Filings." };
     const [c] = await s.db.select().from(s.companies).where(s.eq(s.companies.id, r.companyId));
     const subs = await s.db.select({
       startedAt: s.submissions.startedAt, outcome: s.submissions.outcome, correlationId: s.submissions.correlationId,
@@ -593,7 +625,7 @@ export async function saveReturn(id: string, data: ReturnData): Promise<{ ok: bo
   try {
     const s = await store();
     const r = await ownReturn(s, u, id);
-    if (!r) return { ok: false, error: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, error: "That return isn't in Nucta Filings." };
     if (r.status === "accepted") return { ok: false, error: "This return has been accepted by HMRC, so it can't be changed. Start an amended return instead." };
     const old = normaliseReturnData(r.data as Partial<ReturnData>);
     const incoming = editable(normaliseReturnData(data));
@@ -807,7 +839,7 @@ export async function sendReturnToTest(id: string, part = 0): Promise<SendResult
   };
 }
 
-/** The UTR HMRC issued with Nucta File's test credentials (HMRC_TEST_UTR). */
+/** The UTR HMRC issued with Nucta Filings' test credentials (HMRC_TEST_UTR). */
 function testUtrFor(): string {
   const v = (process.env.HMRC_TEST_UTR ?? "").replace(/\s/g, "");
   return /^\d{10}$/.test(v) ? v : "8596148860";
@@ -824,7 +856,7 @@ export async function startAmendment(returnId: string, today = new Date().toISOS
   try {
     const s = await store();
     const r = await ownReturn(s, u, returnId);
-    if (!r) return { ok: false, problems: ["That return isn't in Nucta File."] };
+    if (!r) return { ok: false, problems: ["That return isn't in Nucta Filings."] };
     if (!accepted(r.status)) {
       return { ok: false, problems: ["Only a return HMRC have accepted can be amended. This one hasn't been accepted yet — change it and send it again instead."] };
     }
@@ -872,7 +904,7 @@ export interface LiveResult extends SendResult {
   filed: boolean;
   /** HMRC's receipt in words, for a real filing. */
   receiptText: string | null;
-  /** Set when HMRC accepted but Nucta File couldn't save the receipt: keep the one on screen. */
+  /** Set when HMRC accepted but Nucta Filings couldn't save the receipt: keep the one on screen. */
   receiptNotSaved: boolean;
 }
 
@@ -921,7 +953,7 @@ export async function fileReturnLive(
   if (!p.ok) return stop("The return isn't ready to file.", p.problems);
   const s0 = await store();
   const lockedUntil = await signInLock(s0, id);
-  if (lockedUntil) return stop("Two sign-ins have failed on this return in the last hour, so Nucta File won't try again yet.", [`A few more wrong passwords can lock the HMRC account. Check the user ID and password by signing in on GOV.UK, then try again after ${new Date(lockedUntil).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}.`]);
+  if (lockedUntil) return stop("Two sign-ins have failed on this return in the last hour, so Nucta Filings won't try again yet.", [`A few more wrong passwords can lock the HMRC account. Check the user ID and password by signing in on GOV.UK, then try again after ${new Date(lockedUntil).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}.`]);
   const online = await onlineApproval(s0, id, r.periodStart!, r.periodEnd!, r.data!);
   const approvedOnline = online?.status === "approved";
   if (!(opts.approved || approvedOnline) || !opts.declared) return stop("Confirm the director's approval and the declaration first.", []);
@@ -975,7 +1007,7 @@ export async function fileReturnLive(
       await s.db.update(s.returns).set({ data: { ...data, filing: { ...(data.filing ?? {}), [String(part)]: new Date().toISOString() } } as unknown as Record<string, unknown> }).where(s.eq(s.returns.id, id));
     }
   } catch {
-    return stop("Nucta File couldn't record the filing, so it hasn't sent it.", ["Nothing went to HMRC. Try again in a moment."]);
+    return stop("Nucta Filings couldn't record the filing, so it hasn't sent it.", ["Nothing went to HMRC. Try again in a moment."]);
   }
 
   let run: RunResult;
@@ -1062,7 +1094,7 @@ async function finishLive(
     : x.til && run.outcome === "accepted" ? ["HMRC's live service checked the return with this sign-in and found nothing wrong. Nothing has been filed."]
       : filed ? [words ?? "HMRC have received the return.", "Keep this receipt: it is HMRC's confirmation that the return was filed."]
         : run.outcome === "timeout" ? ["HMRC have the return and are still processing it. Press “Ask HMRC again” in a minute, with the same sign-in. Don't file it a second time."] : [];
-  if (filed && !saved) detail.push("Nucta File couldn't save this receipt. Save or print this page now, and tell your administrator.");
+  if (filed && !saved) detail.push("Nucta Filings couldn't save this receipt. Save or print this page now, and tell your administrator.");
   if (filed && x.mail) {
     const payable = Math.round((x.pp.computation.taxChargeable + (x.pp.loans?.needed ? x.pp.loans.a80 : 0)) * 100) / 100;
     const m = receiptEmailText({

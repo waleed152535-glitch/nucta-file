@@ -157,7 +157,7 @@ export function liveFiling(): LiveFiling {
  * Gateway account that signed in (HMRC, Transaction Engine Document
  * Submission Protocol, 3.2.3) — so the company or agent hears from HMRC
  * directly. HMRC_CONTACT_EMAIL is deliberately not used here: it would send
- * every client's notification to Nucta File's own inbox.
+ * every client's notification to Nucta Filings' own inbox.
  */
 export function liveConfig(userId: string, password: string, testInLive: boolean, notifyEmail?: string): GovTalkConfig {
   return {

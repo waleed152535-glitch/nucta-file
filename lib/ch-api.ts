@@ -22,7 +22,7 @@ export interface ChSearchHit {
   address: string;
 }
 
-/** What Nucta File keeps from a company's Companies House record. */
+/** What Nucta Filings keeps from a company's Companies House record. */
 export interface ChProfile {
   number: string;
   name: string;
@@ -212,4 +212,20 @@ export async function accountsDocument(documentId: string): Promise<ChResult<str
   } catch (e) {
     return { ok: false, error: `Couldn't reach Companies House: ${String((e as Error)?.message ?? e).slice(0, 120)}` };
   }
+}
+
+/** The company's current directors, by name as Companies House hold it ("HAYAT, Umar" → "Umar Hayat"). */
+export async function currentDirectors(number: string): Promise<ChResult<string[]>> {
+  const r = await get(`/company/${encodeURIComponent(chNumber(number))}/officers?register_view=false&items_per_page=50`);
+  if (!r.ok) return r;
+  const items = ((r.value as Raw).items ?? []) as Raw[];
+  const names = items
+    .filter((o) => /director/i.test(str(o.officer_role)) && !o.resigned_on)
+    .map((o) => {
+      const n = str(o.name);
+      const [last, first] = n.split(",").map((x) => x.trim());
+      const title = (s: string) => s.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase());
+      return first ? `${first.replace(/^(mr|mrs|ms|miss|dr)\.?\s+/i, "")} ${title(last)}`.trim() : title(n);
+    });
+  return { ok: true, value: names };
 }

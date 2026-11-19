@@ -69,7 +69,7 @@ eq("connection method", h["Gov-Client-Connection-Method"], "WEB_APP_VIA_SERVER")
 eq("screens", h["Gov-Client-Screens"], "width=1920&height=1080&scaling-factor=1.25&colour-depth=24");
 eq("window", h["Gov-Client-Window-Size"], "width=1256&height=803");
 eq("user IDs, encoded", h["Gov-Client-User-IDs"], "nucta-file=u%201");
-eq("vendor version, encoded", h["Gov-Vendor-Version"], "Nucta%20File=50");
+eq("vendor version, encoded", h["Gov-Vendor-Version"], "Nucta%20Filings=50");
 eq("forwarded", h["Gov-Vendor-Forwarded"], "by=198.51.100.7&for=203.0.113.6");
 eq("the IP and when it was read", [h["Gov-Client-Public-IP"], h["Gov-Client-Public-IP-Timestamp"]], ["203.0.113.6", "2026-10-26T10:39:57.123Z"]);
 t("no port header when the host gives none", !("Gov-Client-Public-Port" in h));

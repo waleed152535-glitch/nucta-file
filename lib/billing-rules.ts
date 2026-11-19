@@ -85,7 +85,7 @@ export interface FeeEmail {
   testMode: boolean;
 }
 
-/** The payment confirmation Nucta File sends once Stripe confirm the payment. */
+/** The payment confirmation Nucta Filings sends once Stripe confirm the payment. */
 export function feeEmail(e: FeeEmail): { subject: string; text: string } {
   const on = e.paidAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
   const seller = [SITE.company, SITE.companyNumber ? `company number ${SITE.companyNumber}` : "", SITE.registeredOffice].filter(Boolean).join(", ");
@@ -102,7 +102,7 @@ export function feeEmail(e: FeeEmail): { subject: string; text: string } {
     "",
     "The fee covers filing this return with HMRC, sending it again if HMRC find something to fix, and amending it later.",
     "",
-    e.returnUrl ? `Next, file the return with HMRC:\n${e.returnUrl}` : "Next, open the return in Nucta File and file it with HMRC.",
+    e.returnUrl ? `Next, file the return with HMRC:\n${e.returnUrl}` : "Next, open the return in Nucta Filings and file it with HMRC.",
     "",
     `Questions about this payment: ${SITE.email}`,
     "",

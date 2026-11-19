@@ -34,7 +34,7 @@ env("https://nuctafilings.co.uk");
 console.log("— page tags");
 const m = pageMeta({ title: "Pricing", description: "d", path: "/pricing" });
 eq("canonical", (m.alternates as { canonical: string }).canonical, "/pricing");
-eq("title gets the brand in OG", (m.openGraph as { title: string }).title, "Pricing — Nucta File");
+eq("title gets the brand in OG", (m.openGraph as { title: string }).title, "Pricing — Nucta Filings");
 eq("share image by default", ((m.openGraph as { images: { url: string }[] }).images)[0].url, "/opengraph-image");
 eq("large card", (m.twitter as { card: string }).card, "summary_large_image");
 const g = pageMeta({ title: "x", description: "d", path: "/guides/x", type: "article", image: null, modified: "2026-11-12" });
@@ -102,7 +102,7 @@ eq("markdown sitemap has no canonical (noindex)", markdownFor("sitemap")!.canoni
 const md = guideMarkdown(GUIDES[0]);
 t("guide copy has the title and every heading", md.startsWith(`# ${GUIDES[0].title}`) && GUIDES[0].sections.every((s) => md.includes(`## ${s.heading}`)));
 const llms = llmsTxt();
-t("llms.txt starts with the name", llms.startsWith("# Nucta File\n\n> "));
+t("llms.txt starts with the name", llms.startsWith("# Nucta Filings\n\n> "));
 t("llms.txt links every guide's Markdown", GUIDES.every((x) => llms.includes(`/guides/${x.slug}.md`)));
 
 env(keep.url, keep.prod);

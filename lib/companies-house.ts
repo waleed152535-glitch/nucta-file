@@ -435,13 +435,13 @@ export function chErrorHelp(number: string): string | null {
 export function chRejectHelp(reason: string): string | null {
   const r = reason.toLowerCase();
   if (/auth(entication)?\s*code|authcode|security code/.test(r)) return "The company's authentication code wasn't accepted. It's the 6-character code Companies House sent to the registered office. Check it and file again; if it's lost, ask Companies House for a new one (it comes by post).";
-  if (/company name|name.*(not match|does not match|differs)/.test(r)) return "The company name doesn't match Companies House's register. Make sure the company's name in Nucta File is exactly as registered, then file again.";
+  if (/company name|name.*(not match|does not match|differs)/.test(r)) return "The company name doesn't match Companies House's register. Make sure the company's name in Nucta Filings is exactly as registered, then file again.";
   if (/made.?up|accounting reference|reference date|period end|period of the accounts|ard/.test(r)) return "The period end doesn't match the accounting reference date Companies House hold. If the year end has changed, it has to be changed at Companies House first (form AA01).";
   if (/already (been )?(filed|registered|received)|duplicate/.test(r)) return "Companies House already hold accounts for this period. Nothing more needs sending unless they asked for amended accounts.";
   if (/approv|sign|director/.test(r)) return "The approval on the accounts wasn't accepted: the director named must be a director on the register on the date given, and the date must be after the year end.";
   if (/balance sheet|does not balance|totals?/.test(r)) return "Companies House found a problem with the balance sheet figures. Check the figures in the return, then file again.";
-  if (/statement|audit exemption|section 477|micro-entity provisions|small companies regime/.test(r)) return "A required statement on the balance sheet was missing or not accepted. Contact Nucta File support with the submission number.";
-  if (/ixbrl|xbrl|taxonomy|schema|tag|instance/.test(r)) return "Companies House couldn't read the accounts file. This is a software problem, not something you did: contact Nucta File support with the submission number.";
+  if (/statement|audit exemption|section 477|micro-entity provisions|small companies regime/.test(r)) return "A required statement on the balance sheet was missing or not accepted. Contact Nucta Filings support with the submission number.";
+  if (/ixbrl|xbrl|taxonomy|schema|tag|instance/.test(r)) return "Companies House couldn't read the accounts file. This is a software problem, not something you did: contact Nucta Filings support with the submission number.";
   if (/dormant/.test(r)) return "Companies House didn't accept the dormant accounts. A company is dormant only if it had no significant transactions in the year; check the figures, then file again.";
   if (/struck off|dissolved|liquidation|not (be )?active/.test(r)) return "The company isn't active on the register, so it can't file accounts this way.";
   return null;

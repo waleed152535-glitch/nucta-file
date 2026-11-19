@@ -20,7 +20,7 @@ export default async function Approve({ params }: { params: Promise<{ token: str
   return (
     <section className="read">
       <div className="wrap">
-        <p className="crumb">Prepared by {v.preparedBy} with Nucta File</p>
+        <p className="crumb">Prepared by {v.preparedBy} with Nucta Filings</p>
         <div className="paper">
           <p className="meta" style={{ marginBottom: 8 }}>For the directors of</p>
           <h1>{v.company}</h1>

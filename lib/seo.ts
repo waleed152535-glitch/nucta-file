@@ -12,7 +12,7 @@ import { SITE, absolute, siteOrigin } from "./site";
  */
 
 export interface PageSeo {
-  /** The page's own title; " — Nucta File" is added unless `absoluteTitle`. */
+  /** The page's own title; " — Nucta Filings" is added unless `absoluteTitle`. */
   title: string;
   description: string;
   /** The page's path, e.g. "/pricing". Becomes the canonical address. */
@@ -29,7 +29,7 @@ export interface PageSeo {
   published?: string;
 }
 
-const SHARE_ALT = "Nucta File: Company Tax Returns and accounts for small UK companies";
+const SHARE_ALT = "Nucta Filings: Company Tax Returns and accounts for small UK companies";
 
 export function pageMeta(p: PageSeo): Metadata {
   const full = p.absoluteTitle ? p.title : `${p.title} — ${SITE.product}`;
@@ -67,7 +67,7 @@ const ORG_ID = () => `${siteOrigin()}/#organization`;
 const SITE_ID = () => `${siteOrigin()}/#website`;
 const APP_ID = () => `${siteOrigin()}/#software`;
 
-/** The company behind Nucta File. */
+/** The company behind Nucta Filings. */
 export function organization(): Thing {
   return {
     "@type": "Organization",
@@ -91,7 +91,7 @@ export function website(): Thing {
   };
 }
 
-/** Nucta File itself, as the home page describes it. */
+/** Nucta Filings itself, as the home page describes it. */
 export function softwareApplication(): Thing {
   return {
     "@type": "SoftwareApplication",

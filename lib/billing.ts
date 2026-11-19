@@ -3,12 +3,12 @@
  * file — the browser reaches this through billing-actions.ts and the webhook.
  *
  * How a payment goes:
- *   1. The customer presses "Pay" on a return. Nucta File asks Stripe for a
+ *   1. The customer presses "Pay" on a return. Nucta Filings asks Stripe for a
  *      Checkout page for that return's fee and sends the customer there.
- *      Card details are typed into Stripe's page only; Nucta File never sees them.
- *   2. Stripe tell Nucta File the payment went through, twice over: by the
+ *      Card details are typed into Stripe's page only; Nucta Filings never sees them.
+ *   2. Stripe tell Nucta Filings the payment went through, twice over: by the
  *      webhook (/api/stripe/webhook, signed with STRIPE_WEBHOOK_SECRET), and
- *      when the customer comes back, by Nucta File asking Stripe directly.
+ *      when the customer comes back, by Nucta Filings asking Stripe directly.
  *      Either way the payment is read from Stripe itself, never taken from
  *      the browser's word, and whichever comes first marks it paid.
  *   3. The first time a payment is seen as paid, the confirmation email goes,
@@ -136,7 +136,7 @@ const isoToday = () => new Date().toISOString().slice(0, 10);
 
 export interface FeeState {
   /**
-   * free: not charging. admin: Nucta File's own staff. paid: this return or the one it amends is paid.
+   * free: not charging. admin: Nucta Filings' own staff. paid: this return or the one it amends is paid.
    * amendment/before: covered by an earlier filing. membership: covered by the practice's membership.
    * due: pay before filing.
    */
@@ -185,8 +185,8 @@ export async function feeState(s: Store, u: SignedInUser, returnId: string): Pro
       };
     }
   }
-  if (!(await chargingOn())) return { ...base, status: "free", amount: 0, words: "Filing is free while Nucta File launches." };
-  if (u.admin) return { ...base, status: "admin", amount: 0, words: "Nucta File's administrators file without paying." };
+  if (!(await chargingOn())) return { ...base, status: "free", amount: 0, words: "Filing is free while Nucta Filings launches." };
+  if (u.admin) return { ...base, status: "admin", amount: 0, words: "Nucta Filings' administrators file without paying." };
   if (me && filedLive(me.data)) return { ...base, status: "before", amount: 0, words: "Part of this return was filed before charging started, so the rest is free too." };
   if (links.slice(1).some((x) => x.status === "accepted" || filedLive(x.data))) return { ...base, status: "amendment", amount: 0, words: "Amendments are included: the original return was filed with HMRC." };
   // A practice's membership: this return already counted against one, or the one in force with returns left.
@@ -265,11 +265,11 @@ export async function startCheckout(u: SignedInUser, r: { id: string; companyNam
   const meta = { nf_app: "nucta-file", nf_payment: paymentId, nf_return: r.id, nf_account: u.accountId, nf_user: u.id };
   const cs = await stripe<CheckoutSession>("POST", "/v1/checkout/sessions", {
     mode: "payment",
-    line_items: [{ quantity: 1, price_data: { currency: "gbp", unit_amount: Math.round(amount * 100), product_data: { name: "Company Tax Return filing (Nucta File)", description } } }],
+    line_items: [{ quantity: 1, price_data: { currency: "gbp", unit_amount: Math.round(amount * 100), product_data: { name: "Company Tax Return filing (Nucta Filings)", description } } }],
     customer_email: u.email,
     client_reference_id: paymentId,
     metadata: { ...meta, nf_desc: description.slice(0, 450) },
-    payment_intent_data: { description: `Nucta File: ${description}`.slice(0, 1000), metadata: meta },
+    payment_intent_data: { description: `Nucta Filings: ${description}`.slice(0, 1000), metadata: meta },
     success_url: `${back}?fee=back&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${back}?fee=cancelled`,
     expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
@@ -301,7 +301,7 @@ export async function startMembershipCheckout(u: SignedInUser, plan: Plan, start
   const meta = { nf_app: "nucta-file", nf_kind: "membership", nf_payment: paymentId, nf_account: u.accountId, nf_user: u.id, nf_plan: plan.key, nf_plan_name: plan.name.slice(0, 40), nf_returns: String(plan.returns), nf_starts: startsOn };
   const cs = await stripe<CheckoutSession>("POST", "/v1/checkout/sessions", {
     mode: "payment",
-    line_items: [{ quantity: 1, price_data: { currency: "gbp", unit_amount: Math.round(plan.price * 100), product_data: { name: `Nucta File membership: ${plan.name}`, description } } }],
+    line_items: [{ quantity: 1, price_data: { currency: "gbp", unit_amount: Math.round(plan.price * 100), product_data: { name: `Nucta Filings membership: ${plan.name}`, description } } }],
     customer_email: u.email,
     client_reference_id: paymentId,
     metadata: { ...meta, nf_desc: description.slice(0, 450) },
@@ -333,7 +333,7 @@ export interface Synced { status: "paid" | "pending" | "expired" | "refunded" | 
 
 /**
  * Reads a Checkout session from Stripe and brings the payment up to date.
- * Sessions that aren't Nucta File's (other sales on the same Stripe account)
+ * Sessions that aren't Nucta Filings' (other sales on the same Stripe account)
  * are left alone.
  */
 export async function syncCheckoutSession(sessionId: string): Promise<Synced> {
@@ -354,7 +354,7 @@ export async function syncCheckoutSession(sessionId: string): Promise<Synced> {
     // Paid, but the record wasn't written when the page was made: write it now from what Stripe hold.
     await s.db.insert(s.payments).values({
       id: m.nf_payment && /^[0-9a-f-]{36}$/.test(m.nf_payment) ? m.nf_payment : randomUUID(), accountId: m.nf_account, returnId: kind === "filing" ? m.nf_return : null, kind, userId: m.nf_user ?? "",
-      stripeSessionId: cs.id, amount: cs.amount_total ?? 0, currency: cs.currency ?? "gbp", description: m.nf_desc ?? (kind === "membership" ? "Nucta File membership" : "Company Tax Return filing"),
+      stripeSessionId: cs.id, amount: cs.amount_total ?? 0, currency: cs.currency ?? "gbp", description: m.nf_desc ?? (kind === "membership" ? "Nucta Filings membership" : "Company Tax Return filing"),
       status: "pending", email: cs.customer_details?.email ?? cs.customer_email ?? null,
     }).onConflictDoNothing();
     [row] = await s.db.select().from(s.payments).where(s.eq(s.payments.stripeSessionId, cs.id));

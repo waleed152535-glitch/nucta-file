@@ -73,7 +73,7 @@ export default function VatClient({ companyId, notice }: { companyId: string; no
             <b>VAT returns aren&apos;t switched on on this site yet.</b>{" "}
             {v.admin
               ? <>Register an application on HMRC&apos;s Developer Hub for the VAT (MTD) API, with <span className="mono">{v.redirectUri}</span> as its redirect URI, then put its client ID and secret in HMRC_MTD_CLIENT_ID and HMRC_MTD_CLIENT_SECRET in Vercel and redeploy.</>
-              : "They'll appear here once Nucta File's administrators have connected to HMRC."}
+              : "They'll appear here once Nucta Filings' administrators have connected to HMRC."}
           </Banner>
         )}
 
@@ -104,7 +104,7 @@ export default function VatClient({ companyId, notice }: { companyId: string; no
                           <td style={{ textAlign: "right" }}>
                             {o.status === "O" && ended && <button type="button" className="btn sm" onClick={() => { setPreparing(o.periodKey); setReceipt(null); setTimeout(() => document.getElementById("vat-return")?.scrollIntoView({ behavior: "smooth" }), 50); }}>{preparing === o.periodKey ? "Preparing" : "Prepare the return"}</button>}
                             {o.status === "O" && !ended && <span className="note">Ends {day(o.end)}</span>}
-                            {ours && <a className="note" href={`#sent-${ours.id}`}>Sent from Nucta File</a>}
+                            {ours && <a className="note" href={`#sent-${ours.id}`}>Sent from Nucta Filings</a>}
                           </td>
                         </tr>
                       );
@@ -135,7 +135,7 @@ export default function VatClient({ companyId, notice }: { companyId: string; no
 
         {v.submitted.length > 0 && (
           <div className="card">
-            <div className="hd"><h3>Sent from Nucta File</h3><span className="note">Every VAT return sent, with HMRC&apos;s receipt</span></div>
+            <div className="hd"><h3>Sent from Nucta Filings</h3><span className="note">Every VAT return sent, with HMRC&apos;s receipt</span></div>
             <div className="bd" style={{ paddingTop: 4, overflowX: "auto" }}>
               <table className="paytable">
                 <thead><tr><th>Period</th><th className="num">Box 3</th><th className="num">Box 4</th><th className="num">Box 5</th><th>Sent</th><th>HMRC&apos;s reference</th></tr></thead>
@@ -227,7 +227,7 @@ function ConnectionCard({ v, companyId, onChange }: { v: VatView; companyId: str
         ) : (
           <>
             <p className="note" style={{ marginTop: 0 }}>
-              Sign in on HMRC&apos;s own page and grant Nucta File authority to see the VAT periods and send returns. The HMRC password is typed there, never in Nucta File.
+              Sign in on HMRC&apos;s own page and grant Nucta Filings authority to see the VAT periods and send returns. The HMRC password is typed there, never in Nucta Filings.
               {!v.company?.vrn && " Add the VAT number first."}
             </p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

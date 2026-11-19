@@ -41,7 +41,7 @@ export async function chFilingState(returnId: string): Promise<ChFilingState> {
   try {
     const s = await store();
     const r = await ownedReturn(s, u, returnId);
-    if (!r) return { ...blank, error: "That return isn't in Nucta File." };
+    if (!r) return { ...blank, error: "That return isn't in Nucta Filings." };
     const [c] = await s.db.select().from(s.companies).where(s.eq(s.companies.id, r.companyId));
     const data = normaliseReturnData(r.data as Partial<ReturnData>);
 
@@ -53,9 +53,9 @@ export async function chFilingState(returnId: string): Promise<ChFilingState> {
       rows = await s.db.select().from(s.chFilings).where(s.eq(s.chFilings.returnId, returnId)).orderBy(s.desc(s.chFilings.createdAt));
     }
 
-    const { returnDocuments } = await import("./return-docs");
-    const docs = await returnDocuments(returnId);
-    const accountsHtml = docs.ok ? docs.accountsHtml : null;
+    const { accountsForCompaniesHouse } = await import("./return-docs");
+    const built = await accountsForCompaniesHouse(returnId);
+    const accountsHtml = built.accountsHtml;
     let hash: string | null = null;
     if (accountsHtml) {
       const { companiesHouseCopy } = await import("./accounts/ch-form");
@@ -63,10 +63,15 @@ export async function chFilingState(returnId: string): Promise<ChFilingState> {
       hash = accountsHash(ixbrlForCompaniesHouse(companiesHouseCopy(accountsHtml)));
     }
     const latest = rows[0] ? { status: rows[0].status as ChFilingStatus, submissionNumber: rows[0].submissionNumber } : null;
-    const { problems, warnings } = chFilingChecks({
+    const checked = chFilingChecks({
       companyNo: c.companyNo, companyName: c.name, periodTo: r.periodEnd, director: data.director, approvedOn: data.approvedOn,
       accountsReady: Boolean(accountsHtml), today: today(), latest, profile: (c.chProfile as ChProfile | null) ?? null,
     });
+    // Say what's wrong with the accounts, not just that they aren't ready.
+    const problems = !accountsHtml && built.problems.length
+      ? [...checked.problems.filter((x) => !x.startsWith("The accounts aren't ready")), ...built.problems.map((x) => `In the accounts: ${x}`)]
+      : checked.problems;
+    const warnings = checked.warnings;
     const [last] = await s.db.select({ name: s.chFilings.contactName, phone: s.chFilings.contactPhone }).from(s.chFilings)
       .where(s.eq(s.chFilings.accountId, u.accountId)).orderBy(s.desc(s.chFilings.createdAt)).limit(1);
     return {
@@ -90,15 +95,15 @@ export async function fileWithCompaniesHouse(returnId: string, f: FileInput): Pr
   try {
     const s = await store();
     const r = await ownedReturn(s, u, returnId);
-    if (!r) return { ok: false, headline: "That return isn't in Nucta File.", detail: [], filing: null };
+    if (!r) return { ok: false, headline: "That return isn't in Nucta Filings.", detail: [], filing: null };
     const [c] = await s.db.select().from(s.companies).where(s.eq(s.companies.id, r.companyId));
     const data = normaliseReturnData(r.data as Partial<ReturnData>);
-    const { returnDocuments } = await import("./return-docs");
-    const docs = await returnDocuments(returnId);
-    if (!docs.ok || !docs.accountsHtml) return { ok: false, headline: "The accounts aren't ready yet.", detail: [docs.error ?? "Finish the figures so the accounts can be built."], filing: null };
-    if (!c.companyNo) return { ok: false, headline: "The company has no company number in Nucta File.", detail: ["Add it in the company's details."], filing: null };
+    const { accountsForCompaniesHouse } = await import("./return-docs");
+    const docs = await accountsForCompaniesHouse(returnId);
+    if (!docs.accountsHtml) return { ok: false, headline: "The accounts aren't ready yet.", detail: docs.problems.length ? docs.problems : ["Finish the figures so the accounts can be built."], filing: null };
+    if (!c.companyNo) return { ok: false, headline: "The company has no company number in Nucta Filings.", detail: ["Add it in the company's details."], filing: null };
 
-    // The register as it is now, where Nucta File can read it; otherwise what was read last.
+    // The register as it is now, where Nucta Filings can read it; otherwise what was read last.
     let profile = (c.chProfile as ChProfile | null) ?? null;
     const { chApiReady, companyProfile } = await import("./ch-api");
     if (chApiReady()) {
@@ -125,7 +130,7 @@ export async function checkChFiling(returnId: string): Promise<{ ok: boolean; pr
   try {
     const s = await store();
     const r = await ownedReturn(s, u, returnId);
-    if (!r) return { ok: false, problem: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, problem: "That return isn't in Nucta Filings." };
     const { presenter, missing } = chPresenter("live");
     if (!presenter) return { ok: false, problem: missing.join(" ") };
     const rows = await s.db.select().from(s.chFilings).where(s.eq(s.chFilings.returnId, returnId));

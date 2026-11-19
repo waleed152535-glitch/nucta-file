@@ -44,7 +44,7 @@ export const CH_STATUS_WORDS: Record<ChFilingStatus, { label: string; tone: "goo
   failed: { label: "Fault at Companies House", tone: "bad", meaning: "Companies House had a fault processing the submission. File again; if it happens twice, contact them with the submission number." },
 };
 
-/** Companies House's status codes as Nucta File's statuses. */
+/** Companies House's status codes as Nucta Filings' statuses. */
 export const FROM_CH_STATUS: Record<string, ChFilingStatus> = { ACCEPT: "accepted", REJECT: "rejected", PENDING: "pending", PARKED: "parked", INTERNAL_FAILURE: "failed" };
 
 export const accountsHash = (ixbrl: string): string => createHash("sha256").update(ixbrl, "utf8").digest("hex").slice(0, 32);
@@ -76,7 +76,7 @@ export function chFilingChecks(c: ChFilingCheckInput): { problems: string[]; war
   const warnings: string[] = [];
   if (c.latest?.status === "accepted") problems.push(`Companies House have already accepted these accounts (submission ${c.latest.submissionNumber}).`);
   else if (c.latest && CH_ACTIVE.includes(c.latest.status)) problems.push(`Submission ${c.latest.submissionNumber} is still with Companies House. Wait for their answer before filing again.`);
-  if (!c.companyNo) problems.push("The company has no company number in Nucta File. Add it in the company's details.");
+  if (!c.companyNo) problems.push("The company has no company number in Nucta Filings. Add it in the company's details.");
   else {
     const np = companyNumberProblem(c.companyNo);
     if (np) problems.push(np);
@@ -93,12 +93,12 @@ export function chFilingChecks(c: ChFilingCheckInput): { problems: string[]; war
   if (p) {
     if (p.status && !/^active$/i.test(p.status)) problems.push(`Companies House show the company as ${p.status}, so it can't file accounts this way.`);
     if (p.lastAccountsMadeUpTo && p.lastAccountsMadeUpTo === c.periodTo) {
-      problems.push("Companies House already have accounts made up to this date. Amended accounts can't be filed from Nucta File yet.");
+      problems.push("Companies House already have accounts made up to this date. Amended accounts can't be filed from Nucta Filings yet.");
     } else if (p.nextAccountsMadeUpTo && p.nextAccountsMadeUpTo !== c.periodTo) {
       warnings.push(`Companies House expect the next accounts made up to ${p.nextAccountsMadeUpTo}, but these are made up to ${c.periodTo}. Unless the year end has been changed at Companies House, they'll reject them.`);
     }
     if (p.name && normName(p.name) !== normName(c.companyName)) {
-      warnings.push(`The name in Nucta File, “${c.companyName}”, isn't exactly the name on the register, “${p.name}”. Companies House may reject accounts whose name doesn't match.`);
+      warnings.push(`The name in Nucta Filings, “${c.companyName}”, isn't exactly the name on the register, “${p.name}”. Companies House may reject accounts whose name doesn't match.`);
     }
   }
   return { problems, warnings };
@@ -299,7 +299,7 @@ async function notify(s: Store, r: Row): Promise<void> {
         ...(r.reasons.length ? ["Their reasons:", ...r.reasons.map((x) => `- ${x}${chRejectHelp(x) ? `\n  What to do: ${chRejectHelp(x)}` : ""}`), ""] : []),
         "Put it right and file again before the filing deadline.",
       ];
-    const sent = await sendEmail(r.filedByEmail, subject, [...lines, "", `Open the return: ${link}`, "", "Nucta File"].join("\n"));
+    const sent = await sendEmail(r.filedByEmail, subject, [...lines, "", `Open the return: ${link}`, "", "Nucta Filings"].join("\n"));
     if (sent) await s.db.update(s.chFilings).set({ notifiedAt: new Date() }).where(s.eq(s.chFilings.id, r.id));
   } catch {
     // The status on the return is what counts; an email that can't go now is tried again on the next check.

@@ -6,8 +6,8 @@
  * Unlike the Company Tax Return, which is sent with a Government Gateway
  * password typed at the moment of filing, MTD works by sign-in on HMRC's own
  * page (OAuth 2.0): the business — or its agent, with an agent services
- * account — signs in there and grants Nucta File authority, and HMRC hand
- * back tokens. The password never reaches Nucta File. The tokens are kept,
+ * account — signs in there and grants Nucta Filings authority, and HMRC hand
+ * back tokens. The password never reaches Nucta Filings. The tokens are kept,
  * encrypted, so returns can be sent for up to 18 months without signing in
  * again; the access token lasts four hours and is renewed as needed.
  *
@@ -26,7 +26,7 @@ import { fraudHeaders, hmrcVatError, type ClientInfo } from "./vat-rules";
 export type MtdEnv = "sandbox" | "production";
 export const mtdEnv = (): MtdEnv => (process.env.HMRC_MTD_ENV === "production" ? "production" : "sandbox");
 export const mtdReady = () => Boolean((process.env.HMRC_MTD_CLIENT_ID ?? "").trim() && (process.env.HMRC_MTD_CLIENT_SECRET ?? "").trim());
-export const PRODUCT_VERSION = "53";
+export const PRODUCT_VERSION = "54";
 
 const BASES: Record<MtdEnv, { api: string; authorize: string }> = {
   sandbox: { api: "https://test-api.service.hmrc.gov.uk", authorize: "https://test-www.tax.service.gov.uk/oauth/authorize" },

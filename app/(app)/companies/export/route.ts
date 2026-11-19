@@ -23,7 +23,7 @@ export async function GET() {
   const [list, dash] = await Promise.all([listCompanies(), getDashboard()]);
   const next = new Map(dash.companies.map((c) => [c.id, c.next]));
   const overdue = (id: string) => dash.deadlines.filter((d) => d.companyId === id && d.state === "overdue").length;
-  const rows = [["Company", "Company number", "Corporation Tax UTR", "Returns in Nucta File", "Latest return", "Latest return's year end", "Next deadline", "Due", "Days left", "Overdue deadlines"]];
+  const rows = [["Company", "Company number", "Corporation Tax UTR", "Returns in Nucta Filings", "Latest return", "Latest return's year end", "Next deadline", "Due", "Days left", "Overdue deadlines"]];
   for (const c of list.companies) {
     const n = next.get(c.id);
     rows.push([c.name, c.companyNo ?? "", c.utr ?? "", String(c.returns), c.latest ? STATUS[c.latest.status] ?? c.latest.status : "", c.latest?.periodEnd ?? "",
@@ -31,6 +31,6 @@ export async function GET() {
   }
   const csv = "\uFEFF" + rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
   return new Response(csv, {
-    headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="nucta-file-companies-${new Date().toISOString().slice(0, 10)}.csv"`, "Cache-Control": "no-store" },
+    headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="nucta-filings-companies-${new Date().toISOString().slice(0, 10)}.csv"`, "Cache-Control": "no-store" },
   });
 }

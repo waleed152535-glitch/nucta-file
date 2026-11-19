@@ -32,12 +32,12 @@ const VARS = [
   },
   {
     key: "RESEND_API_KEY",
-    what: "The key from Resend (resend.com → API Keys), so Nucta File can email receipts, approval links, invitations and password resets. Secret: paste it only here, in the hosting settings.",
+    what: "The key from Resend (resend.com → API Keys), so Nucta Filings can email receipts, approval links, invitations and password resets. Secret: paste it only here, in the hosting settings.",
     required: false,
   },
   {
     key: "EMAIL_FROM",
-    what: "Who the emails come from, on the domain verified in Resend — for example Nucta File <noreply@mail.nuctaformations.com>.",
+    what: "Who the emails come from, on the domain verified in Resend — for example Nucta Filings <noreply@mail.nuctaformations.com>.",
     required: false,
   },
   {
@@ -62,7 +62,7 @@ const VARS = [
   },
   {
     key: "HMRC_MTD_ENV",
-    what: "\"sandbox\" (the default: HMRC's test service, test businesses only) or \"production\" once HMRC have approved Nucta File for VAT and issued production credentials.",
+    what: "\"sandbox\" (the default: HMRC's test service, test businesses only) or \"production\" once HMRC have approved Nucta Filings for VAT and issued production credentials.",
     required: false,
   },
   {

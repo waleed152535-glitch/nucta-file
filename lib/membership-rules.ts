@@ -3,7 +3,7 @@
  * months, paid once by card, instead of a fee per return. The rules, with
  * nothing that touches the network or the database, so each can be tested.
  *
- *  - The plans are set by Nucta File's administrators on the Payments page;
+ *  - The plans are set by Nucta Filings' administrators on the Payments page;
  *    these are the ones to start from.
  *  - A membership runs for twelve months from the day it starts.
  *  - Each return filed live with HMRC uses one of its returns, once: sending
@@ -126,7 +126,7 @@ export function long(iso: string): string {
 }
 
 export const membershipDescription = (planName: string, returns: number, startsOn: string) =>
-  `Nucta File membership: ${planName}, ${returns.toLocaleString("en-GB")} returns, ${long(startsOn)} to ${long(membershipEnds(startsOn))}`;
+  `Nucta Filings membership: ${planName}, ${returns.toLocaleString("en-GB")} returns, ${long(startsOn)} to ${long(membershipEnds(startsOn))}`;
 
 export interface MembershipEmail {
   name: string;

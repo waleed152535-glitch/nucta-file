@@ -2,7 +2,7 @@
 
 /**
  * Filing the accounts with Companies House from the return: the Companies
- * House copy of the same accounts HMRC receive, sent through Nucta File's
+ * House copy of the same accounts HMRC receive, sent through Nucta Filings'
  * presenter account. The company's authentication code lives only in this
  * component's memory and is sent once with the filing.
  *
@@ -41,7 +41,7 @@ function Filing({ f, latest }: { f: ChFilingView; latest: boolean }) {
   );
 }
 
-export default function CompaniesHouseFiling({ returnId, refreshKey }: { returnId: string; refreshKey: string }) {
+export default function CompaniesHouseFiling({ returnId, refreshKey, hmrcReady = true }: { returnId: string; refreshKey: string; hmrcReady?: boolean }) {
   const [st, setSt] = useState<ChFilingState | null>(null);
   const [code, setCode] = useState("");
   const [contact, setContact] = useState({ name: "", phone: "" });
@@ -103,8 +103,9 @@ export default function CompaniesHouseFiling({ returnId, refreshKey }: { returnI
       {latest?.status !== "accepted" && !waiting && (
         <>
           <p className="note" style={{ margin: "10px 0 12px" }}>
-            Nucta File sends Companies House the {st.kind ? KIND[st.kind] : "accounts"} made up to <b>{day(st.periodTo)}</b>: the same accounts HMRC get, without the
+            Nucta Filings sends Companies House the {st.kind ? KIND[st.kind] : "accounts"} made up to <b>{day(st.periodTo)}</b>: the same accounts HMRC get, without the
             profit and loss account{st.kind === "small" ? " and directors' report" : ""}, as the law allows. Companies House don&apos;t charge for filing accounts.
+            {!hmrcReady && <> The CT600 isn&apos;t ready for HMRC yet, and doesn&apos;t need to be: the accounts can go to Companies House first, and the CT600 later.</>}
           </p>
           {st.problems.length > 0 && (
             <div className="banner bad" style={{ marginBottom: 10 }}><span>✕</span><span><b>Before these can be filed:</b>

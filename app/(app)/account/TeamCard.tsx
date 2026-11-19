@@ -68,7 +68,7 @@ export default function TeamCard({ team }: { team: TeamView }) {
                 </span>
               </div>
             )}
-            {!team.emailReady && <p className="note">Invitation emails need RESEND_API_KEY and EMAIL_FROM in the settings. Until then, copy each link and send it yourself.</p>}
+            {!team.emailReady && <p className="note">Nucta Filings can&apos;t send invitation emails on this site yet, so copy each link and send it yourself.</p>}
           </div>
         ) : <p className="note" style={{ marginBottom: 0 }}>Only the account&apos;s owner can invite or remove people.</p>}
       </div>

@@ -1,6 +1,6 @@
 /**
  * Where HMRC send people back after signing in for VAT, with a one-time code
- * and the state Nucta File gave them. The state must be ours, unused and
+ * and the state Nucta Filings gave them. The state must be ours, unused and
  * under ten minutes old, and for the person signed in here.
  */
 import { NextResponse } from "next/server";

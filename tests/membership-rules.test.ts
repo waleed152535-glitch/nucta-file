@@ -64,7 +64,7 @@ eq("an ended one doesn't stop a new one", purchaseWindow([m("a", "2024-01-01", 2
 console.log("— words");
 eq("before filing", coverWords(m("a", "2026-01-01", 3), false), "Covered by your Practice membership: this return will be 4 of 10, to 31 December 2026.");
 eq("already counted", coverWords(m("a", "2026-01-01", 4), true), "Covered by your Practice membership: this return is 4 of 10, to 31 December 2026.");
-eq("the payment's description", membershipDescription("Practice", 100, "2026-11-01"), "Nucta File membership: Practice, 100 returns, 1 November 2026 to 31 October 2027");
+eq("the payment's description", membershipDescription("Practice", 100, "2026-11-01"), "Nucta Filings membership: Practice, 100 returns, 1 November 2026 to 31 October 2027");
 {
   const e = membershipEmail({ name: "Hina", planName: "Practice", returns: 100, amountPence: 29900, startsOn: "2026-11-01", paidAt: new Date("2026-10-26T10:00:00Z"), paymentId: "0f3a9c2e-1111-2222-3333-444455556666", receiptUrl: "https://pay.stripe.com/receipts/x", accountUrl: "https://x/account#membership", testMode: true });
   eq("email subject, marked as a test", e.subject, "[Test] Membership paid: Practice, 100 returns");

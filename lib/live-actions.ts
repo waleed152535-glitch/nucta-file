@@ -29,20 +29,20 @@ export interface LiveAdminView {
 export async function getLiveAdmin(): Promise<LiveAdminView> {
   const u = await currentUser();
   const settings = await getLiveSettings();
-  if (!u?.admin) return { ok: false, problem: "This is for Nucta File's administrators only.", settings, changes: [], checks: [], filings: [] };
+  if (!u?.admin) return { ok: false, problem: "This is for Nucta Filings' administrators only.", settings, changes: [], checks: [], filings: [] };
   const contact = (process.env.HMRC_CONTACT_EMAIL ?? "").trim();
   const contactOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
   const from = (process.env.EMAIL_FROM ?? "").trim();
   const fromAddress = (from.match(/<([^>]+)>/)?.[1] ?? from).trim();
   const mailProblem = !process.env.RESEND_API_KEY && !from ? "Add RESEND_API_KEY and EMAIL_FROM in the hosting settings (Vercel → Settings → Environment Variables), then redeploy."
     : !process.env.RESEND_API_KEY ? "EMAIL_FROM is set; add RESEND_API_KEY too, then redeploy."
-      : !from ? "RESEND_API_KEY is set; add EMAIL_FROM too, such as Nucta File <noreply@mail.nuctaformations.com>, then redeploy."
-        : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromAddress) ? `EMAIL_FROM (${from}) isn't an email address. Use something like Nucta File <noreply@mail.nuctaformations.com>.` : null;
+      : !from ? "RESEND_API_KEY is set; add EMAIL_FROM too, such as Nucta Filings <noreply@mail.nuctaformations.com>, then redeploy."
+        : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromAddress) ? `EMAIL_FROM (${from}) isn't an email address. Use something like Nucta Filings <noreply@mail.nuctaformations.com>.` : null;
   let tested = { count: 0, last: null as string | null };
   try {
     const s = await store();
     const rows = await s.db.select({ at: s.submissions.startedAt, cls: s.submissions.messageClass }).from(s.submissions)
-      .where(s.and(s.eq(s.submissions.gatewayTest, true), s.eq(s.submissions.outcome, "accepted"))).orderBy(s.desc(s.submissions.startedAt));
+      .where(s.and(s.eq(s.submissions.gatewayTest, true), s.eq(s.submissions.outcome, "accepted"), s.ne(s.submissions.messageClass, "CH-Accounts"))).orderBy(s.desc(s.submissions.startedAt));
     tested = { count: rows.length, last: rows[0]?.at.toISOString() ?? null };
   } catch { /* shown as none */ }
   const checks = [
@@ -63,8 +63,8 @@ export async function getLiveAdmin(): Promise<LiveAdminView> {
     readiness(settings).find((c) => c.label === "CT600 schema")!,
     {
       label: "Accepted by HMRC's test service", ok: tested.count > 0,
-      detail: tested.count ? `HMRC's test service has accepted ${tested.count} submission${tested.count === 1 ? "" : "s"} sent from this Nucta File, most recently on ${new Date(tested.last!).toLocaleString("en-GB", { timeZone: "Europe/London" })}.`
-        : "No return sent from this Nucta File has been accepted by HMRC's test service yet. Send one from a return's Check and send step.",
+      detail: tested.count ? `HMRC's test service has accepted ${tested.count} submission${tested.count === 1 ? "" : "s"} sent from this Nucta Filings, most recently on ${new Date(tested.last!).toLocaleString("en-GB", { timeZone: "Europe/London" })}.`
+        : "No return sent from this Nucta Filings has been accepted by HMRC's test service yet. Send one from a return's Check and send step.",
     },
   ];
   let filings: LiveAdminView["filings"] = [];
@@ -84,8 +84,8 @@ export async function getLiveAdmin(): Promise<LiveAdminView> {
 
 export async function updateLiveFiling(next: { mode: LiveFiling; who: LiveWho; requireTil: boolean; requireTest?: boolean; emailReceipt: boolean; confirmLive?: boolean }): Promise<{ ok: boolean; problem?: string; settings?: LiveSettings }> {
   const u = await currentUser();
-  if (!u?.admin) return { ok: false, problem: "This is for Nucta File's administrators only." };
-  if (!["off", "til", "on"].includes(next.mode) || !["admins", "everyone"].includes(next.who)) return { ok: false, problem: "That isn't a setting Nucta File knows." };
+  if (!u?.admin) return { ok: false, problem: "This is for Nucta Filings' administrators only." };
+  if (!["off", "til", "on"].includes(next.mode) || !["admins", "everyone"].includes(next.who)) return { ok: false, problem: "That isn't a setting Nucta Filings knows." };
   const before = await getLiveSettings();
   if (next.mode === "on" && before.mode !== "on" && !next.confirmLive) return { ok: false, problem: "Tick the box to confirm real filing should be switched on." };
   if (next.mode === "on" && next.who === "everyone" && !(before.mode === "on" && before.who === "everyone") && !next.confirmLive) return { ok: false, problem: "Tick the box to confirm real filing should open to every account." };
@@ -98,12 +98,12 @@ export async function updateLiveFiling(next: { mode: LiveFiling; who: LiveWho; r
   }
 }
 
-/** Sends a test email to the administrator, to check the email service accepts Nucta File's address. */
+/** Sends a test email to the administrator, to check the email service accepts Nucta Filings' address. */
 export async function sendTestEmail(): Promise<{ ok: boolean; problem?: string; to?: string }> {
   const u = await currentUser();
-  if (!u?.admin) return { ok: false, problem: "This is for Nucta File's administrators only." };
-  const r = await sendEmailChecked(u.email, "Nucta File: test email",
-    `Hello ${u.name},\n\nThis is a test from Nucta File's Live filing page. If it has reached you, HMRC receipts, approval links, invitations and password resets can be emailed.\n\nNucta File`);
+  if (!u?.admin) return { ok: false, problem: "This is for Nucta Filings' administrators only." };
+  const r = await sendEmailChecked(u.email, "Nucta Filings: test email",
+    `Hello ${u.name},\n\nThis is a test from Nucta Filings' Live filing page. If it has reached you, HMRC receipts, approval links, invitations and password resets can be emailed.\n\nNucta Filings`);
   return r.ok ? { ok: true, to: u.email } : { ok: false, problem: r.error };
 }
 
@@ -131,7 +131,7 @@ export async function recordPayment(returnId: string, part: number, p: { on: str
   try {
     const s = await store();
     const r = await ownedReturn(s, u, returnId);
-    if (!r) return { ok: false, problem: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, problem: "That return isn't in Nucta Filings." };
     const [c] = await s.db.select({ utr: s.companies.utr }).from(s.companies).where(s.eq(s.companies.id, r.companyId));
     const refProblem = paymentReferenceProblem(p.reference ?? "", c?.utr ?? null);
     if (refProblem) return { ok: false, problem: refProblem };
@@ -154,7 +154,7 @@ export async function removePayment(returnId: string, part: number, index: numbe
   try {
     const s = await store();
     const r = await ownedReturn(s, u, returnId);
-    if (!r) return { ok: false, problem: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, problem: "That return isn't in Nucta Filings." };
     const home = await paymentHome(s, returnId);
     if (!home) return { ok: false, problem: "The return couldn't be opened." };
     const list = [...(home.data.paid?.[String(part)] ?? [])];
@@ -175,11 +175,11 @@ export async function emailReceipt(returnId: string, part: number, toRaw: string
   if (!u) return { ok: false, problem: SIGNED_OUT };
   const to = toRaw.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) || to.length > 200) return { ok: false, problem: "Enter an email address." };
-  if (!emailReady()) return { ok: false, problem: "Email isn't set up in Nucta File yet, so the receipt can't be sent. Download the receipt PDF instead." };
+  if (!emailReady()) return { ok: false, problem: "Email isn't set up in Nucta Filings yet, so the receipt can't be sent. Download the receipt PDF instead." };
   try {
     const s = await store();
     const r = await ownedReturn(s, u, returnId);
-    if (!r) return { ok: false, problem: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, problem: "That return isn't in Nucta Filings." };
     const data = normaliseReturnData(r.data as Partial<ReturnData>);
     const rec = data.sent?.[String(part)];
     if (rec?.status !== "accepted") return { ok: false, problem: "This return hasn't been filed with HMRC, so there's no receipt to send." };

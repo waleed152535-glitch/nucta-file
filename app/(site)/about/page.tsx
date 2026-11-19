@@ -2,21 +2,21 @@ import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { SITE } from "@/lib/site";
 
-export const metadata = pageMeta({ title: "About", path: "/about", description: "Who makes Nucta File and why: software from Nucta Formations Ltd for small UK companies and the accountants who look after them, and where it stands today." });
+export const metadata = pageMeta({ title: "About", path: "/about", description: "Who makes Nucta Filings and why: software from Nucta Formations Ltd for small UK companies and the accountants who look after them, and where it stands today." });
 
 export default function About() {
   return (
     <section className="read">
       <div className="wrap">
         <div className="paper">
-        <h1>About Nucta File</h1>
-        <p style={{ fontSize: 19 }}>Nucta File is made by {SITE.company}, a UK company formation and compliance business that looks after small companies — many of them run by directors who live outside the UK.</p>
+        <h1>About Nucta Filings</h1>
+        <p style={{ fontSize: 19 }}>Nucta Filings is made by {SITE.company}, a UK company formation and compliance business that looks after small companies — many of them run by directors who live outside the UK.</p>
         <h2>Why we built it</h2>
         <p>When HMRC closed their free filing service on 31 March 2026, every company needed software to file its Company Tax Return. We needed it for our own clients, and wanted it to do the work an accountant would — the computation, the allowances, the director&apos;s loans, the awkward first year — rather than ask for the answers.</p>
         <h2>Where it stands</h2>
-        <p>Nucta File is registered with HMRC as a software developer (vendor {SITE.vendorId}). It files Company Tax Returns directly with HMRC, and its first live filings were made in October 2026. HMRC&apos;s recognition is optional; we&apos;ll apply once Nucta File has been in use long enough to meet their conditions. Filing accounts with Companies House is built and waiting for their test approval.</p>
+        <p>Nucta Filings is registered with HMRC as a software developer (vendor {SITE.vendorId}). It files Company Tax Returns directly with HMRC, and its first live filings were made in October 2026. HMRC&apos;s recognition is optional; we&apos;ll apply once Nucta Filings has been in use long enough to meet their conditions. Filing accounts with Companies House is built and waiting for their test approval.</p>
         <h2>How we work</h2>
-        <p>Every rule Nucta File applies is written down with where it comes from, and every return is checked against HMRC&apos;s own schema and business rules before it&apos;s sent. Where a company is outside what Nucta File handles, it says so.</p>
+        <p>Every rule Nucta Filings applies is written down with where it comes from, and every return is checked against HMRC&apos;s own schema and business rules before it&apos;s sent. Where a company is outside what Nucta Filings handles, it says so.</p>
         <p style={{ marginTop: 28 }}><Link href="/contact">Get in touch</Link></p>
         </div>
       </div>

@@ -65,7 +65,7 @@ export const PAY_ONLINE = "https://www.gov.uk/pay-corporation-tax";
  * The 17-character payment reference: the company's 10-digit UTR, "A001",
  * two digits that change with each accounting period, and "A". HMRC print
  * it on the notice to file and show it in the company's HMRC account; the
- * two period digits are HMRC's, so Nucta File checks the shape rather than
+ * two period digits are HMRC's, so Nucta Filings checks the shape rather than
  * guessing them.
  */
 export function paymentReferenceProblem(raw: string, utr: string | null): string | null {
@@ -112,9 +112,9 @@ export function receiptEmailText(x: {
       `Or pay online: ${PAY_ONLINE}`,
     ] : []),
     "",
-    "Keep this email with the company's records. The full receipt is kept with the return in Nucta File.",
+    "Keep this email with the company's records. The full receipt is kept with the return in Nucta Filings.",
     "",
-    `Nucta File, for ${x.sender}`,
+    `Nucta Filings, for ${x.sender}`,
   ];
   return { subject: `Filed with HMRC: ${x.company}, year to ${longDate(x.periodTo)}`, text: lines.join("\n") };
 }

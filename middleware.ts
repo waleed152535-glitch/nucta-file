@@ -21,7 +21,7 @@ import { canonicalHost } from "@/lib/site";
  *    checked against the database by every page and action (lib/auth.ts), so a
  *    made-up cookie gets nothing.
  */
-const PRIVATE = ["/dashboard", "/companies", "/returns", "/deadlines", "/calendar.ics", "/gateway", "/live-filing", "/payments", "/companies-house", "/log", "/settings", "/status", "/account"];
+const PRIVATE = ["/dashboard", "/companies", "/returns", "/deadlines", "/calendar.ics", "/gateway", "/live-filing", "/payments", "/companies-house", "/log", "/settings", "/status", "/account", "/help", "/dormant"];
 
 /** Pages that have a Markdown copy, by the path the copy is asked for at. */
 const MARKDOWN = /^\/(?:guides\/[a-z0-9-]+|guides|corporation-tax-calculator|index|sitemap)\.md$/;

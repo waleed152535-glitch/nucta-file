@@ -1,0 +1,10 @@
+Transaction report
+"Report generated on Nov 19, 2026"
+
+"Transaction creation date","Type","Order number","Legacy order ID","Buyer username","Buyer name","Post to city","Post to province/region/state","Post to postcode","Post to country","Net amount","Payout currency","Payout date","Payout ID","Payout method","Payout status","Reason for hold","Item ID","Transaction ID","Item title","Custom label","Quantity","Item subtotal","Postage and packaging","Seller collected tax","eBay collected tax","Final value fee – fixed","Final value fee – variable","Very high ""item not as described"" fee","Below standard performance fee","International fee","Gross transaction amount","Transaction currency","Exchange rate","Reference ID","Description"
+"Aug 03, 2025","Order","01-1","","buyer1","A Buyer","Leeds","","LS1","GB","16.92","GBP","Aug 05, 2025","P1","Bank","Paid","","111","T1","Phone case","PC1","1","18.00","2.50","--","--","-0.30","-2.55","--","--","--","20.50","GBP","--","","--"
+"Aug 10, 2025","Refund","01-1","","buyer1","A Buyer","Leeds","","LS1","GB","-18.00","GBP","Aug 12, 2025","P2","Bank","Paid","","111","T1","Phone case","PC1","1","18.00","0","--","--","0","0","--","--","--","-18.00","GBP","--","","--"
+"Aug 11, 2025","Shipping label","--","","","","","","","","-3.20","GBP","","","","","","","","","","","--","--","--","--","--","--","--","--","--","-3.20","GBP","--","","Royal Mail label"
+"Aug 12, 2025","Other fee","--","","","","","","","","-5.00","GBP","","","","","","","","","","","--","--","--","--","--","--","--","--","--","-5.00","GBP","--","","Promoted listings fee"
+"Aug 13, 2025","Other fee","--","","","","","","","","-25.00","GBP","","","","","","","","","","","--","--","--","--","--","--","--","--","--","-25.00","GBP","--","","Shop subscription fee"
+"Aug 14, 2025","Payout","--","","","","","","","","-10.00","GBP","Aug 14, 2025","P3","Bank","Paid","","","","","","","--","--","--","--","--","--","--","--","--","-10.00","GBP","--","","--"

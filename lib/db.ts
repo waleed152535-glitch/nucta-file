@@ -19,7 +19,7 @@ export const rawSql = sql;
 /**
  * Where the app is connecting, without the password, for error messages.
  *
- * Nucta File shares its database with Nucta Desk, and a table missing "here"
+ * Nucta Filings shares its database with Nucta Desk, and a table missing "here"
  * but present "there" almost always means two different connection strings.
  * Showing the host and database name makes that visible at a glance.
  */

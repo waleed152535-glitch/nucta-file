@@ -3,7 +3,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * Nucta File keeps its own records, separate from Nucta Desk.
+ * Nucta Filings keeps its own records, separate from Nucta Desk.
  *
  * The reason is legal rather than technical. A filing is evidence: HMRC can
  * ask, years later, exactly what was sent, when, by whom, and what came back.
@@ -260,7 +260,7 @@ export const tasks = pgTable("nf_tasks", {
 }, (t) => [index("tasks_account_idx").on(t.accountId)]);
 
 /**
- * Settings Nucta File's administrators change from inside the software, such
+ * Settings Nucta Filings' administrators change from inside the software, such
  * as whether live filing is open. One row per setting; the value is JSON.
  */
 export const settings = pgTable("nf_settings", {
@@ -408,7 +408,7 @@ export const chFilings = pgTable("nf_ch_filings", {
   companyNo: text("company_no").notNull(),
   companyName: text("company_name").notNull(),
   periodTo: text("period_to").notNull(),
-  /** The six-character number Nucta File gave the submission; never reused. */
+  /** The six-character number Nucta Filings gave the submission; never reused. */
   submissionNumber: text("submission_number").notNull(),
   /** live | test */
   env: text("env").notNull().default("live"),

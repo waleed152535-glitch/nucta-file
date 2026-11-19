@@ -1,7 +1,7 @@
 import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 
-export const metadata = pageMeta({ title: "Features: accounts, Corporation Tax and the CT600", path: "/features", description: "What Nucta File prepares and files: micro-entity and small company accounts in iXBRL, the tax computation, capital allowances, director's loans and the CT600." });
+export const metadata = pageMeta({ title: "Features: accounts, Corporation Tax and the CT600", path: "/features", description: "What Nucta Filings prepares and files: micro-entity and small company accounts in iXBRL, the tax computation, capital allowances, director's loans and the CT600." });
 
 const GROUPS: { heading: string; intro: string; items: [string, string][] }[] = [
   {
@@ -78,7 +78,7 @@ export default function Features() {
         <div className="wrap">
           <div className="not-yet">
             <h2>Not handled yet</h2>
-            <p>Groups and group relief, research and development and creative reliefs, chargeable gains, rental and other investment income, overseas income, and FRS 102 small-company accounts. If a company has any of these, Nucta File says so at the start rather than preparing a return that would be wrong.</p>
+            <p>Groups and group relief, research and development and creative reliefs, chargeable gains, rental and other investment income, overseas income, and FRS 102 small-company accounts. If a company has any of these, Nucta Filings says so at the start rather than preparing a return that would be wrong.</p>
             <p style={{ marginTop: 24, marginBottom: 0 }}><Link href="/sign-up" className="s-btn">Create your account</Link></p>
           </div>
         </div>

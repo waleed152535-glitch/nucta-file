@@ -138,8 +138,8 @@ export default async function CompanyDeadlines({ params }: { params: Promise<{ n
         {pic.active && pic.corporationTax && (
           <div className="co-cta">
             <div>
-              <h2>Prepare this return in Nucta File</h2>
-              <p>The company&apos;s details and dates come straight from Companies House. Enter the year&apos;s figures and Nucta File works out the tax, prepares the accounts and files the CT600 with HMRC.</p>
+              <h2>Prepare this return in Nucta Filings</h2>
+              <p>The company&apos;s details and dates come straight from Companies House. Enter the year&apos;s figures and Nucta Filings works out the tax, prepares the accounts and files the CT600 with HMRC.</p>
             </div>
             <div className="ctas">
               {signedIn ? (

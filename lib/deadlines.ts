@@ -19,7 +19,7 @@
  *
  * A company's first accounts run from incorporation to the last day of the
  * month of its first anniversary (Companies Act 2006 s391(4)); later ones for
- * twelve months at a time. Periods with no return in Nucta File yet are shown
+ * twelve months at a time. Periods with no return in Nucta Filings yet are shown
  * as "not started", so nothing is missed.
  */
 
@@ -46,7 +46,7 @@ export interface DeadlineReturn {
   taxByPart?: { to: string; tax: number }[];
   /** A dormant company HMRC haven't asked for a return: only its accounts are due. */
   ctNotRequired?: boolean;
-  /** Tax paid so far for each accounting period, as recorded in Nucta File. */
+  /** Tax paid so far for each accounting period, as recorded in Nucta Filings. */
   paidByPart?: { to: string; amount: number }[];
 }
 
@@ -65,7 +65,7 @@ export interface Deadline {
   daysLeft: number;
   state: "overdue" | "soon" | "later";
   amount?: number;
-  /** Worked out by Nucta File rather than taken from Companies House. */
+  /** Worked out by Nucta Filings rather than taken from Companies House. */
   estimated?: boolean;
 }
 
@@ -129,7 +129,7 @@ export function deadlinesFor(companies: DeadlineCompany[], returns: DeadlineRetu
         const tax = r.taxByPart?.find((x) => x.to === p.to)?.tax;
         const due = taxDueDate(p.to);
         if ((tax !== undefined && tax <= 0) || r.ctNotRequired) continue;
-        // Payments recorded in Nucta File take the tax off the list; without one, a filed
+        // Payments recorded in Nucta Filings take the tax off the list; without one, a filed
         // return's tax is shown only until it falls due, as it may have been paid elsewhere.
         const paid = Math.round((r.paidByPart ?? []).filter((x) => x.to === p.to).reduce((sum, x) => sum + x.amount, 0) * 100) / 100;
         if (tax !== undefined && paid > 0 && paid >= tax) continue;

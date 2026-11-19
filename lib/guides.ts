@@ -58,9 +58,9 @@ export const GUIDES: Guide[] = [
         ],
       },
       {
-        heading: "Using Nucta File",
+        heading: "Using Nucta Filings",
         paragraphs: [
-          "You enter the year's figures once. Nucta File prepares micro-entity or small company accounts, works out the computation and the tax, builds the CT600 and attaches the accounts and computation in iXBRL. Each return is checked by HMRC's test service before it can be filed for real.",
+          "You enter the year's figures once. Nucta Filings prepares micro-entity or small company accounts, works out the computation and the tax, builds the CT600 and attaches the accounts and computation in iXBRL. Each return is checked by HMRC's test service before it can be filed for real.",
         ],
       },
     ],
@@ -95,7 +95,7 @@ export const GUIDES: Guide[] = [
         heading: "Deadlines",
         paragraphs: [
           "When the accounts cover 18 months or less, both returns are due 12 months after the end of the accounts. The tax for each period is due 9 months and a day after that period ends — so the first period's tax is due sooner.",
-          "The same set of accounts goes with both returns. Nucta File does the split, attaches the accounts to each return and produces a computation for each.",
+          "The same set of accounts goes with both returns. Nucta Filings does the split, attaches the accounts to each return and produces a computation for each.",
         ],
       },
     ],
@@ -128,7 +128,7 @@ export const GUIDES: Guide[] = [
         heading: "Companies House",
         paragraphs: [
           "Every company files accounts with Companies House each year, dormant or not. Dormant accounts are short: a balance sheet, usually just the share capital, and a statement that the company was dormant and is exempt from audit under section 480 of the Companies Act 2006.",
-          "In Nucta File, answer yes to the dormant question in the first step. The figures steps are skipped, the accounts are prepared as dormant accounts, and a nil return is ready if HMRC ask for one.",
+          "In Nucta Filings, answer yes to the dormant question in the first step. The figures steps are skipped, the accounts are prepared as dormant accounts, and a nil return is ready if HMRC ask for one.",
         ],
       },
     ],
@@ -153,13 +153,13 @@ export const GUIDES: Guide[] = [
       {
         heading: "The rate from 6 April 2026",
         paragraphs: [
-          "For loans made on or after 6 April 2026 the rate is 35.75%. HMRC's systems accept only 33.75% until April 2027, so returns filed before then report 33.75% and are amended afterwards to add the difference. Nucta File works out the amendment and warns you.",
+          "For loans made on or after 6 April 2026 the rate is 35.75%. HMRC's systems accept only 33.75% until April 2027, so returns filed before then report 33.75% and are amended afterwards to add the difference. Nucta Filings works out the amendment and warns you.",
         ],
       },
       {
         heading: "Avoiding it",
         paragraphs: [
-          "A loan repaid within nine months of the year end isn't charged — Nucta File gives that relief automatically when you enter the repayment and its date.",
+          "A loan repaid within nine months of the year end isn't charged — Nucta Filings gives that relief automatically when you enter the repayment and its date.",
           "Separately, an interest-free loan above £10,000 at any time in the tax year is a taxable benefit for a director, reported on form P11D, and the company pays Class 1A National Insurance on it.",
         ],
       },
@@ -193,10 +193,10 @@ export const GUIDES: Guide[] = [
         ],
       },
       {
-        heading: "What it means with Nucta File",
+        heading: "What it means with Nucta Filings",
         paragraphs: [
-          "Nucta File already prepares the accounts in iXBRL for HMRC. Filing the same accounts with Companies House from the same screen is built, and is going through Companies House's testing for filing software.",
-          "Small company accounts in Nucta File include the profit and loss account and the directors' report. The copy for Companies House leaves them out, as the law allows, and says so on the balance sheet.",
+          "Nucta Filings already prepares the accounts in iXBRL and files them with Companies House from the same screen as the CT600, so nothing changes for its users in April 2028.",
+          "Small company accounts in Nucta Filings include the profit and loss account and the directors' report. The copy for Companies House leaves them out, as the law allows, and says so on the balance sheet.",
         ],
       },
     ],
@@ -245,9 +245,9 @@ export const GUIDES: Guide[] = [
         ],
       },
       {
-        heading: "Keeping track with Nucta File",
+        heading: "Keeping track with Nucta Filings",
         paragraphs: [
-          "Nucta File works out all three deadlines for every company you add and lists what is overdue and what is due in the next 30 days. You can add them to Outlook, Apple or Google Calendar with reminders a week and a day before.",
+          "Nucta Filings works out all three deadlines for every company you add and lists what is overdue and what is due in the next 30 days. You can add them to Outlook, Apple or Google Calendar with reminders a week and a day before.",
           "To check one company without an account, use the free deadline checker: it reads the company's Companies House record.",
         ],
       },
@@ -296,9 +296,9 @@ export const GUIDES: Guide[] = [
         ],
       },
       {
-        heading: "With Nucta File",
+        heading: "With Nucta Filings",
         paragraphs: [
-          "Nucta File prepares either set from the same figures: FRS 105 micro-entity accounts, or FRS 102 Section 1A small company accounts with the directors' report and notes, and the shorter copy for Companies House.",
+          "Nucta Filings prepares either set from the same figures: FRS 105 micro-entity accounts, or FRS 102 Section 1A small company accounts with the directors' report and notes, and the shorter copy for Companies House.",
         ],
       },
     ],
@@ -341,9 +341,9 @@ export const GUIDES: Guide[] = [
         ],
       },
       {
-        heading: "With Nucta File",
+        heading: "With Nucta Filings",
         paragraphs: [
-          "Nucta File takes you through those steps in one place: you enter the figures once, and it prepares the accounts, the computation, the tax and the CT600, gives the director an approval pack, and files with HMRC. Every return is checked against HMRC's test service before it can be filed for real.",
+          "Nucta Filings takes you through those steps in one place: you enter the figures once, and it prepares the accounts, the computation, the tax and the CT600, gives the director an approval pack, files with HMRC, and files the accounts with Companies House. Every return is checked against HMRC's test service before it can be filed for real.",
         ],
       },
     ],

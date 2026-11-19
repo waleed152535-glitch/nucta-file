@@ -1,7 +1,7 @@
 import { pageMeta } from "@/lib/seo";
 import { SITE } from "@/lib/site";
 
-export const metadata = pageMeta({ title: "Terms of use", path: "/terms", description: "The terms for using Nucta File: what the software does, your responsibilities and ours when a return is filed with HMRC, fees, liability and ending your account." });
+export const metadata = pageMeta({ title: "Terms of use", path: "/terms", description: "The terms for using Nucta Filings: what the software does, your responsibilities and ours when a return is filed with HMRC, fees, liability and ending your account." });
 
 export default function Terms() {
   return (
@@ -12,7 +12,7 @@ export default function Terms() {
         <p className="meta">Last updated 24 October 2026</p>
         <p>These terms are between you and {SITE.company}{SITE.companyNumber ? ` (company number ${SITE.companyNumber})` : ""}, which provides {SITE.product}. By creating an account you agree to them.</p>
 
-        <h2>What Nucta File does</h2>
+        <h2>What Nucta Filings does</h2>
         <p>{SITE.product} helps you prepare a company&apos;s accounts and Corporation Tax return from figures you enter, and file them with HMRC. It applies the tax rules as they stand and tells you when a company is outside what it handles.</p>
         <p>{SITE.product} files returns with HMRC using the HMRC sign-in you type in at the moment of filing. A return is filed only when you confirm it, after the declaration.</p>
 
@@ -25,7 +25,7 @@ export default function Terms() {
         </ul>
 
         <h2>Our responsibilities</h2>
-        <p>We&apos;ll take reasonable care that {SITE.product} works out returns correctly and keeps your information secure. Nucta File isn&apos;t a substitute for professional advice: if a company&apos;s position isn&apos;t straightforward, ask an accountant.</p>
+        <p>We&apos;ll take reasonable care that {SITE.product} works out returns correctly and keeps your information secure. Nucta Filings isn&apos;t a substitute for professional advice: if a company&apos;s position isn&apos;t straightforward, ask an accountant.</p>
 
         <h2>Fees</h2>
         <p>Using {SITE.product} is free while we launch. When charging starts, the prices on our pricing page apply to each return filed, and we&apos;ll tell you before anything is charged.</p>

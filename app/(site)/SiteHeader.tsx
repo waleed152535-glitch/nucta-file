@@ -23,7 +23,7 @@ export default function SiteHeader() {
   return (
     <header className="s-head">
       <div className="wrap">
-        <Link href="/" className="s-brand" aria-label="Nucta File home"><Mark />Nucta File</Link>
+        <Link href="/" className="s-brand" aria-label="Nucta Filings home"><Mark />Nucta Filings</Link>
         <nav className="s-nav" aria-label="Main">
           {NAV.map((n) => <Link key={n.href} href={n.href} aria-current={here(n.href)} className={n.roomy ? "roomy" : undefined}>{n.label}</Link>)}
         </nav>
@@ -31,11 +31,11 @@ export default function SiteHeader() {
           <summary>Menu</summary>
           <nav aria-label="Main">
             {NAV.map((n) => <Link key={n.href} href={n.href}>{n.label}</Link>)}
-            {signedIn ? <Link href="/dashboard">Open Nucta File</Link> : <Link href="/sign-in">Sign in</Link>}
+            {signedIn ? <Link href="/dashboard">Open Nucta Filings</Link> : <Link href="/sign-in">Sign in</Link>}
           </nav>
         </details>
         <div className="s-actions">
-          {signedIn ? <Link href="/dashboard" className="s-btn">Open Nucta File</Link> : (
+          {signedIn ? <Link href="/dashboard" className="s-btn">Open Nucta Filings</Link> : (
             <>
               <Link href="/sign-in" className="s-link">Sign in</Link>
               <Link href="/sign-up" className="s-btn">Create account</Link>

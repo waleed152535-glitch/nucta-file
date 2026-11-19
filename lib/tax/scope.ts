@@ -1,5 +1,5 @@
 /**
- * Which companies Nucta File can file for.
+ * Which companies Nucta Filings can file for.
  *
  * Each question names something the engine doesn't yet compute. Answering
  * "yes" to any of them stops the return with a plain explanation, so a
@@ -37,7 +37,7 @@ export interface ScopeAnswers {
 }
 
 export const SCOPE_QUESTIONS: { key: keyof ScopeAnswers; ask: string; expect: boolean; why: string }[] = [
-  { key: "ukResidentUkTrade", expect: true, ask: "Is the company UK resident, with one trade carried on in the UK?", why: "Non-resident companies and overseas trades are taxed under different rules." },
+  { key: "ukResidentUkTrade", expect: true, ask: "Is the company UK resident, with one trade? (A company formed in the UK is UK resident, even when its directors live abroad.)", why: "Non-resident companies and overseas trades are taxed under different rules." },
   { key: "loanArrangements", expect: false, ask: "Did a director or shareholder repay a loan and then borrow £5,000 or more again within 30 days, or receive a benefit from the company under an arrangement rather than a loan?", why: "These are taxed under special rules (sections 464A and 464C) that need an accountant. Ordinary director's loans are fine — enter them in the director's loans step." },
   { key: "groupRelief", expect: false, ask: "Is the company claiming or giving up losses with other companies in a group (group relief)?", why: "Group relief needs the CT600C page." },
   { key: "researchOrCreativeRelief", expect: false, ask: "Is the company claiming research and development relief, or a creative industry relief?", why: "These claims have their own pages and detailed rules." },
@@ -50,7 +50,7 @@ export const SCOPE_QUESTIONS: { key: keyof ScopeAnswers; ask: string; expect: bo
   { key: "buildingsAllowances", expect: false, ask: "Is the company claiming structures and buildings allowance?", why: "Buildings allowances aren't handled yet." },
 ];
 
-/** The reasons this company can't be filed through Nucta File yet. Empty means it can. */
+/** The reasons this company can't be filed through Nucta Filings yet. Empty means it can. */
 export function scopeProblems(a: Partial<ScopeAnswers>): string[] {
   return SCOPE_QUESTIONS.flatMap((q) => {
     const v = a[q.key];

@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "VAT returns" };
 
 const NOTICES: Record<string, { tone: "good" | "bad" | "info"; text: string }> = {
-  connected: { tone: "good", text: "Connected to HMRC. Nucta File can now see this business's VAT periods and send its returns." },
+  connected: { tone: "good", text: "Connected to HMRC. Nucta Filings can now see this business's VAT periods and send its returns." },
   declined: { tone: "info", text: "Nothing was connected: the authority wasn't granted on HMRC's page." },
   failed: { tone: "bad", text: "HMRC didn't complete the connection. Try again; if it keeps failing, check that the business is signed up for Making Tax Digital for VAT." },
   "wrong-person": { tone: "bad", text: "That HMRC sign-in was started by someone else. Start it again from this page." },

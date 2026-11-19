@@ -28,7 +28,7 @@ export async function listApprovals(returnId: string): Promise<{ ok: boolean; pr
   try {
     const s = await store();
     const r = await ownedReturn(s, u, returnId);
-    if (!r) return { ok: false, problem: "That return isn't in Nucta File.", rows: [], emailReady: emailReady() };
+    if (!r) return { ok: false, problem: "That return isn't in Nucta Filings.", rows: [], emailReady: emailReady() };
     const now = figuresHash(r.periodStart, r.periodEnd, normaliseReturnData(r.data as Partial<ReturnData>));
     const rows = await s.db.select().from(s.approvals).where(s.eq(s.approvals.returnId, returnId)).orderBy(s.desc(s.approvals.createdAt));
     return {
@@ -47,7 +47,7 @@ export async function listApprovals(returnId: string): Promise<{ ok: boolean; pr
 async function mail(to: string | null, link: string, d: { director: string; company: string; from: string; to: string; tax: number; preparer: string; reminder: boolean }) {
   if (!to) return false;
   return sendEmail(to, `${d.reminder ? "Reminder: " : ""}Please approve ${d.company}'s accounts and tax return`,
-    `Hello ${d.director},\n\n${d.preparer} has prepared the accounts and Company Tax Return for ${d.company}, for ${long(d.from)} to ${long(d.to)}. Corporation Tax: £${d.tax.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.\n\nPlease read them and approve here:\n\n${link}\n\nThe link shows the approval pack to read or download. If anything looks wrong, you can send a question from the same page instead of approving.\n\nNucta File, for ${d.preparer}`);
+    `Hello ${d.director},\n\n${d.preparer} has prepared the accounts and Company Tax Return for ${d.company}, for ${long(d.from)} to ${long(d.to)}. Corporation Tax: £${d.tax.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.\n\nPlease read them and approve here:\n\n${link}\n\nThe link shows the approval pack to read or download. If anything looks wrong, you can send a question from the same page instead of approving.\n\nNucta Filings, for ${d.preparer}`);
 }
 
 /** Sends the return to a director for approval. Any earlier link for the same return stops working. */
@@ -60,7 +60,7 @@ export async function requestApproval(returnId: string, directorNameRaw: string,
   try {
     const s = await store();
     const r = await ownedReturn(s, u, returnId);
-    if (!r) return { ok: false, problem: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, problem: "That return isn't in Nucta Filings." };
     const [c] = await s.db.select().from(s.companies).where(s.eq(s.companies.id, r.companyId));
     const data = normaliseReturnData(r.data as Partial<ReturnData>);
     const p = prepareReturn(toCompanyReturnInput({ name: c.name, companyNo: c.companyNo, utr: c.utr }, r.periodStart, r.periodEnd, data));
@@ -93,7 +93,7 @@ export async function resendApproval(approvalId: string): Promise<{ ok: boolean;
     const [a] = await s.db.select().from(s.approvals).where(s.and(s.eq(s.approvals.id, approvalId), s.eq(s.approvals.accountId, u.accountId)));
     if (!a || a.status === "approved" || a.status === "cancelled") return { ok: false, problem: "That approval can't be sent again." };
     const r = await ownedReturn(s, u, a.returnId);
-    if (!r) return { ok: false, problem: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, problem: "That return isn't in Nucta Filings." };
     const data = normaliseReturnData(r.data as Partial<ReturnData>);
     if (figuresHash(r.periodStart, r.periodEnd, data) !== a.figuresHash) return { ok: false, problem: "The figures have changed since this was sent. Send a new approval instead." };
     const [c] = await s.db.select().from(s.companies).where(s.eq(s.companies.id, r.companyId));

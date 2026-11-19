@@ -2,7 +2,7 @@
  * The figures for Companies House's online micro-entity accounts form,
  * box by box, in the form's own words and order — this year and last year.
  *
- * They come from the same accounts Nucta File sends HMRC with the CT600, so
+ * They come from the same accounts Nucta Filings sends HMRC with the CT600, so
  * what Companies House receive matches what HMRC have. The form wants plain
  * whole numbers: no commas, no brackets, a minus sign for a negative.
  */

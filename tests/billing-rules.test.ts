@@ -56,7 +56,7 @@ console.log("— the email confirmation");
 const ec = emailCheckText("Waleed", "https://file.nucta.test/verify-email?token=abc");
 t("has the link", ec.includes("https://file.nucta.test/verify-email?token=abc"), ec);
 t("says how long it lasts", ec.includes("48 hours"), ec);
-t("says what to do if it wasn't them", ec.includes("If you didn't create a Nucta File account"), ec);
+t("says what to do if it wasn't them", ec.includes("If you didn't create a Nucta Filings account"), ec);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

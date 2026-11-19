@@ -105,7 +105,7 @@ export function SmallBalanceSheet(props: {
         {sug.gap > 0 && sug.amount !== s.deferredTaxCarriedForward && (
           <p className="note" style={{ margin: "-4px 0 8px" }}><button type="button" className="btn ghost sm" onClick={() => setSmall("deferredTaxCarriedForward", sug.amount)}>Use the suggested {gbp(sug.amount)}</button> Check it with whoever prepares the accounts: it&apos;s a starting point.</p>
         )}
-        {ct > 0 && <p className="note" style={{ margin: 0 }}>Includes this year&apos;s Corporation Tax of {gbp(ct)}, which Nucta File adds for you.</p>}
+        {ct > 0 && <p className="note" style={{ margin: 0 }}>Includes this year&apos;s Corporation Tax of {gbp(ct)}, which Nucta Filings adds for you.</p>}
       </div>
 
       <div className="bsgroup">

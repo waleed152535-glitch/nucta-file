@@ -34,8 +34,8 @@ export async function GET() {
   const d = await getDashboard();
   const site = siteOrigin();
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
-  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nucta Formations Ltd//Nucta File//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
-    `X-WR-CALNAME:${esc(`Nucta File deadlines, ${u.accountName}`)}`, "X-WR-TIMEZONE:Europe/London"];
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nucta Formations Ltd//Nucta Filings//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+    `X-WR-CALNAME:${esc(`Nucta Filings deadlines, ${u.accountName}`)}`, "X-WR-TIMEZONE:Europe/London"];
   for (const x of d.deadlines) {
     if (x.kind === "not-started" && x.label !== "Return not started") continue;
     const what = `${x.label}${x.amount != null ? ` (${gbp(x.amount)})` : ""}: ${x.companyName}`;
@@ -45,7 +45,7 @@ export async function GET() {
       `DTSTAMP:${stamp}`,
       `DTSTART;VALUE=DATE:${day(x.due)}`, `DTEND;VALUE=DATE:${nextDay(x.due)}`,
       `SUMMARY:${esc(what)}`,
-      `DESCRIPTION:${esc(`${x.label} for ${x.companyName}, period ${long(x.periodFrom)} to ${long(x.periodTo)}.${x.estimated ? " Date worked out by Nucta File." : ""} Open in Nucta File: ${link}`)}`,
+      `DESCRIPTION:${esc(`${x.label} for ${x.companyName}, period ${long(x.periodFrom)} to ${long(x.periodTo)}.${x.estimated ? " Date worked out by Nucta Filings." : ""} Open in Nucta Filings: ${link}`)}`,
       `URL:${link}`, "TRANSP:TRANSPARENT",
       "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc(what)}`, "TRIGGER:-P7D", "END:VALARM",
       "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc(what)}`, "TRIGGER:-P1D", "END:VALARM",
@@ -53,6 +53,6 @@ export async function GET() {
   }
   lines.push("END:VCALENDAR");
   return new Response(lines.map(fold).join("\r\n") + "\r\n", {
-    headers: { "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": 'attachment; filename="nucta-file-deadlines.ics"', "Cache-Control": "no-store" },
+    headers: { "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": 'attachment; filename="nucta-filings-deadlines.ics"', "Cache-Control": "no-store" },
   });
 }

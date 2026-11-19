@@ -23,6 +23,8 @@ import { Money, Whole, Text, DateField, YesNo, gbp } from "./fields";
 import { PriorSmallFields, SmallBalanceSheet } from "./SmallAccounts";
 import OnlineApproval from "./OnlineApproval";
 import TrialBalanceImport from "./TrialBalanceImport";
+import MarketplaceImport from "./MarketplaceImport";
+import ReturnIntro from "./ReturnIntro";
 import LiveFiling from "./LiveFiling";
 import CompaniesHouseAccounts, { SmallCompaniesHouse } from "./CompaniesHouseAccounts";
 import CompaniesHouseFiling from "./CompaniesHouseFiling";
@@ -79,7 +81,19 @@ export default function ReturnWizard(props: {
   const [ap1, ap2] = periods;
 
   const [tbOpen, setTbOpen] = useState(false);
+  const [mpOpen, setMpOpen] = useState(false);
+  const [mpDone, setMpDone] = useState(false);
   const [tbDone, setTbDone] = useState(false);
+  const fromMarketplace = (v: { turnover: number; otherIncome: number; otherCharges: number }, mode: "replace" | "add") => {
+    setD((p) => ({ ...p, pl: {
+      ...p.pl,
+      turnover: Math.round(v.turnover + (mode === "add" ? p.pl.turnover : 0)),
+      otherIncome: Math.round(v.otherIncome + (mode === "add" ? p.pl.otherIncome : 0)),
+      otherCharges: Math.round(v.otherCharges + (mode === "add" ? p.pl.otherCharges : 0)),
+    } }));
+    setMpOpen(false);
+    setMpDone(true);
+  };
   const fromTrialBalance = (pl: Partial<ReturnData["pl"]>, bs: Partial<ReturnData["balanceSheet"]>) => {
     const whole = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "number" ? Math.round(v) : v])) as T;
     setD((p) => {
@@ -210,6 +224,8 @@ export default function ReturnWizard(props: {
           ))}
         </ol>
 
+        {props.status === "draft" && step === 0 && <ReturnIntro />}
+
         {canAmend && (
           <div className="banner good" style={{ alignItems: "center" }}>
             <span>✓</span>
@@ -236,7 +252,7 @@ export default function ReturnWizard(props: {
             <span>ℹ</span>
             <span>
               These accounts cover {monthsIn(props.periodStart, props.periodEnd)} months. Enter the figures for the <b>whole period</b>, as in the accounts.
-              A Corporation Tax return can&apos;t cover more than 12 months, so Nucta File splits them into two returns —
+              A Corporation Tax return can&apos;t cover more than 12 months, so Nucta Filings splits them into two returns —
               {" "}{longDate(ap1.from)} to {longDate(ap1.to)}, and {longDate(ap2.from)} to {longDate(ap2.to)}{" "}— the profit by days, and
               purchases, sales, donations and director&apos;s loans by their dates.
             </span>
@@ -251,7 +267,7 @@ export default function ReturnWizard(props: {
 
         {step === 0 && (
           <div className="card">
-            <div className="hd"><h3>The company</h3><span className="note">Can Nucta File handle this company?</span></div>
+            <div className="hd"><h3>The company</h3><span className="note">Can Nucta Filings handle this company?</span></div>
             <div className="bd">
               <Text label="What the company does" hint="appears in the accounts and the computation" value={d.activity} onChange={(v) => set("activity", v)} placeholder="e.g. Online retail of household goods" />
               <Whole label="Associated companies" hint="other companies under the same person's control — dormant ones don't count" value={d.associatedCompanies} onChange={(v) => set("associatedCompanies", v)} />
@@ -265,7 +281,7 @@ export default function ReturnWizard(props: {
                   <YesNo question="Have HMRC sent the company a notice to file a Company Tax Return for this period?" value={d.ctNoticeReceived ?? undefined}
                     onChange={(v) => set("ctNoticeReceived", v)}
                     why={d.ctNoticeReceived === false
-                      ? "Then HMRC don't expect a return. Only the dormant accounts go to Companies House — Nucta File prepares them, and the return stays ready in case HMRC ask."
+                      ? "Then HMRC don't expect a return. Only the dormant accounts go to Companies House — Nucta Filings prepares them, and the return stays ready in case HMRC ask."
                       : "HMRC usually tell a dormant company it doesn't need to file. If they've sent a notice (form CT603, or a letter or email asking for a return), a nil return is filed."} />
                   <div className="banner info" style={{ marginTop: 12 }}>
                     <span>ℹ</span>
@@ -292,7 +308,14 @@ export default function ReturnWizard(props: {
                       </div>
                     );
                   })()}
-                  <p className="note" style={{ margin: "14px 0 6px" }}>Answer each question. If any answer means Nucta File can&apos;t prepare this return yet, it will say why.</p>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", margin: "14px 0 6px" }}>
+                    <p className="note" style={{ margin: 0, flex: "1 1 320px" }}>Answer each question. If any answer means Nucta Filings can&apos;t prepare this return yet, it will say why. For most small trading companies the answers are: UK resident, and none of the rest.</p>
+                    {SCOPE_QUESTIONS.some((q) => d.scope[q.key] === undefined) && (
+                      <button type="button" className="btn ghost sm" onClick={() => set("scope", { ...d.scope, ...Object.fromEntries(SCOPE_QUESTIONS.filter((q) => d.scope[q.key] === undefined).map((q) => [q.key, q.expect])) })}>
+                        None of these apply
+                      </button>
+                    )}
+                  </div>
                   {SCOPE_QUESTIONS.map((q) => (
                     <YesNo key={q.key} question={q.ask} value={d.scope[q.key]} onChange={(v) => set("scope", { ...d.scope, [q.key]: v })}
                       why={d.scope[q.key] !== undefined && d.scope[q.key] !== q.expect ? `Not yet: ${q.why}` : undefined} />
@@ -315,13 +338,20 @@ export default function ReturnWizard(props: {
           </div>
         )}
 
-        {(step === 1 || step === 6) && !d.dormant && !tbOpen && (
-          <div className="banner info" style={{ alignItems: "center" }}>
+        {(step === 1 || step === 6) && !d.dormant && !tbOpen && !mpOpen && (
+          <div className="banner info" style={{ alignItems: "center", flexWrap: "wrap" }}>
             <span>⇩</span>
-            <span style={{ flex: 1 }}>{tbDone ? <><b>Filled in from the trial balance.</b> Check each figure here and on the balance sheet, then save.{small && " For small company accounts, split what's owed each way into its lines, and enter equipment's cost and depreciation."}</> : <>Keep the books in Xero, QuickBooks, FreeAgent or Sage? Import the trial balance to fill in the profit and loss and the balance sheet at once.</>}</span>
-            <button type="button" className="btn sm" onClick={() => setTbOpen(true)}>{tbDone ? "Import again" : "Import a trial balance"}</button>
+            <span style={{ flex: "1 1 320px" }}>{tbDone ? <><b>Filled in from the trial balance.</b> Check each figure here and on the balance sheet, then save.{small && " For small company accounts, split what's owed each way into its lines, and enter equipment's cost and depreciation."}</>
+              : mpDone && step === 1 ? <><b>Filled in from the marketplace reports.</b> Now add what the goods cost (Cost of goods sold) and any other costs paid from the bank, then save.</>
+              : step === 1 ? <>Fill this in from the bookkeeping&apos;s trial balance (Xero, QuickBooks, FreeAgent, Sage), or from an Amazon or eBay seller&apos;s transaction reports.</>
+              : <>Keep the books in Xero, QuickBooks, FreeAgent or Sage? Import the trial balance to fill in the profit and loss and the balance sheet at once.</>}</span>
+            <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button type="button" className="btn sm" onClick={() => setTbOpen(true)}>{tbDone ? "Import again" : "Import a trial balance"}</button>
+              {step === 1 && <button type="button" className="btn ghost sm" onClick={() => setMpOpen(true)}>{mpDone ? "Import reports again" : "Import Amazon or eBay reports"}</button>}
+            </span>
           </div>
         )}
+        {step === 1 && !d.dormant && mpOpen && <MarketplaceImport periodFrom={props.periodStart} periodTo={props.periodEnd} onApply={fromMarketplace} onClose={() => setMpOpen(false)} />}
         {(step === 1 || step === 6) && !d.dormant && tbOpen && <TrialBalanceImport onApply={fromTrialBalance} onClose={() => setTbOpen(false)} />}
 
         {step === 1 && !d.dormant && (
@@ -559,7 +589,7 @@ export default function ReturnWizard(props: {
               {props.chReady && props.company.companyNo && (
                 <div className="banner info" style={{ alignItems: "center" }}>
                   <span>⌂</span>
-                  <span style={{ flex: 1 }}>Already filed last year&apos;s accounts at Companies House? Nucta File can read last year&apos;s figures from them.</span>
+                  <span style={{ flex: 1 }}>Already filed last year&apos;s accounts at Companies House? Nucta Filings can read last year&apos;s figures from them.</span>
                   <button type="button" className="btn sm" disabled={chBusy} onClick={async () => {
                     setChBusy(true); setChPrior(null);
                     const r = await priorFromCompaniesHouse(props.id, small ? "small" : "micro");
@@ -683,7 +713,7 @@ export default function ReturnWizard(props: {
                         <Money label="Loans due after a year" value={b.creditorsAfter} onChange={(v) => setIn("balanceSheet", "creditorsAfter", v)} />
                         <Money label="Provisions" value={b.provisions} onChange={(v) => setIn("balanceSheet", "provisions", v)} />
                       </div>
-                      {live.computed && ct > 0 && <p className="note" style={{ margin: 0 }}>Includes this year&apos;s Corporation Tax of {gbp(ct)}, which Nucta File adds for you.</p>}
+                      {live.computed && ct > 0 && <p className="note" style={{ margin: 0 }}>Includes this year&apos;s Corporation Tax of {gbp(ct)}, which Nucta Filings adds for you.</p>}
                     </div>
                     <div className="bsgroup">
                       <h5><span>Shares and reserves</span>{live.acc && <b>{gbp(live.acc.capitalAndReserves)}</b>}</h5>
@@ -750,7 +780,7 @@ export default function ReturnWizard(props: {
             <div className="bd">
               {!preview && <p className="note">{pending ? "Checking…" : "Press Check to build the return."}</p>}
               {preview && preview.problems.length > 0 && (
-                <div className="banner bad"><span>✕</span><span><b>Not ready yet.</b>
+                <div className="banner bad"><span>✕</span><span><b>{props.chLive ? "Not ready for HMRC yet." : "Not ready yet."}</b>
                   <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{preview.problems.map((p, i) => <li key={i}>{p}</li>)}</ul></span></div>
               )}
               {preview && preview.warnings.length > 0 && (
@@ -808,7 +838,7 @@ export default function ReturnWizard(props: {
                   onTest={send} testResults={sent} testing={sending}
                   refreshKey={`${props.status}|${preview.parts.map((x) => x.sent?.status ?? "").join(",")}|${Object.entries(sent).map(([k, v]) => `${k}:${v.outcome}`).join(",")}`} />
               )}
-              {preview?.ok && props.chLive && <CompaniesHouseFiling returnId={props.id} refreshKey={`${props.status}|${d.approvedOn}|${d.director}`} />}
+              {preview && props.chLive && <CompaniesHouseFiling returnId={props.id} refreshKey={`${props.status}|${d.approvedOn}|${d.director}|${preview.ok}`} hmrcReady={preview.ok} />}
               {preview?.ok && (props.chLive ? (
                 <details className="card" style={{ padding: "12px 18px", marginBottom: 12 }}>
                   <summary style={{ cursor: "pointer", fontWeight: 600 }}>Or file the accounts yourself on Companies House&apos;s website</summary>

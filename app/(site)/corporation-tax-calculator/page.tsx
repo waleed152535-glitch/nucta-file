@@ -52,8 +52,8 @@ export default function CorporationTaxCalculator() {
       <section className="s-sec tight" aria-labelledby="next-h">
         <div className="wrap">
           <h2 id="next-h">From the tax to the return</h2>
-          <p className="intro">Nucta File uses this same calculation to prepare the company&apos;s accounts, the computation and the CT600, and files them with HMRC.</p>
-          <p className="calc-cta"><Link href="/sign-up" className="s-btn big">Prepare a return with Nucta File</Link></p>
+          <p className="intro">Nucta Filings uses this same calculation to prepare the company&apos;s accounts, the computation and the CT600, and files them with HMRC.</p>
+          <p className="calc-cta"><Link href="/sign-up" className="s-btn big">Prepare a return with Nucta Filings</Link></p>
           <ul className="guide-list">
             {next.map((g) => (
               <li key={g.slug}><Link href={`/guides/${g.slug}`}><h3>{g.title}</h3><p>{g.summary}</p></Link></li>

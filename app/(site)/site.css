@@ -1,7 +1,7 @@
 /*
  * The website, night edition.
  *
- * Nucta File's world is the paperwork of a company's year: accounts, a tax
+ * Nucta Filings' world is the paperwork of a company's year: accounts, a tax
  * computation, the CT600 with its numbered boxes, HMRC's receipt. The site
  * sets those documents in a dark room and lights them, so the paper itself is
  * the brightest thing on the page. Everything else stays quiet:
@@ -355,7 +355,7 @@ html:has(.site),body:has(.site){background:#070B14;}
 .engine .line.total span:nth-child(2),.engine .line.total .v{color:var(--text);font-weight:700;}
 .engine .e-note{font-size:13.5px;color:var(--text-3);margin-top:18px;max-width:none;}
 
-/* what Nucta File works out: an index, keyed by HMRC box numbers */
+/* what Nucta Filings works out: an index, keyed by HMRC box numbers */
 .index{margin-top:64px;border-top:1px solid var(--line);}
 .index .item{display:grid;grid-template-columns:96px minmax(0,.9fr) minmax(0,1.3fr);gap:32px;align-items:baseline;padding:28px 0;border-bottom:1px solid var(--line);position:relative;transition:background .25s;}
 .index .item::before{content:"";position:absolute;left:-32px;top:0;bottom:0;width:2px;background:var(--nucta);opacity:0;transition:opacity .25s;}

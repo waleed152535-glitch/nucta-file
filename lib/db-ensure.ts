@@ -1,5 +1,5 @@
 /**
- * Tables and columns added after Nucta File's tables were first created.
+ * Tables and columns added after Nucta Filings' tables were first created.
  * Each statement is safe to run again, so they run once per server instance
  * and an existing database keeps working without anyone pressing "Create the
  * tables". The same statements are part of the full setup.

@@ -49,7 +49,7 @@ export default function LiveFilingSettings({ initial }: { initial: LiveSettings 
         <div className="note" style={{ marginBottom: 4 }}>Who can use it</div>
         <div className="picks" role="radiogroup" aria-label="Who can file live">
           <button type="button" role="radio" aria-checked={who === "admins"} className="pick" onClick={() => { setWho("admins"); setMsg(null); }}>
-            <span className="dot" aria-hidden /><span><b>Administrators only</b><small>A pilot: Nucta File&apos;s own staff file their clients&apos; returns first. Other accounts see that live filing isn&apos;t open for them yet.</small></span>
+            <span className="dot" aria-hidden /><span><b>Administrators only</b><small>A pilot: Nucta Filings&apos; own staff file their clients&apos; returns first. Other accounts see that live filing isn&apos;t open for them yet.</small></span>
           </button>
           <button type="button" role="radio" aria-checked={who === "everyone"} className="pick" onClick={() => { setWho("everyone"); setMsg(null); }}>
             <span className="dot" aria-hidden /><span><b>Every account</b><small>Every customer can file their own returns, with their own HMRC sign-in.</small></span>

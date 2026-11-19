@@ -5,7 +5,7 @@
  * (CTA 2009 s10(1)(a)), so accounts made up for, say, thirteen months — a
  * company's first accounts, or a year end moved later — cover two
  * accounting periods: the first twelve months, then the rest. Each needs its
- * own return. Nucta File takes the accounts' figures once and splits them:
+ * own return. Nucta Filings takes the accounts' figures once and splits them:
  *
  *   Trading profit: the profit of the period of account is apportioned by
  *     days (CTA 2009 s52, CTA 2010 s1172). Each line of the accounts and each
@@ -275,7 +275,7 @@ export function computePeriodOfAccount(i: PeriodOfAccountInput): PeriodOfAccount
   const warnings: string[] = [];
   for (const l of loans.results) for (const w of l?.warnings ?? []) if (!warnings.includes(w)) warnings.push(w);
   if (long && results[1].tradingLoss > 0 && results[0].chargeableProfits > 0) {
-    warnings.push(`The second period made a trading loss of £${results[1].tradingLoss.toLocaleString("en-GB")}. It is carried forward. It could instead be set against the first period's profits by a claim (section 37), which Nucta File doesn't make — ask if that would help.`);
+    warnings.push(`The second period made a trading loss of £${results[1].tradingLoss.toLocaleString("en-GB")}. It is carried forward. It could instead be set against the first period's profits by a claim (section 37), which Nucta Filings doesn't make — ask if that would help.`);
   }
   const pence = (v: number) => Math.round(v * 100) / 100;
   const parts: PeriodPart[] = periods.map((p, n) => ({ ...p, figures: figures[n], result: results[n], loans: loans.results[n], taxDue: taxDueDate(p.to) }));

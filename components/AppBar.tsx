@@ -63,12 +63,13 @@ export default function AppBar({ user, theme: initialTheme = "dark" }: { user: B
     <>
       <header className="appbar">
         <div className="appbar-in">
-          <Link href="/dashboard" className="brand" aria-label="Nucta File dashboard"><Mark size={24} tone="theme" />Nucta File{(user.admin || user.live !== "on") && <small title={user.live === "on" ? "Returns can be filed with HMRC for real" : user.live === "til" ? "HMRC's Test in Live check is open" : "Filing isn't open for this account yet"}>{user.live === "on" ? "Live filing" : user.live === "til" ? "Test in Live" : "Preparing only"}</small>}</Link>
+          <Link href="/dashboard" className="brand" aria-label="Nucta Filings dashboard"><Mark size={24} tone="theme" />Nucta Filings{(user.admin || user.live !== "on") && <small title={user.live === "on" ? "Returns can be filed with HMRC for real" : user.live === "til" ? "HMRC's Test in Live check is open" : "Filing isn't open for this account yet"}>{user.live === "on" ? "Live filing" : user.live === "til" ? "Test in Live" : "Preparing only"}</small>}</Link>
           <nav className="tabsnav" aria-label="Main">
             {TABS.map((t) => <Link key={t.href} href={t.href} className={active(t) ? "active" : ""} aria-current={active(t) ? "page" : undefined}>{t.label}</Link>)}
           </nav>
           <span className="grow" />
-          <Link href="/" className="sitelink" title="The Nucta File website: features, pricing and guides">Website</Link>
+          <Link href="/help" className={`sitelink${path.startsWith("/help") ? " active" : ""}`} title="How Nucta Filings works, step by step">Help</Link>
+          <Link href="/" className="sitelink" title="The Nucta Filings website: features, pricing and guides">Website</Link>
           <button type="button" className="findbtn" onClick={() => setPalette("find")} aria-label="Search (Ctrl+K)">
             <span className="ic" aria-hidden /><span className="grow">Search companies and returns</span><kbd>Ctrl K</kbd>
           </button>
@@ -77,7 +78,7 @@ export default function AppBar({ user, theme: initialTheme = "dark" }: { user: B
             <details className="menu" ref={adm}>
               <summary className="adminbtn">Admin</summary>
               <div className="drop">
-                <div className="sec">Nucta File&apos;s own tools</div>
+                <div className="sec">Nucta Filings&apos; own tools</div>
                 {ADMIN.map((a) => <Link key={a.href} href={a.href}>{a.label}</Link>)}
               </div>
             </details>
@@ -87,6 +88,7 @@ export default function AppBar({ user, theme: initialTheme = "dark" }: { user: B
             <div className="drop">
               <div className="who"><b>{user.name}</b><span>{user.accountName}</span><br /><span>{user.email}</span></div>
               <Link href="/account">Your account</Link>
+              <Link href="/help">Help: how Nucta Filings works</Link>
               <a href="/calendar.ics">Add deadlines to your calendar</a>
               <div className="sec" id="theme-label">Look</div>
               <div className="themes" role="radiogroup" aria-labelledby="theme-label">
@@ -96,7 +98,7 @@ export default function AppBar({ user, theme: initialTheme = "dark" }: { user: B
                   </button>
                 ))}
               </div>
-              <Link href="/">Nucta File website</Link>
+              <Link href="/">Nucta Filings website</Link>
               <form action={signOutAction}><button type="submit">Sign out</button></form>
             </div>
           </details>
@@ -105,6 +107,7 @@ export default function AppBar({ user, theme: initialTheme = "dark" }: { user: B
       <nav className="mobile-nav" aria-label="Main">
         {TABS.map((t) => <Link key={t.href} href={t.href} className={active(t) ? "active" : ""}>{t.label}</Link>)}
         <Link href="/account" className={path.startsWith("/account") ? "active" : ""}>Account</Link>
+        <Link href="/help" className={path.startsWith("/help") ? "active" : ""}>Help</Link>
         <Link href="/">Website</Link>
         {user.admin && <Link href="/gateway" className={path.startsWith("/gateway") ? "active" : ""}>Admin</Link>}
       </nav>

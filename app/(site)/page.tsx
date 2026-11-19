@@ -11,13 +11,13 @@ import JsonLd from "@/components/JsonLd";
 // (lib/billing-actions.ts), so its prices follow the switch on the Payments page.
 
 export const metadata = pageMeta({
-  title: "Nucta File — CT600 software and accounts for small UK companies",
+  title: "Nucta Filings — CT600 software and accounts for small UK companies",
   absoluteTitle: true,
   path: "/",
   description: "Prepare a small company's accounts, work out its Corporation Tax and file the CT600 with HMRC, with the iXBRL accounts and tax computation attached.",
 });
 
-/** What Nucta File works out, keyed by the CT600 box it ends up in where there is one. */
+/** What Nucta Filings works out, keyed by the CT600 box it ends up in where there is one. */
 const WORKS_OUT: { ref: string; box?: boolean; title: string; text: string }[] = [
   { ref: "430", box: true, title: "Corporation Tax at 19% and 25%", text: "The small profits rate, the main rate and marginal relief, with the limits shared across associated companies, cut for a short period and split when the year crosses 1 April." },
   { ref: "Accounts", title: "Micro-entity and small company accounts in iXBRL", text: "FRS 105 for micro-entities, or FRS 102 Section 1A with a directors' report and the full notes for larger companies: tagged for HMRC, with last year's figures alongside and the balance sheet checked to the pound." },
@@ -29,7 +29,7 @@ const WORKS_OUT: { ref: string; box?: boolean; title: string; text: string }[] =
   { ref: "Amend", title: "Amended returns", text: "Change an accepted return and send it again as an amendment, up to 12 months after the filing deadline." },
 ];
 
-/** What Nucta File files today, and what it doesn't yet: said plainly, before anyone starts. */
+/** What Nucta Filings files today, and what it doesn't yet: said plainly, before anyone starts. */
 const FILES_NOW = [
   "Company Tax Returns (CT600) for UK limited companies with one trade",
   "The CT600A page, for loans to directors and other participators",
@@ -37,12 +37,12 @@ const FILES_NOW = [
   "Dormant company accounts, and a nil return when HMRC ask for one",
   "First accounts longer than 12 months, as two returns",
   "Amended returns, up to 12 months after the filing deadline",
+  "Micro-entity, small and dormant accounts filed with Companies House, from the same screen as the CT600",
 ];
 const NOT_YET = [
-  { t: "Filing accounts at Companies House", d: "Built and waiting for Companies House's approval. Until then Nucta File gives you the figures, box by box, for Companies House's own online form." },
   { t: "Medium-sized and audited companies", d: "Companies above the small company limits need full FRS 102 accounts, and an audit." },
   { t: "VAT returns", d: "Built for Making Tax Digital, and waiting for HMRC's approval to file for real." },
-  { t: "Groups, R&D relief, charities and rental income", d: "Nor companies that sold land or shares. Nucta File says so at the start if a company is one of these." },
+  { t: "Groups, R&D relief, charities and rental income", d: "Nor companies that sold land or shares. Nucta Filings says so at the start if a company is one of these." },
   { t: "Self Assessment and confirmation statements", d: "These still go through HMRC and Companies House directly." },
 ];
 
@@ -56,7 +56,7 @@ export default async function Home() {
       <JsonLd data={homeGraph()} />
       <Film charging={charging} />
 
-      <section className="trust" aria-label="Who makes Nucta File">
+      <section className="trust" aria-label="Who makes Nucta Filings">
         <div className="wrap">
           <ul>
             <li><b>Registered with HMRC</b><span>As a software developer, vendor {SITE.vendorId}</span></li>
@@ -72,7 +72,7 @@ export default async function Home() {
           <h2 id="deadline-h" className="date">31 March<span>2026</span></h2>
           <div>
             <p><b>HMRC&apos;s free Company Tax Return service closed that day. Every company now files through software.</b></p>
-            <p>The return still goes with the company&apos;s accounts and a tax computation, both in iXBRL. Nucta File prepares all three from one set of figures, for one company or a whole client list.</p>
+            <p>The return still goes with the company&apos;s accounts and a tax computation, both in iXBRL. Nucta Filings prepares all three from one set of figures, for one company or a whole client list.</p>
             <p><Link href="/guides/hmrc-online-filing-closed">What the change means for your company</Link></p>
           </div>
         </div>
@@ -81,7 +81,7 @@ export default async function Home() {
       <section className="s-sec" aria-labelledby="files-h">
         <div className="wrap">
           <h2 id="files-h">What it files today</h2>
-          <p className="intro">So you know before you start. If a company needs something Nucta File doesn&apos;t do yet, it tells you at the beginning, not halfway through.</p>
+          <p className="intro">So you know before you start. If a company needs something Nucta Filings doesn&apos;t do yet, it tells you at the beginning, not halfway through.</p>
           <div className="cover">
             <div>
               <h3>Files now</h3>
@@ -106,8 +106,8 @@ export default async function Home() {
 
       <section className="s-sec" aria-labelledby="works-h">
         <div className="wrap">
-          <h2 id="works-h">What Nucta File works out for you</h2>
-          <p className="intro">Each rule is HMRC&apos;s, applied the way HMRC check it. Where a company is outside what Nucta File handles, it says so at the start rather than guessing.</p>
+          <h2 id="works-h">What Nucta Filings works out for you</h2>
+          <p className="intro">Each rule is HMRC&apos;s, applied the way HMRC check it. Where a company is outside what Nucta Filings handles, it says so at the start rather than guessing.</p>
           <div className="index">
             {WORKS_OUT.map((w) => (
               <div className="item" key={w.title}>
@@ -117,7 +117,7 @@ export default async function Home() {
               </div>
             ))}
           </div>
-          <p style={{ marginTop: 36 }}><Link href="/features" className="s-btn quiet">Everything Nucta File does</Link></p>
+          <p style={{ marginTop: 36 }}><Link href="/features" className="s-btn quiet">Everything Nucta Filings does</Link></p>
         </div>
       </section>
 
@@ -141,7 +141,7 @@ export default async function Home() {
       <section className="s-sec" aria-labelledby="safe-h">
         <div className="wrap">
           <h2 id="safe-h">Careful with what matters</h2>
-          <p className="intro">A tax return is evidence. Nucta File treats it that way.</p>
+          <p className="intro">A tax return is evidence. Nucta Filings treats it that way.</p>
           <div className="safe">
             <div>
               <Icon d={<><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>} />
@@ -151,7 +151,7 @@ export default async function Home() {
             <div>
               <Icon d={<><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.6 2.6L16 9.5" /></>} />
               <h3>Checked before it&apos;s filed</h3>
-              <p>Nucta File checks every figure against HMRC&apos;s rules before it&apos;s sent, and HMRC check it again as it arrives. If anything is wrong, nothing is filed and you see what to fix.</p>
+              <p>Nucta Filings checks every figure against HMRC&apos;s rules before it&apos;s sent, and HMRC check it again as it arrives. If anything is wrong, nothing is filed and you see what to fix.</p>
             </div>
             <div>
               <Icon d={<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6M9 16h3" /></>} />
@@ -190,11 +190,11 @@ export default async function Home() {
         <div className="wrap">
           <h2 id="faq-h">Questions</h2>
           <div className="faq">
-            <details><summary>Can I file with HMRC through Nucta File now?</summary><p>Yes. Nucta File files Company Tax Returns directly with HMRC, with the accounts and computation attached in iXBRL. You type the company&apos;s HMRC sign-in — or your agent sign-in — at the moment of filing; it is used once and never stored, and HMRC&apos;s receipt is kept with the return. Nucta File is registered with HMRC as a software developer (vendor {SITE.vendorId}). HMRC&apos;s recognition of software is optional — HMRC say so themselves.</p></details>
-            <details><summary>Can I still use HMRC&apos;s own free filing service?</summary><p>No. HMRC closed its free Company Accounts and Tax Online service on 31 March 2026, so a company&apos;s return now has to be filed with commercial software such as Nucta File.</p></details>
-            <details><summary>Which companies can use it?</summary><p>UK limited companies with one trade that file micro-entity or small company accounts — companies within two of turnover up to £15 million, a balance sheet up to £7.5 million and 50 employees — and dormant companies. Groups, research and development relief, rental income and companies that sold land or shares aren&apos;t handled yet; Nucta File tells you at the start if a company is one of them.</p></details>
-            <details><summary>What does HMRC need with the return?</summary><p>The CT600, the company&apos;s accounts and a tax computation, both in iXBRL. Nucta File prepares all three from the figures you enter and sends them together.</p></details>
-            <details><summary>Does it file the accounts with Companies House?</summary><p>Filing with Companies House is built and waiting for Companies House&apos;s test approval. Until then, download the accounts from Nucta File and file them as you do now.</p></details>
+            <details><summary>Can I file with HMRC through Nucta Filings now?</summary><p>Yes. Nucta Filings files Company Tax Returns directly with HMRC, with the accounts and computation attached in iXBRL. You type the company&apos;s HMRC sign-in — or your agent sign-in — at the moment of filing; it is used once and never stored, and HMRC&apos;s receipt is kept with the return. Nucta Filings is registered with HMRC as a software developer (vendor {SITE.vendorId}). HMRC&apos;s recognition of software is optional — HMRC say so themselves.</p></details>
+            <details><summary>Can I still use HMRC&apos;s own free filing service?</summary><p>No. HMRC closed its free Company Accounts and Tax Online service on 31 March 2026, so a company&apos;s return now has to be filed with commercial software such as Nucta Filings.</p></details>
+            <details><summary>Which companies can use it?</summary><p>UK limited companies with one trade that file micro-entity or small company accounts — companies within two of turnover up to £15 million, a balance sheet up to £7.5 million and 50 employees — and dormant companies. Groups, research and development relief, rental income and companies that sold land or shares aren&apos;t handled yet; Nucta Filings tells you at the start if a company is one of them.</p></details>
+            <details><summary>What does HMRC need with the return?</summary><p>The CT600, the company&apos;s accounts and a tax computation, both in iXBRL. Nucta Filings prepares all three from the figures you enter and sends them together.</p></details>
+            <details><summary>Does it file the accounts with Companies House?</summary><p>Yes. Once the director has approved the accounts, file them with Companies House from the same screen as the CT600, using the company&apos;s Companies House authentication code. Companies House don&apos;t charge for filing accounts, and neither does Nucta Filings.</p></details>
             <details><summary>What if a return needs correcting?</summary><p>Open it and press Amend. You get a copy to change, sent to HMRC marked as an amendment, which HMRC put in place of the original. Amendments can be made up to 12 months after the filing deadline.</p></details>
           </div>
         </div>

@@ -3,7 +3,7 @@ import { inviteByToken } from "@/lib/team-core";
 import { JoinForm } from "../AuthForms";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Join a Nucta File account", robots: { index: false } };
+export const metadata = { title: "Join a Nucta Filings account", robots: { index: false } };
 
 export default async function Join({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
   const token = (await searchParams).token ?? "";

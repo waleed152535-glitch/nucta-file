@@ -170,7 +170,7 @@ export function sizeAdvice(format: AccountsFormat, size: SizeAnswer): string | n
   }
   if (!size.small) {
     return `This year's figures are above the small company limits on at least two of the three tests: ${why(size.limits.small)}. ` +
-      "If last year was above them too, the company is medium-sized and needs fuller accounts than Nucta File prepares; ask an accountant.";
+      "If last year was above them too, the company is medium-sized and needs fuller accounts than Nucta Filings prepares; ask an accountant.";
   }
   return null;
 }
@@ -214,7 +214,7 @@ export function checkSmallDetail(s: SmallDetail, depreciationCharge: number, oth
  * A suggestion for the deferred tax provision at the year end: the gap
  * between equipment's value in the books and in the tax pools, at the rate
  * expected when it reverses. It's a starting point for the person preparing
- * the accounts, not a figure Nucta File puts in by itself.
+ * the accounts, not a figure Nucta Filings puts in by itself.
  */
 export function suggestDeferredTax(netBookValue: number, taxPools: number, taxableProfit: number): { amount: number; rate: number; gap: number } {
   const gap = Math.max(0, r(netBookValue) - r(taxPools));

@@ -18,7 +18,7 @@ export default async function SignUp({ searchParams }: { searchParams: Promise<{
             <li>{company ? <>Company {company} opens, ready to add, as soon as your account is made.</> : "Add a company from Companies House in a few seconds."}</li>
             <li>Enter the year&apos;s figures; the tax works itself out.</li>
             <li>Download the accounts, computation and CT600, and an approval pack for the director.</li>
-            <li>File with HMRC using the company&apos;s HMRC sign-in, and get the figures for Companies House in the same place.</li>
+            <li>File the CT600 with HMRC and the accounts with Companies House, from the same screen.</li>
             <li>Free while we launch.</li>
           </ul>
         </div>

@@ -123,7 +123,7 @@ export async function filingPicture(u: SignedInUser, returnId: string, today = n
   });
   const s = await store();
   const r = await ownedReturn(s, u, returnId);
-  if (!r) return blank("That return isn't in Nucta File.");
+  if (!r) return blank("That return isn't in Nucta Filings.");
   const [c] = await s.db.select().from(s.companies).where(s.eq(s.companies.id, r.companyId));
   const data = normaliseReturnData(r.data as Partial<ReturnData>);
   const p = prepareReturn(toCompanyReturnInput({ name: c.name, companyNo: c.companyNo, utr: c.utr }, r.periodStart, r.periodEnd, data));
@@ -189,7 +189,7 @@ export async function filingPicture(u: SignedInUser, returnId: string, today = n
       detail: x.left > 0 ? (overdue ? "HMRC charge interest on tax paid late, from the day after it was due. Paying is separate from filing: see Pay the tax below." : "Paying is separate from filing: see Pay the tax below.") : undefined,
     });
   }
-  if (lockedUntil) checks.push({ key: "lock", state: "bad", title: "Two sign-ins failed in the last hour", detail: `To protect the HMRC account from being locked, Nucta File won't try again until ${new Date(lockedUntil).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Check the user ID and password by signing in on GOV.UK first.` });
+  if (lockedUntil) checks.push({ key: "lock", state: "bad", title: "Two sign-ins failed in the last hour", detail: `To protect the HMRC account from being locked, Nucta Filings won't try again until ${new Date(lockedUntil).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Check the user ID and password by signing in on GOV.UK first.` });
   checks.push({ key: "account", state: "info", title: "The HMRC sign-in", detail: "Use the company's own HMRC organisation account with Corporation Tax added to it, or an agent's account authorised for this company's Corporation Tax. If Corporation Tax hasn't been added, HMRC refuse the sign-in: add it in the HMRC account (an activation code comes by post to the registered office)." });
 
   return {

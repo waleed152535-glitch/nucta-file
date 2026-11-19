@@ -5,10 +5,10 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Confirm your email", robots: { index: false, follow: false } };
 
 const WORDS: Record<EmailCheckOutcome, { title: string; text: (email: string) => string }> = {
-  confirmed: { title: "Email confirmed", text: (e) => `Thank you — ${e || "your email address"} is confirmed. You can now file returns with HMRC from Nucta File, and receipts and payment confirmations will come to this address.` },
+  confirmed: { title: "Email confirmed", text: (e) => `Thank you — ${e || "your email address"} is confirmed. You can now file returns with HMRC from Nucta Filings, and receipts and payment confirmations will come to this address.` },
   already: { title: "Already confirmed", text: (e) => `${e || "This email address"} is already confirmed. There's nothing more to do.` },
-  expired: { title: "That link has expired", text: () => "Links to confirm an email work for 48 hours. Sign in to Nucta File and press “Send the link again” at the top of the page." },
-  invalid: { title: "That link doesn't work", text: () => "It may be incomplete, or from an older email. Open the link in the most recent email from Nucta File, or sign in and send a new one." },
+  expired: { title: "That link has expired", text: () => "Links to confirm an email work for 48 hours. Sign in to Nucta Filings and press “Send the link again” at the top of the page." },
+  invalid: { title: "That link doesn't work", text: () => "It may be incomplete, or from an older email. Open the link in the most recent email from Nucta Filings, or sign in and send a new one." },
 };
 
 /** Where the link in the confirmation email lands. Works whether or not this browser is signed in. */
@@ -27,7 +27,7 @@ export default async function VerifyEmail({ searchParams }: { searchParams: Prom
           <h1>{w.title}</h1>
           <p className="sub">{w.text(r.email ?? "")}</p>
           {u
-            ? <Link className="s-btn big" href="/dashboard" style={{ width: "100%", textAlign: "center" }}>Open Nucta File</Link>
+            ? <Link className="s-btn big" href="/dashboard" style={{ width: "100%", textAlign: "center" }}>Open Nucta Filings</Link>
             : <Link className="s-btn big" href="/sign-in?next=%2Fdashboard" style={{ width: "100%", textAlign: "center" }}>Sign in</Link>}
         </div>
       </div>

@@ -959,7 +959,7 @@ export function buildAccounts(i: AccountsInput): string {
       ${fixedFact("core:DirectorSigningFinancialStatements", "DDir")}${i.small ? `
       ${fixedFact("direp:DirectorSigningDirectorsReport", "DDir")}
       ${dateFact("direp:DateSigningDirectorsReport", i.approvedOn, E)}` : ""}
-      ${textFact("bus:NameProductionSoftware", "Nucta File", D)}
+      ${textFact("bus:NameProductionSoftware", "Nucta Filings", D)}
     </ix:hidden>
     <ix:references>
       <link:schemaRef xlink:type="simple" xlink:href="${tx.schemaRef}"/>

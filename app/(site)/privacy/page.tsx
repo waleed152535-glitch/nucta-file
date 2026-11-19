@@ -1,7 +1,7 @@
 import { pageMeta } from "@/lib/seo";
 import { SITE } from "@/lib/site";
 
-export const metadata = pageMeta({ title: "Privacy notice", path: "/privacy", description: "What Nucta File keeps about you and your companies, why it is kept, who it is shared with (HMRC and Companies House when you file) and how long it is held." });
+export const metadata = pageMeta({ title: "Privacy notice", path: "/privacy", description: "What Nucta Filings keeps about you and your companies, why it is kept, who it is shared with (HMRC and Companies House when you file) and how long it is held." });
 
 export default function Privacy() {
   return (
@@ -17,7 +17,7 @@ export default function Privacy() {
           <li><b>Your account:</b> your name, email address, your firm or company name, and a scrambled form of your password (we can&apos;t read it).</li>
           <li><b>Companies and returns you add:</b> company details, the figures you enter, the accounts, computations and returns prepared, and the names of directors and shareholders where a return needs them.</li>
           <li><b>Filings:</b> what was sent to HMRC and what HMRC sent back, including receipts — with the password removed and the Government Gateway user ID hidden.</li>
-          <li><b>VAT returns:</b> the VAT number, the nine boxes of each return sent and HMRC&apos;s receipt. When you connect to HMRC for VAT, HMRC give Nucta File an access token in place of a password; it&apos;s kept encrypted and can be disconnected at any time.</li>
+          <li><b>VAT returns:</b> the VAT number, the nine boxes of each return sent and HMRC&apos;s receipt. When you connect to HMRC for VAT, HMRC give Nucta Filings an access token in place of a password; it&apos;s kept encrypted and can be disconnected at any time.</li>
           <li><b>Signing in:</b> a session cookie and the type of browser, so you stay signed in. We don&apos;t use advertising or tracking cookies.</li>
           <li><b>For HMRC&apos;s fraud checks:</b> when you use VAT returns, HMRC require details of the device with every request — your IP address, a device identifier kept in your browser, screen and window size, time zone and browser type. They&apos;re sent to HMRC with each VAT request and not used for anything else.</li>
         </ul>
@@ -36,7 +36,7 @@ export default function Privacy() {
         <ul>
           <li><b>HMRC</b>, when you file a return, and <b>Companies House</b>, when you look up or file for a company.</li>
           <li><b>Our hosting and database providers</b> (Vercel and Neon), who store it for us under contract and can&apos;t use it for anything else.</li>
-          <li>Our <b>email provider</b> (Resend), which sends Nucta File&apos;s emails: the link to confirm your address, HMRC&apos;s receipts, payment confirmations, approval links and password resets.</li>
+          <li>Our <b>email provider</b> (Resend), which sends Nucta Filings&apos; emails: the link to confirm your address, HMRC&apos;s receipts, payment confirmations, approval links and password resets.</li>
           <li><b>Stripe</b>, if you pay a filing fee. Card details go only to Stripe; we receive the amount, whether it was paid and a link to Stripe&apos;s receipt.</li>
         </ul>
         <p>We don&apos;t sell personal information or share it for marketing.</p>

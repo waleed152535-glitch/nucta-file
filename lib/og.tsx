@@ -45,7 +45,7 @@ export async function shareImage({ kicker, title, foot }: { kicker?: string; tit
             <polygon points="8,7 18,7 40,41 30,41" fill="#FFB4A3" />
             <rect x="30" y="7" width="10" height="34" rx="2" fill="#FC3C17" />
           </svg>
-          <div style={{ display: "flex", fontSize: 34, fontWeight: 800, letterSpacing: -0.5 }}>Nucta File</div>
+          <div style={{ display: "flex", fontSize: 34, fontWeight: 800, letterSpacing: -0.5 }}>Nucta Filings</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           {kicker ? <div style={{ display: "flex", fontSize: 28, color: "#FF8466" }}>{kicker}</div> : null}

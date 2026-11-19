@@ -25,7 +25,7 @@ import { SITE } from "./site";
 export const SESSION_COOKIE = "nf_session";
 /**
  * A hint for the public website that someone is signed in, so its header can
- * offer "Open Nucta File". It holds nothing secret and proves nothing: the
+ * offer "Open Nucta Filings". It holds nothing secret and proves nothing: the
  * app itself checks the real session.
  */
 export const SIGNED_IN_HINT = "nf_in";
@@ -162,7 +162,7 @@ export async function joinAccount(i: { accountId: string; email: string; name: s
   if (problems.length) return { ok: false, problems };
   const s = await store();
   const [existing] = await s.db.select({ id: s.users.id }).from(s.users).where(s.eq(s.users.email, email));
-  if (existing) return { ok: false, problems: ["There's already a Nucta File account with this email. Ask whoever invited you to use a different email, or sign in with that account."] };
+  if (existing) return { ok: false, problems: ["There's already a Nucta Filings account with this email. Ask whoever invited you to use a different email, or sign in with that account."] };
   const userId = randomUUID();
   // The invitation went to this address and was opened from it, so the address is confirmed.
   await s.db.insert(s.users).values({ id: userId, accountId: i.accountId, email, name: i.name.trim(), passwordHash: await hashPassword(i.password), lastLoginAt: new Date(), role: i.role === "owner" ? "owner" : "member", emailVerifiedAt: new Date() });
@@ -262,8 +262,8 @@ export async function requestPasswordReset(emailRaw: string, origin: string): Pr
   if (!u) return;
   const token = randomBytes(32).toString("base64url");
   await s.db.insert(s.passwordResets).values({ id: sha256(token), userId: u.id, expiresAt: new Date(Date.now() + 60 * 60_000) });
-  await sendEmail(email, "Reset your Nucta File password",
-    `Hello ${u.name},\n\nTo choose a new password for Nucta File, open this link within the next hour:\n\n${origin}/reset-password?token=${token}\n\nIf you didn't ask for this, ignore this email — your password stays as it is.\n\nNucta File`);
+  await sendEmail(email, "Reset your Nucta Filings password",
+    `Hello ${u.name},\n\nTo choose a new password for Nucta Filings, open this link within the next hour:\n\n${origin}/reset-password?token=${token}\n\nIf you didn't ask for this, ignore this email — your password stays as it is.\n\nNucta Filings`);
 }
 
 export async function resetPassword(token: string, next: string): Promise<{ ok: boolean; problem?: string }> {
@@ -306,7 +306,7 @@ export const emailCheckNeeded = (u: SignedInUser) => emailReady() && !u.emailVer
  * day, so the button can't be used to flood someone's inbox.
  */
 export async function sendEmailCheck(userId: string, origin: string): Promise<{ ok: boolean; problem?: string; already?: boolean }> {
-  if (!emailReady()) return { ok: false, problem: "Email isn't set up for Nucta File yet, so there's nothing to confirm." };
+  if (!emailReady()) return { ok: false, problem: "Email isn't set up for Nucta Filings yet, so there's nothing to confirm." };
   const s = await store();
   const [u] = await s.db.select({ id: s.users.id, email: s.users.email, name: s.users.name, verified: s.users.emailVerifiedAt }).from(s.users).where(s.eq(s.users.id, userId));
   if (!u) return { ok: false, problem: "That account no longer exists." };
@@ -318,20 +318,20 @@ export async function sendEmailCheck(userId: string, origin: string): Promise<{ 
   if (recent.length >= CHECKS_PER_DAY) return { ok: false, problem: `${CHECKS_PER_DAY} links have been sent today. Check the spam folder, or email ${SITE.email} and we'll confirm it for you.` };
   const token = randomBytes(32).toString("base64url");
   await s.db.insert(s.emailChecks).values({ id: sha256(token), userId: u.id, email: u.email, expiresAt: new Date(Date.now() + CHECK_HOURS * 3_600_000) });
-  const sent = await sendEmailChecked(u.email, "Confirm your email for Nucta File", emailCheckText(u.name, `${origin}/verify-email?token=${token}`));
+  const sent = await sendEmailChecked(u.email, "Confirm your email for Nucta Filings", emailCheckText(u.name, `${origin}/verify-email?token=${token}`));
   return sent.ok ? { ok: true } : { ok: false, problem: "The email couldn't be sent just now. Try again in a few minutes." };
 }
 
 export function emailCheckText(name: string, link: string): string {
   return `Hello ${name},
 
-Welcome to Nucta File. Please confirm that this is your email address by opening this link:
+Welcome to Nucta Filings. Please confirm that this is your email address by opening this link:
 
 ${link}
 
 The link works for ${CHECK_HOURS} hours. Once your email is confirmed you can file returns with HMRC, and HMRC's receipts and your payment confirmations come here.
 
-If you didn't create a Nucta File account, ignore this email and nothing more will happen.
+If you didn't create a Nucta Filings account, ignore this email and nothing more will happen.
 
 ${SITE.product}
 ${SITE.company}`;

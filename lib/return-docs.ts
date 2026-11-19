@@ -58,7 +58,7 @@ export async function returnDocuments(id: string): Promise<ReturnDocs> {
  */
 export async function returnDocumentsFor(id: string, r: LoadedReturn): Promise<ReturnDocs> {
   const blank: ReturnDocs = { ok: false, company: { name: "", companyNo: "" }, periodFrom: "", periodTo: "", director: "", preparedBy: "", accountsHtml: null, parts: [], filingDue: "", amended: false, dormant: null };
-  if (!r.ok || !r.data || !r.company) return { ...blank, error: r.error ?? "That return isn't in Nucta File." };
+  if (!r.ok || !r.data || !r.company) return { ...blank, error: r.error ?? "That return isn't in Nucta Filings." };
   const data = r.data;
   const p = prepareReturn(toCompanyReturnInput(r.company, r.periodStart!, r.periodEnd!, data));
 
@@ -96,4 +96,27 @@ export async function returnDocumentsFor(id: string, r: LoadedReturn): Promise<R
     accountsHtml, parts, filingDue: p.filingDue, amended: Boolean(data.amends),
     dormant: data.dormant ? { returnNeeded: data.ctNoticeReceived !== false } : null,
   };
+}
+
+/**
+ * The accounts for Companies House alone, for a return whose HMRC details
+ * aren't finished yet (no UTR, no declaration). The accounts don't carry
+ * either, so they're built with stand-ins for those two and nothing else
+ * changes; anything wrong with the accounts themselves still stops them.
+ * Where the CT600 can already be built, the accounts come from returnDocuments
+ * instead, so a return already filed with HMRC sends Companies House the
+ * accounts HMRC received.
+ */
+export async function accountsForCompaniesHouse(id: string): Promise<{ accountsHtml: string | null; problems: string[] }> {
+  const r = await getReturn(id);
+  if (!r.ok || !r.data || !r.company) return { accountsHtml: null, problems: [r.error ?? "That return isn't in Nucta Filings."] };
+  const full = await returnDocumentsFor(id, r);
+  if (full.ok && full.accountsHtml) return { accountsHtml: full.accountsHtml, problems: [] };
+  const d = r.data;
+  const p = prepareReturn(toCompanyReturnInput(
+    { ...r.company, utr: /^\d{10}$/.test((r.company.utr ?? "").replace(/\s/g, "")) ? r.company.utr : "0000000000" },
+    r.periodStart!, r.periodEnd!,
+    { ...d, declarantName: d.declarantName.trim() || d.director.trim() || "Director" },
+  ));
+  return p.ok && p.accountsHtml ? { accountsHtml: p.accountsHtml, problems: [] } : { accountsHtml: null, problems: p.problems };
 }

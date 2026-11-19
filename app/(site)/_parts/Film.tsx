@@ -246,7 +246,7 @@ export default function Film({ charging = false }: { charging?: boolean }) {
                   ? <><b>{gbp(PRICES.company.perReturn)} a return,</b> or {gbp(PRICES.company.dormant)} for a dormant company. No subscription.</>
                   : <><b>Free while we launch,</b> then {gbp(PRICES.company.perReturn)} a return, or {gbp(PRICES.company.dormant)} for a dormant company. No subscription.</>}
               </p>
-              <p className="lede">Nucta File prepares a small company&apos;s accounts, works out its Corporation Tax and files the CT600 with HMRC, with the accounts and computation attached in iXBRL.</p>
+              <p className="lede">Nucta Filings prepares a small company&apos;s accounts, works out its Corporation Tax and files the CT600 with HMRC, with the accounts and computation attached in iXBRL.</p>
               <CompanySearch id="hero-q" />
               <p className="hero-more">
                 <Link href="/sign-up">Create your account</Link>

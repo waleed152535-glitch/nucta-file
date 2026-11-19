@@ -22,18 +22,18 @@ export interface PublicPage {
 export function publicPages(): PublicPage[] {
   const latestGuide = GUIDES.map((g) => g.updated).sort().at(-1);
   return [
-    { path: "/", title: "Nucta File", about: "CT600 software and accounts for small UK companies.", markdown: "/index.md" },
-    { path: "/features", title: "Features", about: "What Nucta File prepares, works out and files." },
+    { path: "/", title: "Nucta Filings", about: "CT600 software and accounts for small UK companies.", markdown: "/index.md" },
+    { path: "/features", title: "Features", about: "What Nucta Filings prepares, works out and files." },
     { path: "/corporation-tax-calculator", title: CALCULATOR.title, about: CALCULATOR.description, modified: CALCULATOR.updated, markdown: `${CALCULATOR.path}.md` },
     { path: "/check", title: "Company deadline checker", about: "When a UK company's accounts, Company Tax Return and Corporation Tax are due, from its Companies House record." },
-    { path: "/accountants", title: "For accountants", about: "Nucta File for accountancy practices and formation agents." },
-    { path: "/pricing", title: "Pricing", about: "What filing a Company Tax Return with Nucta File costs." },
+    { path: "/accountants", title: "For accountants", about: "Nucta Filings for accountancy practices and formation agents." },
+    { path: "/pricing", title: "Pricing", about: "What filing a Company Tax Return with Nucta Filings costs." },
     { path: "/guides", title: "Guides", about: "Plain-English guides to Company Tax Returns and accounts.", modified: latestGuide, markdown: "/guides.md" },
     ...GUIDES.map((g) => ({ path: `/guides/${g.slug}`, title: g.title, about: g.summary, modified: g.updated, markdown: `/guides/${g.slug}.md` })),
-    { path: "/about", title: "About", about: "Who makes Nucta File, and why." },
-    { path: "/contact", title: "Contact", about: "How to reach the Nucta File team." },
-    { path: "/terms", title: "Terms of use", about: "The terms for using Nucta File." },
-    { path: "/privacy", title: "Privacy notice", about: "What Nucta File keeps, and why." },
+    { path: "/about", title: "About", about: "Who makes Nucta Filings, and why." },
+    { path: "/contact", title: "Contact", about: "How to reach the Nucta Filings team." },
+    { path: "/terms", title: "Terms of use", about: "The terms for using Nucta Filings." },
+    { path: "/privacy", title: "Privacy notice", about: "What Nucta Filings keeps, and why." },
   ];
 }
 
@@ -67,7 +67,7 @@ export function calculatorMarkdown(): string {
 
 export function guidesMarkdown(): string {
   return [
-    "# Guides from Nucta File",
+    "# Guides from Nucta Filings",
     "",
     "> The rules small UK companies ask about most, in plain words, with the sources.",
     "",
@@ -130,7 +130,7 @@ export function llmsTxt(): string {
     "",
     "## About the product",
     "",
-    `- [Overview](${absolute("/index.md")}): what Nucta File does`,
+    `- [Overview](${absolute("/index.md")}): what Nucta Filings does`,
     `- [Features](${absolute("/features")})`,
     `- [For accountants](${absolute("/accountants")})`,
     `- [Pricing](${absolute("/pricing")})`,

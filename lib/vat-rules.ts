@@ -216,7 +216,7 @@ export function checkClientInfo(c: unknown): ClientInfo | null {
 /**
  * The headers for the WEB_APP_VIA_SERVER connection method. Gov-Client-Public-Port
  * is sent only when the host passes it on; Gov-Client-Multi-Factor and
- * Gov-Vendor-License-IDs are left out because Nucta File uses neither.
+ * Gov-Vendor-License-IDs are left out because Nucta Filings uses neither.
  */
 export function fraudHeaders(c: ClientInfo, s: ServerInfo): Record<string, string> {
   const h: Record<string, string> = {
@@ -227,8 +227,8 @@ export function fraudHeaders(c: ClientInfo, s: ServerInfo): Record<string, strin
     "Gov-Client-Screens": c.screens.map((x) => `width=${x.width}&height=${x.height}&scaling-factor=${x.scalingFactor}&colour-depth=${x.colourDepth}`).join(","),
     "Gov-Client-Window-Size": `width=${c.window.width}&height=${c.window.height}`,
     "Gov-Client-User-IDs": `nucta-file=${enc(s.userId)}`,
-    "Gov-Vendor-Product-Name": enc("Nucta File"),
-    "Gov-Vendor-Version": `${enc("Nucta File")}=${enc(s.productVersion)}`,
+    "Gov-Vendor-Product-Name": enc("Nucta Filings"),
+    "Gov-Vendor-Version": `${enc("Nucta Filings")}=${enc(s.productVersion)}`,
   };
   if (s.clientIp) {
     h["Gov-Client-Public-IP"] = s.clientIp;

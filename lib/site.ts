@@ -1,10 +1,10 @@
 /**
- * The website's facts in one place: who runs Nucta File, how to reach them,
+ * The website's facts in one place: who runs Nucta Filings, how to reach them,
  * and the prices. Change them here and every page follows.
  */
 
 export const SITE = {
-  product: "Nucta File",
+  product: "Nucta Filings",
   company: "Nucta Formations Ltd",
   /** Shown in the footer and legal pages once filled in. */
   companyNumber: process.env.NUCTA_COMPANY_NUMBER ?? "",
@@ -26,7 +26,7 @@ export const PRICES = {
 
 export const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 
-/** The address Nucta File lives at once its own domain is connected. */
+/** The address Nucta Filings lives at once its own domain is connected. */
 export const HOME_DOMAIN = "nuctafilings.co.uk";
 
 const trim = (v: string) => v.trim().replace(/\/+$/, "");

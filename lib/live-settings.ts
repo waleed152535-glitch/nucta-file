@@ -1,5 +1,5 @@
 /**
- * Whether live filing is open, and for whom: set by Nucta File's
+ * Whether live filing is open, and for whom: set by Nucta Filings'
  * administrators on the Live filing page, kept in the database so it changes
  * without touching the hosting settings or redeploying.
  *
@@ -18,7 +18,7 @@ export type LiveWho = "admins" | "everyone";
 export interface LiveSettings {
   /** off: HMRC's test service only. til: also HMRC's Test in Live check. on: real filing too. */
   mode: LiveFiling;
-  /** Who can use it: Nucta File's administrators only (a pilot), or every account. */
+  /** Who can use it: Nucta Filings' administrators only (a pilot), or every account. */
   who: LiveWho;
   /** A real filing needs a passed Test in Live check of the same figures first. */
   requireTil: boolean;

@@ -19,7 +19,7 @@ export async function companyNotes(companyId: string): Promise<{ ok: boolean; pr
   try {
     const s = await store();
     const c = await ownedCompany(s, u, companyId);
-    if (!c) return { ok: false, problem: "That company isn't in Nucta File.", notes: [], tasks: [] };
+    if (!c) return { ok: false, problem: "That company isn't in Nucta Filings.", notes: [], tasks: [] };
     const notes = await s.db.select().from(s.notes).where(s.eq(s.notes.companyId, companyId)).orderBy(s.desc(s.notes.createdAt)).limit(100);
     const tasks = await s.db.select().from(s.tasks).where(s.and(s.eq(s.tasks.companyId, companyId), s.eq(s.tasks.accountId, u.accountId))).orderBy(s.asc(s.tasks.done), s.asc(s.tasks.due), s.desc(s.tasks.createdAt)).limit(100);
     return {
@@ -38,7 +38,7 @@ export async function addNote(companyId: string, body: string): Promise<{ ok: bo
   const text = body.trim();
   if (!text) return { ok: false, problem: "Write the note first." };
   const s = await store();
-  if (!(await ownedCompany(s, u, companyId))) return { ok: false, problem: "That company isn't in Nucta File." };
+  if (!(await ownedCompany(s, u, companyId))) return { ok: false, problem: "That company isn't in Nucta Filings." };
   await s.db.insert(s.notes).values({ id: randomUUID(), accountId: u.accountId, companyId, authorName: u.name, body: text.slice(0, 5000) });
   return { ok: true };
 }
@@ -76,7 +76,7 @@ export async function addTask(companyId: string | null, titleRaw: string, dueRaw
   if (!title) return { ok: false, problem: "Say what needs doing." };
   if (due && !isDate(due)) return { ok: false, problem: "The date isn't a date." };
   const s = await store();
-  if (companyId && !(await ownedCompany(s, u, companyId))) return { ok: false, problem: "That company isn't in Nucta File." };
+  if (companyId && !(await ownedCompany(s, u, companyId))) return { ok: false, problem: "That company isn't in Nucta Filings." };
   await s.db.insert(s.tasks).values({ id: randomUUID(), accountId: u.accountId, companyId: companyId || null, title: title.slice(0, 300), due: due || null, createdBy: u.name });
   return { ok: true };
 }

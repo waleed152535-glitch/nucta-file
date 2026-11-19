@@ -24,7 +24,7 @@ export async function payFilingFee(returnId: string): Promise<{ ok: boolean; url
   try {
     const s = await store();
     const r = await ownedReturn(s, u, returnId);
-    if (!r) return { ok: false, problem: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, problem: "That return isn't in Nucta Filings." };
     const fee = await feeState(s, u, returnId);
     if (fee.status === "paid") return { ok: false, alreadyPaid: true, problem: "This return's fee is already paid." };
     if (fee.status !== "due") return { ok: false, problem: fee.words };
@@ -46,7 +46,7 @@ export async function checkFilingFee(returnId: string, sessionId: string): Promi
   try {
     const s = await store();
     const r = await ownedReturn(s, u, returnId);
-    if (!r) return { ok: false, status: "missing", words: "That return isn't in Nucta File." };
+    if (!r) return { ok: false, status: "missing", words: "That return isn't in Nucta Filings." };
     const synced = await syncCheckoutSession(sessionId);
     if (synced.status === "ignored" || synced.returnId !== returnId || synced.accountId !== u.accountId) {
       return { ok: false, status: "mismatch", words: "That payment isn't for this return." };
@@ -110,7 +110,7 @@ export async function buyMembership(planKey: string): Promise<{ ok: boolean; url
   if (u.accountKind === "company") return { ok: false, problem: "Memberships are for practices filing for clients. A company filing its own return pays per return." };
   if (u.role !== "owner") return { ok: false, problem: "Only the account's owner can buy a membership." };
   if (emailCheckNeeded(u)) return { ok: false, problem: `Confirm your email address first: open the link we sent to ${u.email}. The payment confirmation goes there.` };
-  if (!(await chargingOn())) return { ok: false, problem: "Filing is free while Nucta File launches, so there's nothing to buy yet." };
+  if (!(await chargingOn())) return { ok: false, problem: "Filing is free while Nucta Filings launches, so there's nothing to buy yet." };
   try {
     const s = await store();
     const plan = (await getPlans()).find((p) => p.key === planKey && p.on);
@@ -140,7 +140,7 @@ export async function checkMembershipPayment(sessionId: string): Promise<{ ok: b
 
 export async function updatePlans(plans: unknown): Promise<{ ok: boolean; problems: string[]; plans?: Plan[] }> {
   const u = await currentUser();
-  if (!u?.admin) return { ok: false, problems: ["This is for Nucta File's administrators only."] };
+  if (!u?.admin) return { ok: false, problems: ["This is for Nucta Filings' administrators only."] };
   const r = checkPlans(plans);
   if (!r.ok) return { ok: false, problems: r.problems };
   if (!r.plans.some((p) => p.on)) return { ok: false, problems: ["Keep at least one plan on offer, or practices can only pay per return."] };
@@ -174,7 +174,7 @@ export async function getPaymentsAdmin(): Promise<PaymentsAdminView> {
   const settings = await getBillingSettings();
   const webhookUrl = `${siteUrl()}/api/stripe/webhook`;
   const base = { settings, mode: stripeMode(), webhookUrl, prices: PRICES, plans: await getPlans() };
-  if (!u?.admin) return { ok: false, problem: "This is for Nucta File's administrators only.", ...base, checks: [], payments: [], memberships: [] };
+  if (!u?.admin) return { ok: false, problem: "This is for Nucta Filings' administrators only.", ...base, checks: [], payments: [], memberships: [] };
   const key = process.env.STRIPE_SECRET_KEY ?? "";
   const mode = stripeMode();
   const checks = [
@@ -203,7 +203,7 @@ const SITE_PRICE_PAGES = ["/", "/pricing", "/accountants"];
 
 export async function updateCharging(next: { charging: boolean; confirm?: boolean }): Promise<{ ok: boolean; problem?: string; settings?: BillingSettings }> {
   const u = await currentUser();
-  if (!u?.admin) return { ok: false, problem: "This is for Nucta File's administrators only." };
+  if (!u?.admin) return { ok: false, problem: "This is for Nucta Filings' administrators only." };
   if (next.charging && !stripeReady()) return { ok: false, problem: "Add the Stripe secret key first: charging can't start without it." };
   const before = await getBillingSettings();
   if (next.charging && !before.charging && !next.confirm) return { ok: false, problem: "Tick the box to confirm customers should pay before filing." };

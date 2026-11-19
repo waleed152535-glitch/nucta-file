@@ -50,7 +50,7 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
             </ul>
           </nav>
         )}
-        <p className="after"><Link href="/sign-up" className="s-btn big">Prepare a return with Nucta File</Link></p>
+        <p className="after"><Link href="/sign-up" className="s-btn big">Prepare a return with Nucta Filings</Link></p>
       </div>
     </article>
   );

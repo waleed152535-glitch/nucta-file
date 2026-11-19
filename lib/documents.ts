@@ -11,7 +11,7 @@
 import { DOMParser } from "@xmldom/xmldom";
 import type { Block } from "./pdf";
 
-/** What the CT600 elements Nucta File writes mean, by box number (HMRC CT600 v3 specification). */
+/** What the CT600 elements Nucta Filings writes mean, by box number (HMRC CT600 v3 specification). */
 const BOXES: { path: string; box: string; label: string; section: string; kind?: "money" | "yes" | "date" | "rate" | "text" }[] = [
   { section: "Company information", path: "CompanyInformation/CompanyName", box: "1", label: "Company name", kind: "text" },
   { section: "Company information", path: "CompanyInformation/RegistrationNumber", box: "2", label: "Company registration number", kind: "text" },
@@ -137,7 +137,7 @@ export function receiptBlocks(r: { company: string; period: string; at: string; 
     { t: "row", label: "Correlation ID", values: [r.correlationId ?? "—"] },
     { t: "row", label: "IRmark", values: [r.irmark ?? "—"] },
     ...(r.filedBy ? [{ t: "row" as const, label: "Government Gateway user ID", values: [r.filedBy] }] : []),
-    { t: "p", small: true, text: "HMRC recommend keeping this receipt and the submission electronically as evidence of what was filed. Nucta File keeps both with the return." },
+    { t: "p", small: true, text: "HMRC recommend keeping this receipt and the submission electronically as evidence of what was filed. Nucta Filings keeps both with the return." },
   ];
 }
 

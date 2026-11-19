@@ -10,10 +10,10 @@ import { siteOrigin } from "@/lib/site";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteOrigin()),
-  applicationName: "Nucta File",
-  title: { default: "Nucta File — Company Tax Returns and accounts for small companies", template: "%s — Nucta File" },
+  applicationName: "Nucta Filings",
+  title: { default: "Nucta Filings — Company Tax Returns and accounts for small companies", template: "%s — Nucta Filings" },
   description: "Prepare a small company's accounts, work out its Corporation Tax and file the CT600 to HMRC with the iXBRL accounts and computation attached.",
-  openGraph: { siteName: "Nucta File", locale: "en_GB", type: "website" },
+  openGraph: { siteName: "Nucta Filings", locale: "en_GB", type: "website" },
   twitter: { card: "summary_large_image" },
   formatDetection: { telephone: false, email: false, address: false },
 };

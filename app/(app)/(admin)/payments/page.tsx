@@ -87,7 +87,7 @@ export default async function PaymentsPage() {
             )}
 
             <div className="card">
-              <div className="hd"><h3>Payments</h3><span className="note">Newest first. Refunds are made in Stripe; they show here once Stripe tell Nucta File.</span></div>
+              <div className="hd"><h3>Payments</h3><span className="note">Newest first. Refunds are made in Stripe; they show here once Stripe tell Nucta Filings.</span></div>
               <div className="bd" style={{ paddingTop: 4 }}>
                 {!v.payments.length ? <p className="note">No payments yet.</p> : (
                   <div style={{ overflowX: "auto" }}>

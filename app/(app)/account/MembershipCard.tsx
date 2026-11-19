@@ -49,7 +49,7 @@ export default function MembershipCard({ v, notice }: { v: MembershipView; notic
         )}
         {v.next && <p className="note">Bought and waiting: {v.next.planName}, {v.next.returnsIncluded} returns, from {day(v.next.startsOn)}.</p>}
         {!v.charging && (
-          <div className="banner info"><span>i</span><span>Filing is free while Nucta File launches, so there&apos;s nothing to buy yet. These are the yearly plans for when charging starts — we&apos;ll tell you first.</span></div>
+          <div className="banner info"><span>i</span><span>Filing is free while Nucta Filings launches, so there&apos;s nothing to buy yet. These are the yearly plans for when charging starts — we&apos;ll tell you first.</span></div>
         )}
         <div className="plan-picks">
           {v.plans.map((p) => (

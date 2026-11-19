@@ -31,6 +31,7 @@ export default function CompaniesClient({ companies, error, chReady, startAdding
           <div className="sub">Each company&apos;s returns, prepared step by step and filed from here.</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link className="btn ghost" href="/dormant">Dormant accounts in bulk</Link>
           <a className="btn ghost" href="/companies/export">Download as a spreadsheet</a>
           <button className="btn ghost" onClick={() => { setImporting(true); setOpen(false); }}>Import a list</button>
           <button className="btn" onClick={() => { setOpen(true); setImporting(false); }}>Add a company</button>

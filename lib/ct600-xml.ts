@@ -141,7 +141,7 @@ const pounds = (v: number): string =>
  *
  * The marginal relief formula is the simple form, which holds when the
  * company has no exempt distributions (dividends received from outside its
- * group). Nucta File doesn't take those as an input yet, so it can't be used
+ * group). Nucta Filings doesn't take those as an input yet, so it can't be used
  * for a company that has them. Before April 2023 the rate was a flat 19%.
  */
 export function taxProblems(i: Ct600Input): string[] {
@@ -190,7 +190,7 @@ export function taxProblems(i: Ct600Input): string[] {
 
   const net = Math.round((i.corporationTax - mr) * 100) / 100;
   if (Math.abs(i.taxPayable - net) > 0.005) {
-    out.push(`Tax payable is entered as ${pounds(i.taxPayable)}, but the tax chargeable is ${pounds(net)}. Nucta File doesn't handle other reliefs or set-offs yet, so these must match.`);
+    out.push(`Tax payable is entered as ${pounds(i.taxPayable)}, but the tax chargeable is ${pounds(net)}. Nucta Filings doesn't handle other reliefs or set-offs yet, so these must match.`);
   }
   return out;
 }

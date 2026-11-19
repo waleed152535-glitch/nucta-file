@@ -55,7 +55,7 @@ export default async function CompaniesHousePage() {
       label: "Daily collection of results",
       ok: Boolean(process.env.CRON_SECRET),
       detail: process.env.CRON_SECRET
-        ? "CRON_SECRET is set: every morning Nucta File collects Companies House's decisions and emails whoever filed."
+        ? "CRON_SECRET is set: every morning Nucta Filings collects Companies House's decisions and emails whoever filed."
         : "Optional: add CRON_SECRET (any long random text) so results are also collected each morning. Without it they're collected whenever a return is opened.",
     },
   ];

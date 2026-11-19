@@ -170,7 +170,7 @@ export function figureProblems(f: ReturnFigures, opts: { periodOfAccount?: boole
     out.push("Periods starting before 1 April 2023 used different tax rules and aren't supported.");
   }
   if (financialYearOf(f.periodTo) > LAST_CHECKED_FY) {
-    out.push(`The tax rates for the year from 1 April ${LAST_CHECKED_FY + 1} haven't been checked into Nucta File yet, so this period can't be computed.`);
+    out.push(`The tax rates for the year from 1 April ${LAST_CHECKED_FY + 1} haven't been checked into Nucta Filings yet, so this period can't be computed.`);
   }
   if (!Number.isInteger(f.associatedCompanies) || f.associatedCompanies < 0) out.push("Associated companies must be a whole number, 0 or more.");
   const negatives = [

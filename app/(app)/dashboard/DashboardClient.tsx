@@ -13,6 +13,7 @@ import DeadlineList from "./DeadlineList";
 import { Board, Calendar, CompanyTable, Feed, TaxChart, money, shortDate, readyToFile } from "./parts";
 import { openPalette } from "@/components/AppBar";
 import DashTasks from "./DashTasks";
+import GettingStarted from "./GettingStarted";
 
 type Filter = "all" | "overdue" | "soon" | "ct600" | "ct-payment" | "ch-accounts" | "not-started";
 const FILTERS: { key: Filter; label: string }[] = [
@@ -57,7 +58,7 @@ export default function DashboardClient({ data, chReady, who, supportEmail, toda
           <div>
             <h2 suppressHydrationWarning>{hello}{name}.</h2>
             <p className="sum">
-              {empty ? (who.practice ? "Add your first client and Nucta File will keep every deadline for you." : "Add your company and Nucta File will keep every deadline for you.")
+              {empty ? (who.practice ? "Add your first client and Nucta Filings will keep every deadline for you." : "Add your company and Nucta Filings will keep every deadline for you.")
                 : summary.length ? <>You have <b>{summary.join(", ")}</b>.</> : <>Nothing is overdue or due in the next 30 days.</>}
               {" "}{!empty && <span className="note">{who.practice ? `${c.companies} client compan${c.companies === 1 ? "y" : "ies"}` : "Your company"}, as at {shortDate(today)}.</span>}
             </p>
@@ -71,7 +72,9 @@ export default function DashboardClient({ data, chReady, who, supportEmail, toda
           <button type="button" onClick={() => openPalette("new")} disabled={empty}><span className="qi">{I.doc}</span><span>Start a return<small>Pick a company and a year</small></span></button>
           <button type="button" onClick={() => setAdding(!adding)}><span className="qi">{I.plus}</span><span>Add a company<small>{chReady ? "From Companies House" : "Type in the details"}</small></span></button>
           <a href="/calendar.ics"><span className="qi">{I.cal}</span><span>Add deadlines to your calendar<small>Outlook, Google or your phone</small></span></a>
-          <a href="/companies/export"><span className="qi">{I.sheet}</span><span>Download the company list<small>A spreadsheet of every deadline</small></span></a>
+          {who.practice
+            ? <Link href="/dormant"><span className="qi">{I.sheet}</span><span>Dormant accounts in bulk<small>File many companies at once</small></span></Link>
+            : <a href="/companies/export"><span className="qi">{I.sheet}</span><span>Download the company list<small>A spreadsheet of every deadline</small></span></a>}
         </div>
 
         {adding && <AddCompany chReady={chReady} onCancel={() => setAdding(false)} />}
@@ -82,18 +85,19 @@ export default function DashboardClient({ data, chReady, who, supportEmail, toda
               <h3>{who.practice ? "Let's add your first client." : "Let's get your company's return ready."}</h3>
               <ol className="welcome-steps">
                 <li><b>{who.practice ? "Add a client company" : "Add your company"}</b>{chReady ? "Search Companies House by name or number; the address and accounts dates fill in." : "Type its name, number and Corporation Tax reference."}</li>
-                <li><b>Start the return</b>Nucta File suggests the period from the company&apos;s accounts dates.</li>
+                <li><b>Start the return</b>Nucta Filings suggests the period from the company&apos;s accounts dates.</li>
                 <li><b>Enter the year&apos;s figures</b>From the bookkeeping or last year&apos;s accounts. The tax is worked out as you type.</li>
-                <li><b>Approve and file</b>The director approves online or on paper, then you file with the company&apos;s HMRC sign-in. The figures for Companies House are on the same screen.</li>
+                <li><b>Approve and file</b>The director approves online or on paper. Then file the CT600 with HMRC and the accounts with Companies House, from the same screen.</li>
               </ol>
               <button type="button" className="btn" onClick={() => setAdding(true)}>{who.practice ? "Add your first client" : "Add your company"}</button>
-              <p className="note" style={{ marginTop: 14 }}>Stuck? Email <a href={`mailto:${supportEmail}`}>{supportEmail}</a> and we&apos;ll help you set up.</p>
+              <p className="note" style={{ marginTop: 14 }}>New here? <Link href="/help">See how Nucta Filings works</Link>, step by step. Stuck? Email <a href={`mailto:${supportEmail}`}>{supportEmail}</a> and we&apos;ll help you set up.</p>
             </div>
           </div>
         ) : !empty && (
           <>
+            {data.started && <GettingStarted p={data.started} practice={who.practice} onAddCompany={() => setAdding(true)} />}
             <div className="stats">
-              <div className="stat"><div className="l">{who.practice ? "Client companies" : "Companies"}</div><div className="n">{c.companies}</div><div className="s">{data.returns.length} return{data.returns.length === 1 ? "" : "s"} in Nucta File</div></div>
+              <div className="stat"><div className="l">{who.practice ? "Client companies" : "Companies"}</div><div className="n">{c.companies}</div><div className="s">{data.returns.length} return{data.returns.length === 1 ? "" : "s"} in Nucta Filings</div></div>
               <div className={`stat ${c.overdue ? "bad" : ""}`}><div className="l">Overdue</div><div className="n">{c.overdue}</div><div className="s">{c.overdue ? "Deal with these first" : "All up to date"}</div></div>
               <div className={`stat ${c.dueSoon ? "warn" : ""}`}><div className="l">Due in the next 30 days</div><div className="n">{c.dueSoon}</div><div className="s">Returns, tax and accounts</div></div>
               <div className="stat money"><div className="l">Tax due in 90 days</div><div className="n">{money(in90)}</div><div className="s">Corporation Tax and loans tax</div></div>

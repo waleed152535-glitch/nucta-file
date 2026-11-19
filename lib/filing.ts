@@ -4,7 +4,7 @@
  *   scope check → tax computation → accounts → computation document → CT600
  *
  * Each stage refuses rather than guesses: if the company is outside what
- * Nucta File handles, the figures don't add up, or the balance sheet doesn't
+ * Nucta Filings handles, the figures don't add up, or the balance sheet doesn't
  * balance, the result says so in plain words and nothing is built.
  *
  * Accounts longer than 12 months make two returns (see tax/long-period.ts):

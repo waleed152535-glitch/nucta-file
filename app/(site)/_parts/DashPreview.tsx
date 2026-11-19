@@ -1,5 +1,5 @@
 /**
- * A practice's dashboard as it looks in Nucta File, with example clients.
+ * A practice's dashboard as it looks in Nucta Filings, with example clients.
  * A picture, not the real thing: it isn't interactive.
  */
 const ROWS: { co: string; what: string; when: string; state: "late" | "soon" | "wait" | "done"; label: string }[] = [
@@ -13,12 +13,12 @@ const ROWS: { co: string; what: string; when: string; state: "late" | "soon" | "
 
 export default function DashPreview() {
   return (
-    <div className="dash-wrap" role="img" aria-label="Nucta File's dashboard for a practice: six example clients, one overdue, two due soon, one filed.">
+    <div className="dash-wrap" role="img" aria-label="Nucta Filings' dashboard for a practice: six example clients, one overdue, two due soon, one filed.">
       <div className="dash" aria-hidden>
         <div className="bar"><i /><i /><i /></div>
         <div className="body">
           <div className="d-side">
-            <b>Nucta File</b>
+            <b>Nucta Filings</b>
             <span className="on">Dashboard</span>
             <span>Companies and returns</span>
             <span>Your account</span>

@@ -1,7 +1,7 @@
 import { LATER_STATEMENTS } from "./db-ensure";
 
 /**
- * Nucta File's tables, as one list of statements.
+ * Nucta Filings' tables, as one list of statements.
  *
  * This is drizzle/0000_nucta_file_init.sql, split on drizzle's statement
  * markers. It lives in code rather than being read from the .sql file at run

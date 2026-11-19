@@ -71,8 +71,8 @@ export default function AddCompany({ chReady, onCancel, initialNumber }: { chRea
       <div className="bd">
         {!chReady && (
           <p className="note" style={{ marginTop: 0 }}>
-            Companies House search isn&apos;t set up yet, so type the details. With a free Companies House API key in the hosting settings
-            (CH_API_KEY), a company is found by name or number and its address and accounts dates fill in by themselves.
+            Type the company&apos;s details exactly as they appear at Companies House. The company number and Corporation Tax UTR let
+            Nucta Filings work out the deadlines and file for the company later.
           </p>
         )}
         {chReady && !manual && !profile && (

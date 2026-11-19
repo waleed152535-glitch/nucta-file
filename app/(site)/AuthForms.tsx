@@ -16,14 +16,14 @@ export function SignInForm({ next }: { next: string }) {
   return (
     <form action={act} className="auth-card">
       <h1>Sign in</h1>
-      <p className="sub">to Nucta File</p>
+      <p className="sub">to Nucta Filings</p>
       <Problems s={s} />
       <input type="hidden" name="next" value={next} />
       <label className="f"><span>Email</span><input name="email" type="email" autoComplete="email" required autoFocus /></label>
       <label className="f"><span>Password</span><input name="password" type="password" autoComplete="current-password" required /></label>
       <button className="s-btn big" type="submit" disabled={busy} style={{ width: "100%" }}>{busy ? "Signing in…" : "Sign in"}</button>
       <p className="switch"><Link href="/forgot-password">Forgotten your password?</Link></p>
-      <p className="switch">New to Nucta File? <Link href="/sign-up">Create an account</Link></p>
+      <p className="switch">New to Nucta Filings? <Link href="/sign-up">Create an account</Link></p>
     </form>
   );
 }
@@ -92,7 +92,7 @@ export function JoinForm({ token, name, email, accountName }: { token: string; n
   return (
     <form action={act} className="auth-card">
       <h1>Join {accountName}</h1>
-      <p className="sub">on Nucta File, as {email}</p>
+      <p className="sub">on Nucta Filings, as {email}</p>
       <Problems s={s} />
       <input type="hidden" name="token" value={token} />
       <label className="f"><span>Your name</span><input name="name" autoComplete="name" defaultValue={name} required /></label>

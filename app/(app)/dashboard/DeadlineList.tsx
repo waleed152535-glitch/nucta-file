@@ -30,7 +30,7 @@ export default function DeadlineList({ deadlines, showCompany = true, empty = "N
               <div className="d">
                 {d.kind === "confirmation" ? "Confirms the company's details at Companies House" : <>Period {short(d.periodFrom)} to {short(d.periodTo)}</>}
                 {d.kind === "not-started" ? (d.label === "Return not started" ? " · start the return" : " · the year hasn't ended") : ""}
-                {d.estimated ? " · date worked out by Nucta File" : ""}
+                {d.estimated ? " · date worked out by Nucta Filings" : ""}
               </div>
             </span>
             <span style={{ textAlign: "right", minWidth: 120 }}>

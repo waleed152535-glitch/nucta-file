@@ -120,7 +120,7 @@ export default function CompanyClient({ company, returns, deadlines, chReady, su
                 <p className="note" style={{ margin: 0 }}>
                   {company.registeredOffice ? <>{company.registeredOffice}<br /></> : null}
                   {chReady ? "Press “Look up” to read this company's record — accounts dates, address and status — from Companies House."
-                    : "With a Companies House API key (CH_API_KEY) set, this shows the company's record and accounts dates from Companies House."}
+                    : "Companies House's record for this company can't be read on this site yet, so the deadlines are worked out from the dates you entered."}
                 </p>
               )}
               {chMsg && <p className="note">{chMsg}</p>}
@@ -144,7 +144,7 @@ export default function CompanyClient({ company, returns, deadlines, chReady, su
               const parts = accountingPeriodsOf(p.from, p.to);
               return parts.length > 1 ? (
                 <div className="banner info"><span>ℹ</span><span>
-                  These accounts cover {monthsIn(p.from, p.to)}{" "}months. A Corporation Tax return can&apos;t cover more than 12, so Nucta File will
+                  These accounts cover {monthsIn(p.from, p.to)}{" "}months. A Corporation Tax return can&apos;t cover more than 12, so Nucta Filings will
                   make <b>two returns</b> from the one set of figures: {day(parts[0].from)} to {day(parts[0].to)}, and {day(parts[1].from)} to {day(parts[1].to)}.
                 </span></div>
               ) : null;

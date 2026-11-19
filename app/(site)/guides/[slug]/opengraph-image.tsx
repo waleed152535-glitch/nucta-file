@@ -3,7 +3,7 @@ import { OG_SIZE, OG_TYPE, shareImage } from "@/lib/og";
 
 export const size = OG_SIZE;
 export const contentType = OG_TYPE;
-export const alt = "A Nucta File guide for small UK companies";
+export const alt = "A Nucta Filings guide for small UK companies";
 
 export function generateStaticParams() {
   return GUIDES.map((g) => ({ slug: g.slug }));

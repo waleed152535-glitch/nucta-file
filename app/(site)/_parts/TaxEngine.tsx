@@ -9,7 +9,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { compute, type ReturnFigures } from "@/lib/tax/computation";
 import { addMonths } from "@/lib/tax/dates";
 
-const END = "2026-03-31";
+/** Year ends the calculator page offers; the home page uses the first-listed default. */
+export const ENDS = ["2027-03-31", "2026-12-31", "2026-03-31", "2025-12-31", "2025-03-31"] as const;
+const DEFAULT_END = "2026-03-31";
 const PERIODS = [12, 9, 6] as const;
 const ASSOCIATED = [0, 1, 2, 3] as const;
 const MAX = 500_000;
@@ -17,12 +19,12 @@ const MAX = 500_000;
 const gbp = (v: number, pence = false) => `£${v.toLocaleString("en-GB", { minimumFractionDigits: pence ? 2 : 0, maximumFractionDigits: pence ? 2 : 0 })}`;
 const long = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
-function figures(profit: number, months: number, associated: number): ReturnFigures {
+function figures(end: string, profit: number, months: number, associated: number): ReturnFigures {
   // The day after the same date `months` earlier: 12 months to 31 March 2026 starts 1 April 2025.
-  const from = new Date(addMonths(END, -months) + "T12:00:00Z");
+  const from = new Date(addMonths(end, -months) + "T12:00:00Z");
   from.setUTCDate(from.getUTCDate() + 1);
   return {
-    periodFrom: from.toISOString().slice(0, 10), periodTo: END, associatedCompanies: associated,
+    periodFrom: from.toISOString().slice(0, 10), periodTo: end, associatedCompanies: associated,
     pl: { turnover: profit, otherIncome: 0, interestReceived: 0, costOfSales: 0, staffCosts: 0, depreciation: 0, otherCharges: 0 },
     disallowable: { entertainment: 0, finesAndPenalties: 0, charitableDonations: 0, politicalDonations: 0, privateExpenses: 0, capitalItemsExpensed: 0, lossOnDisposals: 0, other: 0 },
     profitOnDisposals: 0,
@@ -51,20 +53,24 @@ function useTween(target: number) {
   return shown;
 }
 
-export default function TaxEngine() {
+const short = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+/** `chooseEnd` adds a choice of year end (the calculator page); without it the year ends 31 March 2026. */
+export default function TaxEngine({ chooseEnd = false }: { chooseEnd?: boolean }) {
+  const [end, setEnd] = useState<string>(DEFAULT_END);
   const [profit, setProfit] = useState(85_000);
   const [text, setText] = useState("85,000");
   const [months, setMonths] = useState<number>(12);
   const [associated, setAssociated] = useState<number>(0);
 
-  const r = useMemo(() => compute(figures(profit, months, associated)), [profit, months, associated]);
+  const r = useMemo(() => compute(figures(end, profit, months, associated)), [end, profit, months, associated]);
   const y = r.years[0];
   const lower = r.years.reduce((s, x) => s + x.lowerLimit, 0), upper = r.years.reduce((s, x) => s + x.upperLimit, 0);
   const band = profit <= 0 ? "none" : r.marginalRelief > 0 ? "marginal" : r.rate === 19 ? "small" : "main";
   const tax = useTween(r.taxChargeable);
   const scaleMax = Math.max(upper * 1.25, profit * 1.08, 1);
   const at = (v: number) => `${Math.min(100, (v / scaleMax) * 100)}%`;
-  const due = (() => { const d = new Date(addMonths(END, 9) + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+  const due = (() => { const d = new Date(addMonths(end, 9) + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
 
   const setFromText = (v: string) => {
     setText(v);
@@ -87,6 +93,14 @@ export default function TaxEngine() {
           <input type="range" min={0} max={MAX} step={1000} value={Math.min(profit, MAX)} aria-label="Taxable profit"
             onChange={(e) => setFromSlider(Number(e.target.value))} />
         </div>
+        {chooseEnd && (
+          <div className="e-field">
+            <span className="q" id="eng-end">Year end<small>The last day of the accounting period</small></span>
+            <div className="seg wrapseg" role="group" aria-labelledby="eng-end">
+              {ENDS.map((d) => <button key={d} type="button" aria-pressed={end === d} onClick={() => setEnd(d)}>{short(d)}</button>)}
+            </div>
+          </div>
+        )}
         <div className="e-field">
           <span className="q" id="eng-period">Length of the accounting period<small>A shorter period has lower limits</small></span>
           <div className="seg" role="group" aria-labelledby="eng-period">
@@ -101,7 +115,7 @@ export default function TaxEngine() {
         </div>
       </div>
       <div className="out" aria-live="polite">
-        <div className="big-l">Corporation Tax for the period ending 31 March 2026</div>
+        <div className="big-l">Corporation Tax for the period ending {long(end)}</div>
         <div className="big">{gbp(Math.round(tax * 100) / 100, true)}</div>
         <span className={`band ${band}`}>
           {band === "none" ? "No profit, no Corporation Tax" : band === "small" ? "Small profits rate, 19%" : band === "main" ? "Main rate, 25%" : `Main rate of 25%, less ${gbp(r.marginalRelief, true)} marginal relief`}

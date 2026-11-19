@@ -1,6 +1,7 @@
+import { pageMeta } from "@/lib/seo";
 import { SITE } from "@/lib/site";
 
-export const metadata = { title: "Privacy notice", description: "What Nucta File keeps about you and your companies, and why." };
+export const metadata = pageMeta({ title: "Privacy notice", path: "/privacy", description: "What Nucta File keeps about you and your companies, why it is kept, who it is shared with (HMRC and Companies House when you file) and how long it is held." });
 
 export default function Privacy() {
   return (

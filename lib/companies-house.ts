@@ -24,7 +24,11 @@ import { DOMParser } from "@xmldom/xmldom";
  * be fetched later with GetSubmissionStatus.
  */
 
-/** TIS 1.2.3.2: a single entry point for test and live; GatewayTest tells them apart. */
+/**
+ * TIS 1.2.3.2: a single entry point for test and live; GatewayTest tells them
+ * apart — 1 for test, 0 for live, as Companies House confirmed when issuing
+ * the live package.
+ */
 export const CH_GATEWAY = process.env.CH_GATEWAY_URL ?? "https://xmlgw.companieshouse.gov.uk/v1-0/xmlgw/Gateway";
 
 const ENVELOPE_NS = "http://www.govtalk.gov.uk/CM/envelope";
@@ -55,14 +59,34 @@ export interface ChPresenter {
   test: boolean;
 }
 
+export type ChMode = "test" | "live";
+
+/**
+ * The two presenter accounts, kept apart. Companies House allow no testing on
+ * the live service and the test credentials don't work there, so each mode
+ * has its own settings:
+ *
+ *   test   CH_PRESENTER_ID, CH_PRESENTER_AUTH, CH_PACKAGE_REFERENCE (any in
+ *          test; 0012 was issued), GatewayTest 1 — the admin console only.
+ *   live   CH_LIVE_PRESENTER_ID, CH_LIVE_PRESENTER_AUTH and the live package
+ *          reference Companies House issued for the form types tested,
+ *          CH_LIVE_PACKAGE_REFERENCE (4356), GatewayTest 0 — customers'
+ *          filings from a return.
+ */
+const MODE_SETTINGS: Record<ChMode, { id: string; auth: string; pkg: string; defaultPkg: string; what: string }> = {
+  test: { id: "CH_PRESENTER_ID", auth: "CH_PRESENTER_AUTH", pkg: "CH_PACKAGE_REFERENCE", defaultPkg: "0012", what: "test" },
+  live: { id: "CH_LIVE_PRESENTER_ID", auth: "CH_LIVE_PRESENTER_AUTH", pkg: "CH_LIVE_PACKAGE_REFERENCE", defaultPkg: "4356", what: "live" },
+};
+
 /** Reads the presenter credentials, which live only in the hosting environment. */
-export function chPresenter(): { presenter: ChPresenter | null; missing: string[] } {
+export function chPresenter(mode: ChMode = "test"): { presenter: ChPresenter | null; missing: string[] } {
+  const m = MODE_SETTINGS[mode];
   const missing: string[] = [];
-  const presenterId = process.env.CH_PRESENTER_ID?.trim();
-  const authCode = process.env.CH_PRESENTER_AUTH?.trim();
+  const presenterId = process.env[m.id]?.trim();
+  const authCode = process.env[m.auth]?.trim();
   const email = (process.env.CH_CONTACT_EMAIL ?? process.env.HMRC_CONTACT_EMAIL ?? "").trim();
-  if (!presenterId) missing.push("CH_PRESENTER_ID isn't set. It's the test presenter ID Companies House email you.");
-  if (!authCode) missing.push("CH_PRESENTER_AUTH isn't set. It's the presenter authentication code from the same email.");
+  if (!presenterId) missing.push(`${m.id} isn't set. It's the ${m.what} presenter ID Companies House sent you.`);
+  if (!authCode) missing.push(`${m.auth} isn't set. It's the ${m.what} presenter authentication code from the same message.`);
   if (!email) missing.push("CH_CONTACT_EMAIL isn't set. Companies House use it to tell you about submissions waiting.");
   else if (!chEmailOk(email)) missing.push("CH_CONTACT_EMAIL can only use letters, numbers, dots, hyphens and underscores — Companies House's format has no room for a + sign.");
   if (missing.length) return { presenter: null, missing };
@@ -73,12 +97,15 @@ export function chPresenter(): { presenter: ChPresenter | null; missing: string[
       email,
       // TIS 4.3.2: "Any <PackageReference> … can be used" in test. Live
       // filings must carry the reference Companies House issue on authorisation.
-      packageReference: process.env.CH_PACKAGE_REFERENCE?.trim() || "0012",
-      test: true,
+      packageReference: process.env[m.pkg]?.trim() || m.defaultPkg,
+      test: mode === "test",
     },
     missing: [],
   };
 }
+
+/** Whether customers can file with Companies House from a return: the live credentials are set. */
+export const chLiveReady = (): boolean => chPresenter("live").presenter !== null;
 
 /**
  * TIS 2.1: "Only Limited companies with a company number starting with a 0
@@ -223,8 +250,8 @@ function header(p: ChPresenter, cls: string, fn: "submit" | null, transactionId:
       <Class>${cls}</Class>
       <Qualifier>request</Qualifier>${fn ? `
       <Function>${fn}</Function>` : ""}
-      <TransactionID>${esc(transactionId)}</TransactionID>${p.test ? `
-      <GatewayTest>1</GatewayTest>` : ""}
+      <TransactionID>${esc(transactionId)}</TransactionID>
+      <GatewayTest>${p.test ? 1 : 0}</GatewayTest>
     </MessageDetails>
     <SenderDetails>
       <IDAuthentication>
@@ -384,7 +411,7 @@ export function chErrorHelp(number: string): string | null {
   const help: Record<number, string> = {
     500: "The message was sent with the wrong content type. This is a software fault — report it.",
     501: "Companies House didn't recognise the type of filing. This is a software fault — report it.",
-    502: "The presenter ID or authentication code wasn't accepted. Check the two Companies House settings are exactly as issued, then redeploy.",
+    502: "The presenter ID or authentication code wasn't accepted. Check the Companies House presenter settings in the hosting are exactly as issued (test and live are different), then redeploy.",
     503: "The transaction ID wasn't higher than the last one. Sending again fixes this.",
     504: "Too many requests in a short time. Wait a few minutes and try again.",
     604: "The request had a missing or invalid field.",
@@ -397,6 +424,27 @@ export function chErrorHelp(number: string): string | null {
     9101: "The company number isn't in a valid format.",
   };
   return help[n] ?? null;
+}
+
+/**
+ * What a rejection usually means and what to do, in plain words, read from
+ * the reason Companies House give. Their wording varies (some reasons are
+ * written by an examiner), so this matches on the substance and says nothing
+ * when it doesn't recognise the reason; their own words are always shown.
+ */
+export function chRejectHelp(reason: string): string | null {
+  const r = reason.toLowerCase();
+  if (/auth(entication)?\s*code|authcode|security code/.test(r)) return "The company's authentication code wasn't accepted. It's the 6-character code Companies House sent to the registered office. Check it and file again; if it's lost, ask Companies House for a new one (it comes by post).";
+  if (/company name|name.*(not match|does not match|differs)/.test(r)) return "The company name doesn't match Companies House's register. Make sure the company's name in Nucta File is exactly as registered, then file again.";
+  if (/made.?up|accounting reference|reference date|period end|period of the accounts|ard/.test(r)) return "The period end doesn't match the accounting reference date Companies House hold. If the year end has changed, it has to be changed at Companies House first (form AA01).";
+  if (/already (been )?(filed|registered|received)|duplicate/.test(r)) return "Companies House already hold accounts for this period. Nothing more needs sending unless they asked for amended accounts.";
+  if (/approv|sign|director/.test(r)) return "The approval on the accounts wasn't accepted: the director named must be a director on the register on the date given, and the date must be after the year end.";
+  if (/balance sheet|does not balance|totals?/.test(r)) return "Companies House found a problem with the balance sheet figures. Check the figures in the return, then file again.";
+  if (/statement|audit exemption|section 477|micro-entity provisions|small companies regime/.test(r)) return "A required statement on the balance sheet was missing or not accepted. Contact Nucta File support with the submission number.";
+  if (/ixbrl|xbrl|taxonomy|schema|tag|instance/.test(r)) return "Companies House couldn't read the accounts file. This is a software problem, not something you did: contact Nucta File support with the submission number.";
+  if (/dormant/.test(r)) return "Companies House didn't accept the dormant accounts. A company is dormant only if it had no significant transactions in the year; check the figures, then file again.";
+  if (/struck off|dissolved|liquidation|not (be )?active/.test(r)) return "The company isn't active on the register, so it can't file accounts this way.";
+  return null;
 }
 
 export interface ChReply {

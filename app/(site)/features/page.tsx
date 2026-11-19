@@ -1,6 +1,7 @@
+import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 
-export const metadata = { title: "Features", description: "What Nucta File prepares, works out and files for a small UK company." };
+export const metadata = pageMeta({ title: "Features: accounts, Corporation Tax and the CT600", path: "/features", description: "What Nucta File prepares and files: micro-entity and small company accounts in iXBRL, the tax computation, capital allowances, director's loans and the CT600." });
 
 const GROUPS: { heading: string; intro: string; items: [string, string][] }[] = [
   {

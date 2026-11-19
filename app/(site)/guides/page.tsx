@@ -1,7 +1,8 @@
+import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { GUIDES } from "@/lib/guides";
 
-export const metadata = { title: "Guides", description: "Plain-English guides to Company Tax Returns, accounts and deadlines for small UK companies." };
+export const metadata = pageMeta({ title: "Guides to Company Tax Returns and accounts", path: "/guides", description: "Plain-English guides for small UK companies: CT600 deadlines and penalties, micro-entity accounts, dormant companies, director's loans and the 2028 Companies House changes." });
 
 export default function Guides() {
   return (

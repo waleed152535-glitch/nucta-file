@@ -1,3 +1,4 @@
+import { siteOrigin } from "@/lib/site";
 /**
  * Every deadline in the signed-in account as a calendar file (iCalendar), so
  * Outlook, Apple Calendar or Google Calendar show them, with reminders a week
@@ -31,7 +32,7 @@ export async function GET() {
   const u = await currentUser();
   if (!u) redirect("/sign-in?next=/deadlines");
   const d = await getDashboard();
-  const site = (process.env.NUCTA_SITE_URL ?? "https://nucta-file.vercel.app").replace(/\/+$/, "");
+  const site = siteOrigin();
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nucta Formations Ltd//Nucta File//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
     `X-WR-CALNAME:${esc(`Nucta File deadlines, ${u.accountName}`)}`, "X-WR-TIMEZONE:Europe/London"];

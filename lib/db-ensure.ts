@@ -51,6 +51,10 @@ export const LATER_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS "nf_vat_returns" ("id" text PRIMARY KEY NOT NULL, "account_id" text NOT NULL, "company_id" text NOT NULL, "vrn" text NOT NULL, "period_key" text NOT NULL, "period_start" text, "period_end" text, "due" text, "boxes" jsonb NOT NULL, "source" text NOT NULL, "source_name" text, "receipt" jsonb, "correlation_id" text, "env" text NOT NULL, "submitted_by" text, "submitted_by_name" text, "submitted_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   'CREATE INDEX IF NOT EXISTS "vat_returns_company_idx" ON "nf_vat_returns" USING btree ("company_id")',
   'CREATE UNIQUE INDEX IF NOT EXISTS "vat_returns_period_unique" ON "nf_vat_returns" ("vrn", "period_key", "env")',
+  // Accounts filed with Companies House from a return (build 53).
+  `CREATE TABLE IF NOT EXISTS "nf_ch_filings" ("id" text PRIMARY KEY NOT NULL, "account_id" text NOT NULL, "return_id" text NOT NULL, "company_id" text NOT NULL, "company_no" text NOT NULL, "company_name" text NOT NULL, "period_to" text NOT NULL, "submission_number" text NOT NULL, "env" text DEFAULT 'live' NOT NULL, "kind" text NOT NULL, "status" text NOT NULL, "reasons" jsonb DEFAULT '[]'::jsonb NOT NULL, "examiner_note" text, "received_at" text, "accounts_hash" text NOT NULL, "contact_name" text NOT NULL, "contact_phone" text NOT NULL, "filed_by" text NOT NULL, "filed_by_name" text NOT NULL, "filed_by_email" text, "envelope" text, "reply" text, "last_checked_at" timestamp with time zone, "decided_at" timestamp with time zone, "notified_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  'CREATE INDEX IF NOT EXISTS "ch_filings_return_idx" ON "nf_ch_filings" USING btree ("return_id")',
+  'CREATE UNIQUE INDEX IF NOT EXISTS "ch_filings_number_unique" ON "nf_ch_filings" ("submission_number")',
 ];
 
 let done: Promise<void> | null = null;

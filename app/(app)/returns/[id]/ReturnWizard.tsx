@@ -25,6 +25,7 @@ import OnlineApproval from "./OnlineApproval";
 import TrialBalanceImport from "./TrialBalanceImport";
 import LiveFiling from "./LiveFiling";
 import CompaniesHouseAccounts, { SmallCompaniesHouse } from "./CompaniesHouseAccounts";
+import CompaniesHouseFiling from "./CompaniesHouseFiling";
 
 const STEPS = [
   "The company", "Profit and loss", "Expenses tax doesn't allow", "Equipment and vehicles",
@@ -57,6 +58,8 @@ export default function ReturnWizard(props: {
   feeNotice?: { tone: "good" | "bad" | "info"; text: string };
   /** Whether Companies House can be asked for the company's filed accounts. */
   chReady?: boolean;
+  /** Filing accounts with Companies House from here is switched on (the live presenter account is set up). */
+  chLive?: boolean;
 }) {
   const router = useRouter();
   const [d, setD] = useState<ReturnData>(props.initial);
@@ -805,8 +808,21 @@ export default function ReturnWizard(props: {
                   onTest={send} testResults={sent} testing={sending}
                   refreshKey={`${props.status}|${preview.parts.map((x) => x.sent?.status ?? "").join(",")}|${Object.entries(sent).map(([k, v]) => `${k}:${v.outcome}`).join(",")}`} />
               )}
-              {preview?.ok && preview.companiesHouse && <CompaniesHouseAccounts returnId={props.id} form={preview.companiesHouse} />}
-              {preview?.ok && preview.accountsFormat === "small" && <SmallCompaniesHouse returnId={props.id} periodTo={props.periodEnd} hasPrior={Boolean(d.prior)} director={d.director} approvedOn={d.approvedOn} />}
+              {preview?.ok && props.chLive && <CompaniesHouseFiling returnId={props.id} refreshKey={`${props.status}|${d.approvedOn}|${d.director}`} />}
+              {preview?.ok && (props.chLive ? (
+                <details className="card" style={{ padding: "12px 18px", marginBottom: 12 }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 600 }}>Or file the accounts yourself on Companies House&apos;s website</summary>
+                  <div style={{ marginTop: 10 }}>
+                    {preview.companiesHouse && <CompaniesHouseAccounts returnId={props.id} form={preview.companiesHouse} />}
+                    {preview.accountsFormat === "small" && <SmallCompaniesHouse returnId={props.id} periodTo={props.periodEnd} hasPrior={Boolean(d.prior)} director={d.director} approvedOn={d.approvedOn} />}
+                  </div>
+                </details>
+              ) : (
+                <>
+                  {preview.companiesHouse && <CompaniesHouseAccounts returnId={props.id} form={preview.companiesHouse} />}
+                  {preview.accountsFormat === "small" && <SmallCompaniesHouse returnId={props.id} periodTo={props.periodEnd} hasPrior={Boolean(d.prior)} director={d.director} approvedOn={d.approvedOn} />}
+                </>
+              ))}
               {preview?.ok && (() => {
                 const base = `/returns/${props.id}/documents`;
                 const many = preview.parts.length > 1;

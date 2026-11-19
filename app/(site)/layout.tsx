@@ -21,6 +21,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <ul>
               <li><Link href="/features">Features</Link></li>
               <li><Link href="/check">Deadline checker</Link></li>
+              <li><Link href="/corporation-tax-calculator">Corporation Tax calculator</Link></li>
               <li><Link href="/accountants">For accountants</Link></li>
               <li><Link href="/pricing">Pricing</Link></li>
               <li><Link href="/sign-in">Sign in</Link></li>
@@ -29,9 +30,10 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
           <div>
             <h4>Guides</h4>
             <ul>
+              <li><Link href="/guides/file-ct600-yourself">File a CT600 yourself</Link></li>
+              <li><Link href="/guides/corporation-tax-deadlines-penalties">Deadlines and penalties</Link></li>
+              <li><Link href="/guides/micro-entity-or-small-company-accounts">Micro or small accounts</Link></li>
               <li><Link href="/guides/hmrc-online-filing-closed">HMRC&apos;s free service has closed</Link></li>
-              <li><Link href="/guides/accounts-longer-than-12-months">Accounts over 12 months</Link></li>
-              <li><Link href="/guides/dormant-company-tax-return">Dormant companies</Link></li>
               <li><Link href="/guides">All guides</Link></li>
             </ul>
           </div>

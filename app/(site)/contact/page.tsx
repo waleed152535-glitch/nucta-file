@@ -1,6 +1,7 @@
+import { pageMeta } from "@/lib/seo";
 import { SITE } from "@/lib/site";
 
-export const metadata = { title: "Contact", description: "How to reach the Nucta File team." };
+export const metadata = pageMeta({ title: "Contact", path: "/contact", description: "How to reach the Nucta File team by email about the software, your account, a return you are preparing or using Nucta File in your practice." });
 
 export default function Contact() {
   return (

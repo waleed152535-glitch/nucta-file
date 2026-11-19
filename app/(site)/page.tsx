@@ -4,11 +4,18 @@ import TaxEngine from "./_parts/TaxEngine";
 import DashPreview from "./_parts/DashPreview";
 import { PRICES, SITE, gbp } from "@/lib/site";
 import { chargingOn, getPlans } from "@/lib/billing";
+import { pageMeta, homeGraph } from "@/lib/seo";
+import JsonLd from "@/components/JsonLd";
 
 // The page is built once and rebuilt when charging is switched on or off
 // (lib/billing-actions.ts), so its prices follow the switch on the Payments page.
 
-export const metadata = { title: { absolute: "Nucta File — Company Tax Returns and accounts for small companies" } };
+export const metadata = pageMeta({
+  title: "Nucta File — CT600 software and accounts for small UK companies",
+  absoluteTitle: true,
+  path: "/",
+  description: "Prepare a small company's accounts, work out its Corporation Tax and file the CT600 with HMRC, with the iXBRL accounts and tax computation attached.",
+});
 
 /** What Nucta File works out, keyed by the CT600 box it ends up in where there is one. */
 const WORKS_OUT: { ref: string; box?: boolean; title: string; text: string }[] = [
@@ -46,6 +53,7 @@ export default async function Home() {
   const from = plans.filter((p) => p.on).reduce<null | { price: number; returns: number }>((a, b) => (!a || b.price < a.price ? b : a), null);
   return (
     <>
+      <JsonLd data={homeGraph()} />
       <Film charging={charging} />
 
       <section className="trust" aria-label="Who makes Nucta File">
@@ -92,6 +100,7 @@ export default async function Home() {
           <h2 id="engine-h">Try the tax engine</h2>
           <p className="intro">Move the profit and watch the Corporation Tax work itself out: the small profits rate, marginal relief and the main rate, with the limits cut for a short period or shared with associated companies.</p>
           <TaxEngine />
+          <p className="engine-more"><Link href="/corporation-tax-calculator">Open the full Corporation Tax calculator</Link>, with a choice of year end and how the rates and marginal relief work.</p>
         </div>
       </section>
 

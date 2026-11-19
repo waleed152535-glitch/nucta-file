@@ -8,6 +8,9 @@ import { THEME_COOKIE, themeFrom } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
+/** The software's pages are private: never in search results, even if a link to one leaks. */
+export const metadata = { robots: { index: false, follow: false } };
+
 /** The software itself: signed-in users only. */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const u = await currentUser();

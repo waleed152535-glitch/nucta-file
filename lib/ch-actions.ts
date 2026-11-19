@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { buildAccounts } from "./ixbrl";
 import { accountsFromFigures } from "./accounts-from-figures";
 import { taxProblems, type Ct600Input } from "./ct600-xml";
+import { companiesHouseCopy } from "./accounts/ch-form";
 import {
   chPresenter, companyNumberProblem, authCodeProblem, formHeaderProblems, nextTransactionId, newSubmissionNumber,
   buildChAccountsEnvelope, buildChStatusEnvelope, buildChAckEnvelope, redactCh, parseChReply,
@@ -38,6 +39,12 @@ export interface ChFormInput {
   approvedOn: string;
   contactName: string;
   contactNumber: string;
+  /**
+   * Send the Companies House copy (no profit and loss account), as customers'
+   * filings do, rather than the full accounts. On by default so the test
+   * service sees exactly what the live one will.
+   */
+  publicCopy?: boolean;
 }
 
 /** How the log labels these, so they sit apart from the HMRC returns. */
@@ -83,6 +90,11 @@ function check(f: ChFormInput): { problems: string[]; warnings: string[] } {
 }
 
 function accountsFor(f: ChFormInput): string {
+  const full = fullAccountsFor(f);
+  return f.publicCopy === false ? full : companiesHouseCopy(full);
+}
+
+function fullAccountsFor(f: ChFormInput): string {
   return buildAccounts(accountsFromFigures({
     companyName: f.companyName,
     companyNo: f.companyNo.trim().toUpperCase(),
@@ -261,6 +273,9 @@ const OUTCOME: Record<string, string> = { ACCEPT: "accepted", REJECT: "rejected"
  * not yet collected — which then has to be acknowledged straight away
  * (TIS 2.5.1), or the same results come back on the next poll.
  */
+/** TIS Appendix B: a general status request with no finished results to give. */
+const NOTHING_NEW = "8026";
+
 export async function checkChStatus(submissionNumber?: string): Promise<ChPoll> {
   await requireAdmin();
 
@@ -276,6 +291,16 @@ export async function checkChStatus(submissionNumber?: string): Promise<ChPoll> 
   }
   const reply = parseChReply(res.text);
   const failed = reply.errors.filter((e) => e.type !== "warning");
+  // 8026 "No Accepted or Rejected Documents Found" isn't a failure: it is how
+  // Companies House answer a collection when nothing has finished examination.
+  if (!sn && failed.length && failed.every((e) => e.number === NOTHING_NEW)) {
+    return {
+      ok: true,
+      headline: "Nothing new from Companies House yet.",
+      detail: ["None of the submissions has finished examination. To see one that's still being examined, check it by its number."],
+      statuses: [], acknowledged: false, reply: res.text,
+    };
+  }
   if (failed.length || res.status < 200 || res.status >= 300) {
     return { ok: false, headline: "Companies House refused the status request.", detail: failed.map(errLine), statuses: reply.statuses, acknowledged: false, reply: res.text };
   }

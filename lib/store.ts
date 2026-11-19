@@ -41,5 +41,5 @@ export const problem = (e: unknown): string => {
 /** The site's own address, for links in emails: from the settings, never from a request. */
 export function siteUrl(fallbackHost?: string | null): string {
   const env = process.env.NUCTA_SITE_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "");
-  return (env || (fallbackHost ? `http://${fallbackHost}` : "https://nucta-file.vercel.app")).replace(/\/+$/, "");
+  return (env || (fallbackHost ? `http://${fallbackHost}` : "https://nuctafilings.co.uk")).replace(/\/+$/, "");
 }

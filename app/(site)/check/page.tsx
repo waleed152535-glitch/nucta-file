@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import CompanySearch from "../_parts/CompanySearch";
 import { asCompanyNumber } from "@/lib/company-deadlines";
 import { lookupReady, publicSearch } from "@/lib/public-lookup";
@@ -10,11 +11,13 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ q?: string }> }): Promise<Metadata> {
   const q = ((await searchParams).q ?? "").trim();
   return {
-    title: "Check a company's deadlines",
-    description: "When a UK company's accounts, Company Tax Return and Corporation Tax are due, from its Companies House record. Free, no account needed.",
+    ...pageMeta({
+      title: "Company deadline checker: accounts, CT600 and tax due dates",
+      path: "/check",
+      description: "When a UK company's accounts, Company Tax Return and Corporation Tax are due, from its Companies House record. Free, no account needed.",
+    }),
     // The checker itself can be found; each search's results are just for the visitor.
     robots: q ? { index: false, follow: true } : undefined,
-    alternates: { canonical: "/check" },
   };
 }
 

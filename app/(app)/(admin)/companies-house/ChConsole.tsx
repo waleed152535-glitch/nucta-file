@@ -12,7 +12,7 @@ import {
  * Files the same micro-entity accounts the HMRC console attaches to a tax
  * return, to Companies House's XML Gateway. Two things work differently from
  * HMRC and the screen says so: the result arrives later rather than in the
- * same request, and the test service accepts or rejects at random.
+ * same request, and in testing a person at Companies House decides it.
  */
 
 const blank: ChFormInput = {
@@ -32,6 +32,7 @@ const blank: ChFormInput = {
   approvedOn: "2025-06-30",
   contactName: "Waleed Sarfraz",
   contactNumber: "",
+  publicCopy: true,
 };
 
 type Check = { label: string; ok: boolean; detail: string };
@@ -63,7 +64,7 @@ export default function ChConsole({ checks, gateway }: { checks: Check[]; gatewa
       <div className="topbar">
         <div>
           <h2>Companies House test console</h2>
-          <div className="sub">File micro-entity accounts through the XML Gateway and collect the result.</div>
+          <div className="sub">Test filings only, with the test presenter account (GatewayTest 1). Customers file for real from a return; their filings are listed at the foot of this page.</div>
         </div>
       </div>
 
@@ -76,9 +77,10 @@ export default function ChConsole({ checks, gateway }: { checks: Check[]; gatewa
             the status to see whether they were accepted.
           </p>
           <p style={{ marginTop: 10 }}>
-            <b>The test service decides at random.</b>{" "}In testing, Companies House accept or reject
-            submissions at random so software can be seen to handle both. A rejection here doesn&apos;t
-            mean the accounts are wrong; a refusal at the moment of sending does.
+            <b>In testing, a person decides.</b>{" "}Test accounts stay pending until someone at Companies
+            House reviews them by hand and marks them accepted or rejected. Email them with the
+            submission numbers when tests are ready, quoting the test presenter ID in the subject. A
+            refusal at the moment of sending is different: that means something in the submission is wrong.
           </p>
           <div className="acts">
             <button className="btn ghost" onClick={doPreview} disabled={pending}>Build it and show me</button>
@@ -152,6 +154,10 @@ export default function ChConsole({ checks, gateway }: { checks: Check[]; gatewa
                   <input value={f.contactNumber} onChange={(e) => set("contactNumber", e.target.value)} />
                 </div>
               </div>
+              <label className="check" style={{ cursor: "pointer", marginTop: 6 }}>
+                <input type="checkbox" checked={f.publicCopy !== false} onChange={(e) => setF({ ...f, publicCopy: e.target.checked })} style={{ marginTop: 3 }} />
+                <span>Send the Companies House copy, without the profit and loss account, as customers&apos; filings do</span>
+              </label>
             </div>
           </div>
 

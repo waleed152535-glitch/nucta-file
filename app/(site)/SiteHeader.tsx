@@ -8,6 +8,7 @@ import Mark from "@/components/Mark";
 const NAV: { href: string; label: string; roomy?: boolean }[] = [
   { href: "/features", label: "Features" },
   { href: "/check", label: "Deadline checker", roomy: true },
+  { href: "/corporation-tax-calculator", label: "Tax calculator", roomy: true },
   { href: "/accountants", label: "For accountants" },
   { href: "/pricing", label: "Pricing" },
   { href: "/guides", label: "Guides" },

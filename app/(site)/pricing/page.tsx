@@ -1,8 +1,9 @@
+import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { PRICES, gbp } from "@/lib/site";
 import { chargingOn, getPlans } from "@/lib/billing";
 
-export const metadata = { title: "Pricing", description: "Company Tax Returns filed with HMRC: a price per return with no subscription, or a yearly membership for practices." };
+export const metadata = pageMeta({ title: "Pricing", path: "/pricing", description: "What it costs to file a Company Tax Return with HMRC using Nucta File: a price per return with no subscription, or a yearly membership for accountancy practices." });
 
 // Built once, and rebuilt when charging is switched on or off or the plans change (lib/billing-actions.ts).
 

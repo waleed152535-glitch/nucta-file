@@ -1,6 +1,7 @@
+import { pageMeta } from "@/lib/seo";
 import { SITE } from "@/lib/site";
 
-export const metadata = { title: "Terms of use", description: "The terms for using Nucta File." };
+export const metadata = pageMeta({ title: "Terms of use", path: "/terms", description: "The terms for using Nucta File: what the software does, your responsibilities and ours when a return is filed with HMRC, fees, liability and ending your account." });
 
 export default function Terms() {
   return (

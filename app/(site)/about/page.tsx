@@ -1,7 +1,8 @@
+import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { SITE } from "@/lib/site";
 
-export const metadata = { title: "About", description: "Who makes Nucta File, and why." };
+export const metadata = pageMeta({ title: "About", path: "/about", description: "Who makes Nucta File and why: software from Nucta Formations Ltd for small UK companies and the accountants who look after them, and where it stands today." });
 
 export default function About() {
   return (

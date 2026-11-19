@@ -392,3 +392,48 @@ export const vatReturns = pgTable("nf_vat_returns", {
   submittedByName: text("submitted_by_name"),
   submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [index("vat_returns_company_idx").on(t.companyId), uniqueIndex("vat_returns_period_unique").on(t.vrn, t.periodKey, t.env)]);
+
+/**
+ * Accounts delivered to Companies House from a return, for real (build 53).
+ * Companies House answer twice: on receipt, then after examining the
+ * accounts, usually within a day. `status` follows that: received → pending →
+ * accepted or rejected (or parked / failed). Test filings from the admin
+ * console stay in the submission log, apart from these.
+ */
+export const chFilings = pgTable("nf_ch_filings", {
+  id: id(),
+  accountId: text("account_id").notNull(),
+  returnId: text("return_id").notNull(),
+  companyId: text("company_id").notNull(),
+  companyNo: text("company_no").notNull(),
+  companyName: text("company_name").notNull(),
+  periodTo: text("period_to").notNull(),
+  /** The six-character number Nucta File gave the submission; never reused. */
+  submissionNumber: text("submission_number").notNull(),
+  /** live | test */
+  env: text("env").notNull().default("live"),
+  /** micro | small | dormant — which accounts were delivered. */
+  kind: text("kind").notNull(),
+  /** refused | received | pending | accepted | rejected | parked | failed */
+  status: text("status").notNull(),
+  /** Companies House's own words: gateway errors on sending, or reasons for a rejection. */
+  reasons: jsonb("reasons").$type<string[]>().default([]).notNull(),
+  examinerNote: text("examiner_note"),
+  /** The gateway's timestamp: the legal time of receipt. */
+  receivedAt: text("received_at"),
+  /** A fingerprint of the accounts sent, to tell if the return changed afterwards. */
+  accountsHash: text("accounts_hash").notNull(),
+  contactName: text("contact_name").notNull(),
+  contactPhone: text("contact_phone").notNull(),
+  filedBy: text("filed_by").notNull(),
+  filedByName: text("filed_by_name").notNull(),
+  filedByEmail: text("filed_by_email"),
+  /** The envelope as sent, the presenter password and company code blanked. */
+  envelope: text("envelope"),
+  /** Companies House's latest reply, whole. */
+  reply: text("reply"),
+  lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  notifiedAt: timestamp("notified_at", { withTimezone: true }),
+  createdAt: now(),
+}, (t) => [index("ch_filings_return_idx").on(t.returnId), uniqueIndex("ch_filings_number_unique").on(t.submissionNumber)]);

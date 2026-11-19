@@ -1,9 +1,10 @@
+import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import DashPreview from "../_parts/DashPreview";
 import { PRICES, gbp } from "@/lib/site";
 import { chargingOn, getPlans } from "@/lib/billing";
 
-export const metadata = { title: "For accountants", description: "Nucta File for accountancy practices and formation agents: every client's deadlines, approval packs and filing as agent." };
+export const metadata = pageMeta({ title: "CT600 software for accountants", path: "/accountants", description: "For accountancy practices and formation agents: every client's deadlines in one place, approval packs for directors, and Company Tax Returns filed with HMRC as agent." });
 
 export default async function Accountants() {
   const [charging, all] = await Promise.all([chargingOn(), getPlans()]);

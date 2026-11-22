@@ -711,3 +711,14 @@ html:has(.site),body:has(.site){background:#070B14;}
   .read .related a{grid-template-columns:1fr;gap:6px;}
   .calc-cols{grid-template-columns:1fr;gap:24px;}
 }
+
+/* Confirm your email */
+.confirm-tips{margin:0 0 20px;padding-left:18px;color:#AAB5C9;font-size:14.5px;line-height:1.6;}
+.confirm-msg{margin:12px 0 0;font-size:14.5px;}
+.confirm-msg.good{color:#3DDC97;}
+.confirm-msg.bad{color:#FF8466;}
+.confirm-note{margin:8px 0 0;font-size:13.5px;color:#AAB5C9;}
+.confirm-foot{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:22px;padding-top:16px;border-top:1px solid rgba(196,210,240,.13);font-size:13.5px;color:#AAB5C9;}
+.confirm-foot form{display:inline;}
+.confirm-foot a,.confirm-foot .linkish{color:#FF8466;}
+.linkish{background:none;border:0;padding:0;font:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}

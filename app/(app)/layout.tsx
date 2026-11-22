@@ -18,6 +18,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const path = (await headers()).get("x-nf-path") ?? "/dashboard";
     redirect(`/sign-in?next=${encodeURIComponent(path)}`);
   }
+  // A new account confirms its email first. If the email couldn't be sent,
+  // the confirm page lets them carry on for a day without it.
+  if (emailCheckNeeded(u) && !u.admin && (await cookies()).get("nf_confirm_later")?.value !== "1") {
+    const path = (await headers()).get("x-nf-path") ?? "/dashboard";
+    redirect(`/confirm-email?next=${encodeURIComponent(path)}`);
+  }
   const live = (await liveModeFor(u)).mode;
   const theme = themeFrom((await cookies()).get(THEME_COOKIE)?.value);
   return (

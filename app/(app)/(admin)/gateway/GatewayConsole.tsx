@@ -12,7 +12,7 @@ import { markForPeople } from "@/lib/ct600-xml";
  * Bumped by hand with every package. It is on the screen so that an identical
  * rejection twice over can be told apart from a deploy that never landed.
  */
-const BUILD = "54 — Nucta Filings: guided start, help, Amazon/eBay import, bulk dormant filing";
+const BUILD = "55 — confirm your email before the dashboard";
 
 /**
  * The gateway console.

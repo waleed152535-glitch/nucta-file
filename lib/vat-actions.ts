@@ -29,7 +29,7 @@ async function caller(u: SignedInUser, client: unknown): Promise<Caller | null> 
   const h = await headers();
   const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || (h.get("x-real-ip") ?? "").trim() || null;
   // The host doesn't pass on the browser's port, so Gov-Client-Public-Port is left out.
-  return { userId: u.id, client: info, ip, port: null };
+  return { userId: u.id, accountId: u.accountId, client: info, ip, port: null };
 }
 
 const NO_CLIENT = "Your browser didn't send the details HMRC require with every VAT request (screen size, time zone and so on). Reload the page and try again.";

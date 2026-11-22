@@ -9,7 +9,7 @@ import {
 /** Only paths inside the software, so a sign-in link can't send someone elsewhere. */
 const safeNext = (v: FormDataEntryValue | null) => {
   const n = String(v ?? "");
-  return /^\/(dashboard|companies|returns|deadlines|gateway|live-filing|payments|companies-house|log|settings|status|account)(\/|\?|$)/.test(n) ? n : "/dashboard";
+  return /^\/(dashboard|companies|returns|deadlines|gateway|live-filing|payments|companies-house|log|settings|status|account|help|dormant)(\/|\?|$)/.test(n) ? n : "/dashboard";
 };
 
 export interface FormState { problems: string[]; done?: string }
@@ -20,15 +20,33 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
     firm: String(f.get("firm") ?? ""), kind: f.get("kind") === "company" ? "company" : "practice", agreed: f.get("agreed") === "yes",
   });
   if (!r.ok) return { problems: r.problems };
-  // The link to confirm the email. If it can't go now, the app offers to send it again.
-  if (r.userId && emailReady()) await sendEmailCheck(r.userId, await siteOrigin()).catch(() => undefined);
-  // Came from the deadline checker: go straight on to adding that company.
+  // Came from the deadline checker: go on to adding that company once the email is confirmed.
   const company = String(f.get("company") ?? "").toUpperCase();
-  redirect(/^[A-Z0-9]{8}$/.test(company) ? `/companies?add=1&number=${company}` : "/dashboard");
+  const next = /^[A-Z0-9]{8}$/.test(company) ? `/companies?add=1&number=${company}` : "/dashboard";
+  if (!r.userId || !emailReady()) redirect(next);
+  // The link to confirm the email, then the page that waits for it.
+  const sent = await sendEmailCheck(r.userId, await siteOrigin()).catch(() => ({ ok: false }));
+  redirect(`/confirm-email?next=${encodeURIComponent(next)}${sent.ok ? "" : "&failed=1"}`);
+}
+
+/** Whether the signed-in person has confirmed their email yet: the waiting page asks every few seconds. */
+export async function emailConfirmedYet(): Promise<boolean> {
+  const u = await currentUser();
+  return Boolean(u?.emailVerified);
+}
+
+/**
+ * When the confirmation email can't be sent at all, carry on without it for
+ * a day: preparing returns works, filing and paying still wait for it.
+ */
+export async function confirmLaterAction(f: FormData): Promise<void> {
+  const { cookies } = await import("next/headers");
+  (await cookies()).set("nf_confirm_later", "1", { httpOnly: true, sameSite: "lax", secure: true, path: "/", maxAge: 86_400 });
+  redirect(safeNext(f.get("next")));
 }
 
 /** "Send the link again", from the bar at the top of the software. */
-export async function resendEmailCheckAction(): Promise<FormState> {
+export async function resendEmailCheckAction(_?: FormState): Promise<FormState> {
   const u = await currentUser();
   if (!u) return { problems: ["You're signed out. Sign in again to carry on."] };
   const r = await sendEmailCheck(u.id, await siteOrigin());

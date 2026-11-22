@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 /**
  * VAT returns under Making Tax Digital: the rules, with nothing that touches
  * the network or the database, so each can be tested on its own.
@@ -194,6 +195,8 @@ export interface ServerInfo {
   vendorIp: string | null;
   userId: string;
   productVersion: string;
+  /** The customer's account, sent hashed as their licence. */
+  licenceId?: string | null;
 }
 
 const enc = encodeURIComponent;
@@ -215,8 +218,9 @@ export function checkClientInfo(c: unknown): ClientInfo | null {
 
 /**
  * The headers for the WEB_APP_VIA_SERVER connection method. Gov-Client-Public-Port
- * is sent only when the host passes it on; Gov-Client-Multi-Factor and
- * Gov-Vendor-License-IDs are left out because Nucta Filings uses neither.
+ * is sent only when the host passes it on. Gov-Client-Multi-Factor is left out
+ * because sign-in is by password only. Gov-Vendor-License-IDs carries the
+ * customer's Nucta Filings account (their licence to use it), hashed.
  */
 export function fraudHeaders(c: ClientInfo, s: ServerInfo): Record<string, string> {
   const h: Record<string, string> = {
@@ -234,6 +238,7 @@ export function fraudHeaders(c: ClientInfo, s: ServerInfo): Record<string, strin
     h["Gov-Client-Public-IP"] = s.clientIp;
     h["Gov-Client-Public-IP-Timestamp"] = s.clientIpAt;
   }
+  if (s.licenceId) h["Gov-Vendor-License-IDs"] = `${enc("Nucta Filings")}=${createHash("sha256").update(s.licenceId).digest("hex")}`;
   if (s.clientPort) h["Gov-Client-Public-Port"] = s.clientPort;
   if (s.vendorIp) h["Gov-Vendor-Public-IP"] = s.vendorIp;
   if (s.vendorIp && s.clientIp) h["Gov-Vendor-Forwarded"] = `by=${enc(s.vendorIp)}&for=${enc(s.clientIp)}`;

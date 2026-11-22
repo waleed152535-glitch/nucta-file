@@ -26,7 +26,7 @@ import { fraudHeaders, hmrcVatError, type ClientInfo } from "./vat-rules";
 export type MtdEnv = "sandbox" | "production";
 export const mtdEnv = (): MtdEnv => (process.env.HMRC_MTD_ENV === "production" ? "production" : "sandbox");
 export const mtdReady = () => Boolean((process.env.HMRC_MTD_CLIENT_ID ?? "").trim() && (process.env.HMRC_MTD_CLIENT_SECRET ?? "").trim());
-export const PRODUCT_VERSION = "54";
+export const PRODUCT_VERSION = "56";
 
 const BASES: Record<MtdEnv, { api: string; authorize: string }> = {
   sandbox: { api: "https://test-api.service.hmrc.gov.uk", authorize: "https://test-www.tax.service.gov.uk/oauth/authorize" },
@@ -173,14 +173,14 @@ async function ourIp(): Promise<string | null> {
   return ip;
 }
 
-export interface Caller { userId: string; client: ClientInfo; ip: string | null; port: string | null }
+export interface Caller { userId: string; accountId?: string | null; client: ClientInfo; ip: string | null; port: string | null }
 
 /** One call to HMRC's VAT API, with the fraud prevention headers it requires. */
 export async function mtdCall<T>(s: Store, c: Connection, method: "GET" | "POST", path: string, who: Caller, body?: unknown, retried = false): Promise<{ data: T; correlationId: string | null; status: number }> {
   const token = await accessToken(s, c, retried);
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`, Accept: "application/vnd.hmrc.1.0+json",
-    ...fraudHeaders(who.client, { clientIp: who.ip, clientIpAt: new Date().toISOString(), clientPort: who.port, vendorIp: await ourIp(), userId: who.userId, productVersion: PRODUCT_VERSION }),
+    ...fraudHeaders(who.client, { clientIp: who.ip, clientIpAt: new Date().toISOString(), clientPort: who.port, vendorIp: await ourIp(), userId: who.userId, licenceId: who.accountId ?? null, productVersion: PRODUCT_VERSION }),
   };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (process.env.HMRC_MTD_TEST_SCENARIO && mtdEnv() === "sandbox") headers["Gov-Test-Scenario"] = process.env.HMRC_MTD_TEST_SCENARIO;
@@ -257,7 +257,7 @@ export async function validateFraudHeaders(who: Caller): Promise<{ ok: boolean; 
   if (!t.ok || !tj.access_token) return { ok: false, message: `HMRC didn't give an application token: ${tj.error_description ?? t.status}` };
   const headers = {
     Authorization: `Bearer ${tj.access_token}`, Accept: "application/vnd.hmrc.1.0+json",
-    ...fraudHeaders(who.client, { clientIp: who.ip, clientIpAt: new Date().toISOString(), clientPort: who.port, vendorIp: await ourIp(), userId: who.userId, productVersion: PRODUCT_VERSION }),
+    ...fraudHeaders(who.client, { clientIp: who.ip, clientIpAt: new Date().toISOString(), clientPort: who.port, vendorIp: await ourIp(), userId: who.userId, licenceId: who.accountId ?? null, productVersion: PRODUCT_VERSION }),
   };
   const r = await fetch(`${apiBase()}/test/fraud-prevention-headers/validate`, { headers, cache: "no-store" });
   const j = (await r.json().catch(() => ({}))) as { code?: string; message?: string; errors?: never[]; warnings?: never[] };
